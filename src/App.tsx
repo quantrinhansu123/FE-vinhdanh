@@ -5,8 +5,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Crown, Star, Medal, Settings, X, Upload, Plus, Save, Trash2, Loader2, User } from 'lucide-react';
+import { Trophy, Crown, Star, Medal, Settings, X, Upload, Plus, Save, Trash2, Loader2, User, LogOut, TrendingUp, Menu, EyeOff } from 'lucide-react';
 import { supabase } from './lib/supabase';
+import { ReportModal } from './components/ReportModal';
+import { LoginView } from './components/LoginView';
+import { ProgressDashboard } from './components/ProgressDashboard';
 
 import backgroundImg from './assets/background.png';
 import top1Img from './assets/top1.png';
@@ -19,27 +22,136 @@ interface Employee {
   team: string;
   score: number;
   avatar_url: string | null;
+  email?: string;
+  pass?: string;
   rank?: number;
+}
+
+type Role = 'admin' | 'manager' | 'director' | 'user';
+
+interface AuthUser {
+  id: string;
+  email: string;
+  role: Role;
+  name: string;
+  team: string;
+  avatar_url: string | null;
+}
+
+const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+const AVATARS_BUCKET = import.meta.env.VITE_SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
+const AUTH_STORAGE_KEY = 'fe_vinhdanh_auth_user';
+
+function logSupabaseError(action: string, error: { code?: string; message?: string; details?: string; hint?: string } | null) {
+  if (!error) return;
+
+  console.error(`Error ${action}:`, {
+    table: EMPLOYEES_TABLE,
+    code: error.code,
+    message: error.message,
+    details: error.details,
+    hint: error.hint,
+  });
+
+  if (error.code === 'PGRST205') {
+    console.error(
+      `Supabase table \"${EMPLOYEES_TABLE}\" was not found in the exposed REST schema. Create the table in schema public or set VITE_SUPABASE_EMPLOYEES_TABLE correctly.`
+    );
+  }
 }
 
 export default function App() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [showProgress, setShowProgress] = useState(false);
+  const [showMenuBar, setShowMenuBar] = useState(true);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
 
   useEffect(() => {
-    fetchEmployees();
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as AuthUser;
+        if (parsed?.email) {
+          setAuthUser(parsed);
+        }
+      } catch (error) {
+        console.warn('Invalid login cache, reset required.', error);
+      }
+    }
+    setAuthChecking(false);
   }, []);
+
+  useEffect(() => {
+    if (!authUser) {
+      setLoading(false);
+      return;
+    }
+    fetchEmployees();
+  }, [authUser]);
+
+  const handleLogin = async (email: string, password: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const { data, error } = await supabase
+      .from(EMPLOYEES_TABLE)
+      .select('id, name, email, pass, team, avatar_url')
+      .ilike('email', normalizedEmail)
+      .eq('pass', password)
+      .limit(1);
+
+    if (error) {
+      throw new Error(error.message || 'Không thể đăng nhập');
+    }
+
+    const user = (data || [])[0] as { id?: string; email?: string; name?: string; team?: string; avatar_url?: string | null } | undefined;
+    if (!user?.email) {
+      throw new Error('Sai email hoặc mật khẩu');
+    }
+
+    const nextUser: AuthUser = {
+      id: String(user.id || ''),
+      email: String(user.email),
+      role: normalizedEmail === 'upedu2024@gmail.com' ? 'admin' : 'user',
+      name: String(user.name || ''),
+      team: String(user.team || ''),
+      avatar_url: user.avatar_url || null,
+    };
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextUser));
+    setAuthUser(nextUser);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    setShowAdmin(false);
+    setShowReport(false);
+    setShowProgress(false);
+    setAuthUser(null);
+  };
+
+  if (authChecking) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-black text-white">
+        <Loader2 className="animate-spin" size={28} />
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return <LoginView onLogin={handleLogin} />;
+  }
 
   const fetchEmployees = async () => {
     setLoading(true);
     const { data, error } = await supabase
-      .from('employees')
+      .from(EMPLOYEES_TABLE)
       .select('*')
       .order('score', { ascending: false });
 
     if (error) {
-      console.error('Error fetching employees:', error);
+      logSupabaseError('fetching employees', error);
     } else {
       // Assign ranks based on score
       const rankedData = (data || []).map((emp, index) => ({
@@ -73,12 +185,53 @@ export default function App() {
         }}
       />
 
-      {/* Admin Button */}
+      {/* Menu Toggle Button */}
       <button
-        onClick={() => setShowAdmin(true)}
+        onClick={() => setShowMenuBar(!showMenuBar)}
         className="absolute top-4 left-4 z-50 p-2 bg-black/40 hover:bg-black/60 text-white/70 hover:text-white rounded-full transition-all border border-white/10 backdrop-blur-md"
+        title={showMenuBar ? "Ẩn menu" : "Hiện menu"}
       >
-        <Settings size={20} />
+        {showMenuBar ? <EyeOff size={20} /> : <Menu size={20} />}
+      </button>
+
+      {/* Menu Buttons */}
+      <AnimatePresence>
+        {showMenuBar && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+            className="absolute top-4 left-16 z-50 flex gap-2"
+          >
+            <button
+              onClick={() => setShowAdmin(true)}
+              className="p-2 bg-black/40 hover:bg-black/60 text-white/70 hover:text-white rounded-full transition-all border border-white/10 backdrop-blur-md"
+            >
+              <Settings size={20} />
+            </button>
+            <button
+              onClick={() => setShowReport(true)}
+              className="px-3 py-2 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-xl transition-all border border-white/10 backdrop-blur-md text-xs font-semibold"
+            >
+              Bảng Báo cáo
+            </button>
+            <button
+              onClick={() => setShowProgress(true)}
+              className="px-3 py-2 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-xl transition-all border border-white/10 backdrop-blur-md text-xs font-semibold flex items-center gap-1"
+            >
+              <TrendingUp size={14} /> Tiến bộ
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Logout Button */}
+      <button
+        onClick={handleLogout}
+        className="absolute top-4 right-4 z-50 px-3 py-2 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-xl transition-all border border-white/10 backdrop-blur-md text-xs font-semibold flex items-center gap-1"
+      >
+        <LogOut size={14} /> Đăng xuất
       </button>
 
       {/* Header */}
@@ -99,7 +252,7 @@ export default function App() {
             <div className="w-full flex flex-col items-center justify-center bg-transparent p-4 relative overflow-hidden flex-1">
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-b from-yellow-500/5 to-transparent pointer-events-none" />
 
-              <div className="flex items-end justify-center gap-20 lg:gap-32 w-full h-full pb-12 lg:pb-32 relative z-10 transform translate-y-[90px]">
+              <div className="flex items-end justify-center gap-20 lg:gap-32 w-full h-full pb-12 lg:pb-32 relative z-10 transform translate-y-[90px] -translate-x-[120px]">
                 {podiumOrder.map((winner) => (
                   <div key={winner.id} className={`${winner.rank === 1 ? 'order-2 -mt-4 z-20 transform -translate-y-12' : winner.rank === 2 ? 'order-3 transform translate-y-4' : 'order-1 transform translate-y-4'}`}>
                     <WinnerCard winner={winner} isCenter={winner.rank === 1} />
@@ -174,6 +327,21 @@ export default function App() {
             employees={employees}
           />
         )}
+        {showReport && (
+          <ReportModal
+            onClose={() => {
+              setShowReport(false);
+            }}
+            currentUser={authUser}
+          />
+        )}
+        {showProgress && (
+          <ProgressDashboard
+            onClose={() => {
+              setShowProgress(false);
+            }}
+          />
+        )}
       </AnimatePresence>
     </div>
   );
@@ -223,7 +391,7 @@ function WinnerCard({ winner, isCenter = false }: { winner: Employee, isCenter?:
       </div>
 
       <div className={`${isCenter ? "mt-20" : "mt-14"} text-center flex flex-col items-center`}>
-        <div className="mt-1 text-yellow-400 font-bold text-xs lg:text-sm bg-black/20 px-3 py-0.5 rounded-full border border-yellow-500/20 backdrop-blur-sm">
+        <div className="mt-1 text-yellow-400 font-bold text-xs lg:text-sm bg-black/40 px-3 py-0.5 rounded-full border-2 border-white backdrop-blur-sm shadow-[0_0_20px_rgba(255,255,255,0.6),inset_0_0_10px_rgba(255,255,255,0.2)]">
           Doanh số: {winner.score.toLocaleString()}
         </div>
       </div>
@@ -240,7 +408,9 @@ function AdminModal({ onClose, employees }: { onClose: () => void, employees: Em
     name: '',
     team: '',
     score: 0,
-    avatar_url: '' as string | null
+    avatar_url: '' as string | null,
+    email: '',
+    pass: ''
   });
 
   const handleEdit = (emp: Employee) => {
@@ -249,13 +419,15 @@ function AdminModal({ onClose, employees }: { onClose: () => void, employees: Em
       name: emp.name,
       team: emp.team,
       score: emp.score,
-      avatar_url: emp.avatar_url
+      avatar_url: emp.avatar_url,
+      email: emp.email || '',
+      pass: emp.pass || ''
     });
   };
 
   const handleReset = () => {
     setEditId(null);
-    setFormData({ name: '', team: '', score: 0, avatar_url: '' });
+    setFormData({ name: '', team: '', score: 0, avatar_url: '', email: '', pass: '' });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -269,19 +441,22 @@ function AdminModal({ onClose, employees }: { onClose: () => void, employees: Em
       const filePath = fileName;
 
       const { error: uploadError } = await supabase.storage
-        .from('avatars')
+        .from(AVATARS_BUCKET)
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
+        .from(AVATARS_BUCKET)
         .getPublicUrl(filePath);
 
       setFormData({ ...formData, avatar_url: publicUrl });
     } catch (error) {
-      console.error('Error uploading image:', error);
-      alert('Lỗi khi tải ảnh lên. Hãy đảm bảo bạn đã tạo bucket "avatars" ở chế độ public.');
+      const supabaseError = error as { message?: string; code?: string };
+      console.error('Error uploading image:', supabaseError);
+      alert(
+        `Lỗi khi tải ảnh lên. Hãy đảm bảo bucket "${AVATARS_BUCKET}" đã được tạo và có policy ghi. ${supabaseError?.message ? `Chi tiết: ${supabaseError.message}` : ''}`
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -294,20 +469,20 @@ function AdminModal({ onClose, employees }: { onClose: () => void, employees: Em
     try {
       if (editId) {
         const { error } = await supabase
-          .from('employees')
+          .from(EMPLOYEES_TABLE)
           .update(formData)
           .eq('id', editId);
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('employees')
+          .from(EMPLOYEES_TABLE)
           .insert([formData]);
         if (error) throw error;
       }
       handleReset();
       onClose();
     } catch (error) {
-      console.error('Error saving:', error);
+      logSupabaseError('saving employee', error as { code?: string; message?: string; details?: string; hint?: string });
       alert('Lỗi khi lưu dữ liệu.');
     } finally {
       setIsSubmitting(false);
@@ -319,13 +494,13 @@ function AdminModal({ onClose, employees }: { onClose: () => void, employees: Em
     setIsSubmitting(true);
     try {
       const { error } = await supabase
-        .from('employees')
+        .from(EMPLOYEES_TABLE)
         .delete()
         .eq('id', id);
       if (error) throw error;
       onClose(); // Refresh data
     } catch (error) {
-      console.error('Error deleting:', error);
+      logSupabaseError('deleting employee', error as { code?: string; message?: string; details?: string; hint?: string });
     } finally {
       setIsSubmitting(false);
     }
@@ -427,6 +602,28 @@ function AdminModal({ onClose, employees }: { onClose: () => void, employees: Em
                     placeholder="0"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-white/50 uppercase font-bold px-1">Email (Đăng nhập)</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-yellow-400/50 outline-none transition-all"
+                  placeholder="VD: user@example.com"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-white/50 uppercase font-bold px-1">Mật khẩu (Đăng nhập)</label>
+                <input
+                  type="text"
+                  value={formData.pass}
+                  onChange={e => setFormData({ ...formData, pass: e.target.value })}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-yellow-400/50 outline-none transition-all"
+                  placeholder="VD: 123456"
+                />
               </div>
 
               <div className="flex gap-2 pt-4">
