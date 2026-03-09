@@ -3,329 +3,484 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
-import { motion } from 'motion/react';
-import { Trophy, Crown, Star, Medal } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Trophy, Crown, Star, Medal, Settings, X, Upload, Plus, Save, Trash2, Loader2, User } from 'lucide-react';
+import { supabase } from './lib/supabase';
 
-// Mock Data matching the image
-const WINNERS = [
-  { 
-    id: 1, 
-    name: 'Ms THÁI MINH KHUÊ', 
-    team: 'Alpha', 
-    rank: 1, 
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-    score: 9850
-  },
-  { 
-    id: 2, 
-    name: 'Ms NGUYỄN NHẬT MINH', 
-    team: 'Beta', 
-    rank: 2, 
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-    score: 8920
-  },
-  { 
-    id: 3, 
-    name: 'Mr NGUYỄN TRẦN MINH HUY', 
-    team: 'Gama', 
-    rank: 3, 
-    avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-    score: 8540
-  },
-];
+import backgroundImg from './assets/background.png';
+import top1Img from './assets/top1.png';
+import top2Img from './assets/top2.png';
+import top3Img from './assets/top3.png';
 
-// Mock Data for other ranks
-const OTHER_WINNERS = [
-  { id: 4, name: 'Emily Davis', team: 'Delta', rank: 4, score: 8100, avatar: 'https://picsum.photos/seed/emily/200' },
-  { id: 5, name: 'Chris Wilson', team: 'Alpha', rank: 5, score: 7950, avatar: 'https://picsum.photos/seed/chris/200' },
-  { id: 6, name: 'Jessica Taylor', team: 'Beta', rank: 6, score: 7820, avatar: 'https://picsum.photos/seed/jessica/200' },
-  { id: 7, name: 'David Miller', team: 'Gama', rank: 7, score: 7750, avatar: 'https://picsum.photos/seed/david/200' },
-  { id: 8, name: 'Robert Wilson', team: 'Delta', rank: 8, score: 7640, avatar: 'https://picsum.photos/seed/robert/200' },
-  { id: 9, name: 'Lisa Anderson', team: 'Alpha', rank: 9, score: 7590, avatar: 'https://picsum.photos/seed/lisa/200' },
-  { id: 10, name: 'James Martin', team: 'Beta', rank: 10, score: 7450, avatar: 'https://picsum.photos/seed/james/200' },
-  { id: 11, name: 'William Thompson', team: 'Gama', rank: 11, score: 7320, avatar: 'https://picsum.photos/seed/william/200' },
-  { id: 12, name: 'Sophia Martinez', team: 'Delta', rank: 12, score: 7210, avatar: 'https://picsum.photos/seed/sophia/200' },
-  { id: 13, name: 'Daniel White', team: 'Alpha', rank: 13, score: 7100, avatar: 'https://picsum.photos/seed/daniel/200' },
-  { id: 14, name: 'Olivia Brown', team: 'Beta', rank: 14, score: 7050, avatar: 'https://picsum.photos/seed/olivia/200' },
-  { id: 15, name: 'Lucas Garcia', team: 'Gama', rank: 15, score: 6980, avatar: 'https://picsum.photos/seed/lucas/200' },
-];
+interface Employee {
+  id: string;
+  name: string;
+  team: string;
+  score: number;
+  avatar_url: string | null;
+  rank?: number;
+}
 
 export default function App() {
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdmin, setShowAdmin] = useState(false);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('employees')
+      .select('*')
+      .order('score', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching employees:', error);
+    } else {
+      // Assign ranks based on score
+      const rankedData = (data || []).map((emp, index) => ({
+        ...emp,
+        rank: index + 1
+      }));
+      setEmployees(rankedData);
+    }
+    setLoading(false);
+  };
+
+  const top3 = employees.slice(0, 3);
+  // Sort top3 to display Rank 3, Rank 1, Rank 2 order for the podium
+  const podiumOrder = [
+    top3.find(e => e.rank === 3),
+    top3.find(e => e.rank === 1),
+    top3.find(e => e.rank === 2),
+  ].filter(Boolean) as Employee[];
+
+  const others = employees.slice(3);
+
   return (
-    <div className="min-h-screen w-full bg-[#004D25] flex flex-col items-center p-0 font-sans overflow-hidden relative">
-      {/* Background Effects */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Radial Glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80vw] h-[80vw] bg-emerald-400/20 rounded-full blur-[120px]" />
-        
-        {/* Particles/Sparkles (Simulated) */}
-        <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-yellow-400 rounded-full blur-[1px] animate-pulse" />
-        <div className="absolute top-1/3 right-1/3 w-3 h-3 bg-yellow-200 rounded-full blur-[2px] animate-pulse delay-75" />
-        <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-yellow-300 rounded-full blur-[1px] animate-pulse delay-150" />
-        <div className="absolute top-20 right-20 w-1 h-1 bg-white rounded-full blur-[0px] animate-ping" />
-        
-        {/* Bottom Golden Waves/Curtains (Simulated with gradients) */}
-        <div className="absolute bottom-0 left-0 w-full h-64 bg-gradient-to-t from-[#C49102]/20 to-transparent" />
-        <div className="absolute -bottom-20 -left-20 w-96 h-96 bg-[#FDB931]/10 blur-[80px] rounded-full" />
-        <div className="absolute -bottom-20 -right-20 w-96 h-96 bg-[#FDB931]/10 blur-[80px] rounded-full" />
-      </div>
+    <div className="min-h-screen w-full flex flex-col items-center p-0 font-sans overflow-hidden relative">
+      <div
+        className="absolute inset-0 -z-10"
+        style={{
+          backgroundImage: `url(${backgroundImg})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }}
+      />
 
-      {/* Header - Compact */}
-      <header className="relative z-20 mb-4 w-full pt-6 pb-2 flex flex-col md:flex-row items-center justify-center gap-6">
-        {/* Logo */}
-        <motion.div 
-          initial={{ opacity: 0, x: -50 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ type: "spring", stiffness: 200, damping: 15 }}
-          className="flex-shrink-0"
-        >
-           <div className="relative group cursor-pointer">
-              {/* Glow behind the logo */}
-              <div className="absolute inset-0 bg-white/30 blur-3xl rounded-full opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
-              
-              <img 
-                src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Fd3e93e8d.%E1%BA%A2nh.121830.png" 
-                alt="Logo" 
-                className="h-20 lg:h-28 w-auto object-contain relative z-10 drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:scale-105 transition-transform duration-300"
-              />
-           </div>
-        </motion.div>
+      {/* Admin Button */}
+      <button
+        onClick={() => setShowAdmin(true)}
+        className="absolute top-4 left-4 z-50 p-2 bg-black/40 hover:bg-black/60 text-white/70 hover:text-white rounded-full transition-all border border-white/10 backdrop-blur-md"
+      >
+        <Settings size={20} />
+      </button>
 
-        <div className="text-center md:text-left">
-          <motion.h1 
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-xl md:text-2xl lg:text-3xl font-extrabold uppercase tracking-wide text-white drop-shadow-lg leading-tight"
-          >
-            Vinh Danh Đội Nhóm Xuất Sắc Nhất
-          </motion.h1>
-          <div className="mt-1 flex justify-center md:justify-start">
-            <div className="h-1 w-24 bg-gradient-to-r from-transparent via-yellow-400 to-transparent" />
-          </div>
-        </div>
+      {/* Header */}
+      <header className="relative z-20 mb-4 w-full pt-6 pb-2 flex flex-col items-center justify-center">
+        {/* Header content if needed */}
       </header>
 
-      {/* Main Content - Custom Flex Layout - No Gap */}
-      <div className="relative z-10 w-full h-full flex-1 flex flex-col lg:flex-row items-stretch justify-center gap-0 px-0 pb-0 max-w-[1920px]">
-        
-        {/* Left Panel: Podium (70%) */}
-        <div className="w-full lg:w-[70%] flex flex-col justify-center bg-white/5 backdrop-blur-sm rounded-t-[24px] lg:rounded-l-[24px] lg:rounded-tr-none border border-white/5 border-r-0 p-4 shadow-xl relative overflow-hidden">
-          {/* Subtle background glow for podium */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-b from-yellow-500/5 to-transparent pointer-events-none" />
-          
-          <div className="flex items-end justify-center gap-2 md:gap-8 w-full h-full pb-12 lg:pb-32 relative z-10">
-            {/* Rank 3 (Left) */}
-            <div className="order-1 transform translate-y-4">
-              <WinnerCard winner={WINNERS[2]} />
-            </div>
-
-            {/* Rank 1 (Center) */}
-            <div className="order-2 -mt-4 z-20 transform -translate-y-12">
-              <WinnerCard winner={WINNERS[0]} isCenter />
-            </div>
-
-            {/* Rank 2 (Right) */}
-            <div className="order-3 transform translate-y-4">
-              <WinnerCard winner={WINNERS[1]} />
-            </div>
+      {/* Main Content */}
+      <div className="relative z-10 w-full flex-1 flex flex-col items-center justify-center px-0 pb-0">
+        {loading ? (
+          <div className="flex flex-col items-center gap-4 text-white">
+            <Loader2 className="animate-spin text-yellow-400" size={48} />
+            <p className="font-bold tracking-widest uppercase bg-black/20 px-4 py-1 rounded-full backdrop-blur-sm">Đang tải dữ liệu...</p>
           </div>
-        </div>
+        ) : (
+          <>
+            {/* Podium Area */}
+            <div className="w-full flex flex-col items-center justify-center bg-transparent p-4 relative overflow-hidden flex-1">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-b from-yellow-500/5 to-transparent pointer-events-none" />
 
-        {/* Right Panel: Other Winners List (30%) */}
-        <div className="w-full lg:w-[30%] flex flex-col">
-          <div className="w-full bg-black/20 backdrop-blur-md rounded-b-[24px] lg:rounded-r-[24px] lg:rounded-bl-none border border-white/10 overflow-hidden shadow-2xl flex flex-col h-full max-h-[calc(100vh-60px)]">
-            {/* List Header Title */}
-            <div className="px-4 py-2 border-b border-white/10 bg-white/5 flex items-center justify-between shrink-0">
-              <h2 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Trophy size={16} className="text-yellow-400" />
-                Bảng Xếp Hạng
-              </h2>
-              <div className="text-white/40 text-[10px] font-mono">TOP 4 - 15</div>
-            </div>
-
-            {/* Table Header */}
-            <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-black/20 text-yellow-400/80 font-bold uppercase tracking-wider text-[10px] sticky top-0 z-10 backdrop-blur-sm shrink-0">
-              <div className="col-span-2 text-center">Rank</div>
-              <div className="col-span-6">Name</div>
-              <div className="col-span-4 text-right">Team</div>
-            </div>
-            
-            <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent p-2">
-              <div className="space-y-1">
-                {OTHER_WINNERS.map((winner, index) => (
-                  <motion.div 
-                    key={winner.id}
-                    initial={{ opacity: 0, x: 20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: index * 0.05 }}
-                    className="grid grid-cols-12 gap-2 px-3 py-2 items-center bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all rounded-md group"
-                  >
-                    <div className="col-span-2 flex justify-center">
-                      <div className="w-5 h-5 rounded-full bg-black/20 border border-white/10 group-hover:border-yellow-400/50 flex items-center justify-center text-white font-bold text-[10px] transition-colors">
-                        {winner.rank}
-                      </div>
-                    </div>
-                    <div className="col-span-6 flex items-center gap-2">
-                      <img src={winner.avatar} alt={winner.name} className="w-6 h-6 rounded-full border border-white/20 object-cover" />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-white font-semibold text-xs truncate">{winner.name}</span>
-                      </div>
-                    </div>
-                    <div className="col-span-4 flex justify-end items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-900/50 border border-emerald-500/30 text-emerald-200 text-[9px] font-medium truncate max-w-[60px] text-center">
-                        {winner.team}
-                      </span>
-                      <span className="hidden xl:block text-yellow-400 font-mono font-bold text-xs">{winner.score.toLocaleString()}</span>
-                    </div>
-                  </motion.div>
+              <div className="flex items-end justify-center gap-20 lg:gap-32 w-full h-full pb-12 lg:pb-32 relative z-10 transform translate-y-[90px]">
+                {podiumOrder.map((winner) => (
+                  <div key={winner.id} className={`${winner.rank === 1 ? 'order-2 -mt-4 z-20 transform -translate-y-12' : winner.rank === 2 ? 'order-3 transform translate-y-4' : 'order-1 transform translate-y-4'}`}>
+                    <WinnerCard winner={winner} isCenter={winner.rank === 1} />
+                  </div>
                 ))}
               </div>
             </div>
-          </div>
-        </div>
 
+            {/* Right Panel: List */}
+            <div className="hidden lg:flex absolute right-4 top-4 bottom-4 w-[280px] xl:w-[320px] flex-col z-30">
+              <div className="w-full bg-black/50 backdrop-blur-md rounded-2xl border border-white/15 overflow-hidden shadow-2xl flex flex-col h-full">
+                <div className="px-3 py-2 border-b border-white/10 bg-white/5 flex items-center justify-between shrink-0">
+                  <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <Trophy size={14} className="text-yellow-400" />
+                    Bảng Xếp Hạng
+                  </h2>
+                  <div className="text-white/40 text-[9px] font-mono">TOP 4 - {employees.length}</div>
+                </div>
+
+                <div className="grid grid-cols-12 gap-1 px-2.5 py-2 bg-black/20 text-yellow-400/80 font-bold uppercase tracking-wider text-[11px] sticky top-0 z-10 backdrop-blur-sm shrink-0">
+                  <div className="col-span-2 text-center">Rank</div>
+                  <div className="col-span-6">Name</div>
+                  <div className="col-span-4 text-right">Team</div>
+                </div>
+
+                <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent p-1.5">
+                  <div className="space-y-0.5">
+                    {others.map((winner, index) => (
+                      <motion.div
+                        key={winner.id}
+                        initial={{ opacity: 0, x: 20 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: index * 0.05 }}
+                        className="grid grid-cols-12 gap-1 px-2 py-1.5 items-center bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all rounded-md group"
+                      >
+                        <div className="col-span-2 flex justify-center">
+                          <div className="w-6 h-6 rounded-full bg-black/20 border border-white/10 group-hover:border-yellow-400/50 flex items-center justify-center text-white font-bold text-[11px] transition-colors">
+                            {winner.rank}
+                          </div>
+                        </div>
+                        <div className="col-span-6 flex items-center gap-2">
+                          <img src={winner.avatar_url || 'https://via.placeholder.com/150'} alt={winner.name} className="w-6 h-6 rounded-full border border-white/20 object-cover flex-shrink-0" />
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-white font-semibold text-[12px] truncate">{winner.name}</span>
+                          </div>
+                        </div>
+                        <div className="col-span-4 flex justify-end items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-900/50 border border-emerald-500/30 text-emerald-200 text-[10px] font-medium truncate max-w-[60px] text-center">
+                            {winner.team}
+                          </span>
+                          <span className="hidden xl:block text-yellow-400 font-mono font-bold text-[12px]">{winner.score.toLocaleString()}</span>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
+
+      {/* Admin Modal */}
+      <AnimatePresence>
+        {showAdmin && (
+          <AdminModal
+            onClose={() => {
+              setShowAdmin(false);
+              fetchEmployees();
+            }}
+            employees={employees}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function WinnerCard({ winner, isCenter = false }: { winner: typeof WINNERS[0], isCenter?: boolean }) {
-  // Sizes
+function WinnerCard({ winner, isCenter = false }: { winner: Employee, isCenter?: boolean }) {
   const containerSize = isCenter ? "w-48 h-48 lg:w-60 lg:h-60" : "w-36 h-36 lg:w-44 lg:h-44";
-  const crownSize = isCenter ? 56 : 36;
-  
+
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: winner.rank * 0.2, type: "spring", stiffness: 100 }}
+      transition={{ delay: (winner.rank || 3) * 0.2, type: "spring", stiffness: 100 }}
       className="flex flex-col items-center relative z-10 group"
     >
-      {/* Floating Crown - Perfectly centered above frame */}
-      <motion.div 
-        animate={{ y: [0, -8, 0] }}
-        transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-        className="absolute -top-12 lg:-top-16 z-20 filter drop-shadow-[0_0_15px_rgba(253,186,49,0.8)]"
-      >
-        <Crown size={crownSize} className="text-[#FFD700] fill-[#FFD700]" strokeWidth={1} />
-      </motion.div>
-
-      {/* Main Avatar Container */}
       <div className={`relative ${containerSize} flex items-center justify-center`}>
-        
-        {/* Ambient Glow */}
-        <div className="absolute inset-0 bg-[#FFD700]/20 rounded-full blur-3xl transform scale-125" />
-
-        {/* Premium Royal Frame SVG */}
-        <div className="absolute inset-[-35%] pointer-events-none z-10">
-          <svg viewBox="0 0 300 300" className="w-full h-full drop-shadow-2xl" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              {/* Luxurious Gold Gradients */}
-              <linearGradient id={`royal-gold-${winner.id}`} x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#FDB931" />
-                <stop offset="25%" stopColor="#FFFFE0" />
-                <stop offset="50%" stopColor="#BF953F" />
-                <stop offset="75%" stopColor="#B8860B" />
-                <stop offset="100%" stopColor="#8B4513" />
-              </linearGradient>
-              <linearGradient id={`dark-gold-${winner.id}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#B8860B" />
-                <stop offset="100%" stopColor="#8B4513" />
-              </linearGradient>
-              <filter id="metal-glow">
-                <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-                <feMerge>
-                    <feMergeNode in="coloredBlur"/>
-                    <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-            </defs>
-            
-            {/* Outer Decorative Flourishes (Stylized Wings/Leaves) */}
-            <g stroke={`url(#royal-gold-${winner.id})`} strokeWidth="2" fill="none" opacity="0.8">
-               <path d="M50 150 Q30 100 80 50" strokeWidth="4" strokeLinecap="round" />
-               <path d="M250 150 Q270 100 220 50" strokeWidth="4" strokeLinecap="round" />
-               <path d="M40 180 Q20 130 60 220" strokeWidth="3" />
-               <path d="M260 180 Q280 130 240 220" strokeWidth="3" />
-            </g>
-
-            {/* Main Circular Frame Ring */}
-            <circle cx="150" cy="150" r="105" stroke={`url(#dark-gold-${winner.id})`} strokeWidth="8" fill="none" />
-            <circle cx="150" cy="150" r="100" stroke={`url(#royal-gold-${winner.id})`} strokeWidth="6" fill="none" filter="url(#metal-glow)" />
-            
-            {/* Inner Bevel Ring */}
-            <circle cx="150" cy="150" r="92" stroke="#FFF" strokeOpacity="0.3" strokeWidth="1" fill="none" />
-            
-            {/* Bottom Ornament (Rank Holder Base) */}
-            <path 
-              d="M100 240 Q150 270 200 240 L190 220 Q150 240 110 220 Z" 
-              fill={`url(#royal-gold-${winner.id})`} 
-              filter="url(#metal-glow)"
-            />
-          </svg>
-        </div>
-
-        {/* Avatar Image */}
-        <div className="w-full h-full rounded-full p-2 relative z-0">
+        <div className="absolute inset-0 bg-[#FFD700]/5 rounded-full transform scale-125" />
+        <div className="w-[84%] h-[84%] rounded-full p-0 relative z-0 top-[-14%]">
           <div className="w-full h-full rounded-full overflow-hidden bg-gray-900 shadow-inner relative">
-            <img 
-              src={winner.avatar} 
-              alt={winner.name} 
+            <img
+              src={winner.avatar_url || 'https://via.placeholder.com/300'}
+              alt={winner.name}
               className="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-110"
             />
-            {/* Inner Shadow Overlay for depth */}
             <div className="absolute inset-0 rounded-full shadow-[inset_0_0_20px_rgba(0,0,0,0.6)] pointer-events-none" />
           </div>
         </div>
 
-        {/* Rank Badge - Integrated into Frame */}
-        <div className="absolute -bottom-8 z-20 flex flex-col items-center">
-             {/* Gem/Badge Container */}
-             <div className={`
-               ${isCenter ? 'w-16 h-16' : 'w-12 h-12'} 
-               rounded-full bg-gradient-to-b from-[#D00000] to-[#8B0000]
-               border-[3px] border-[#FFD700] shadow-[0_5px_15px_rgba(0,0,0,0.5)] 
-               flex flex-col items-center justify-center relative overflow-hidden
-             `}>
-               {/* Shine effect on gem */}
-               <div className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] bg-gradient-to-br from-white/30 to-transparent rotate-45 pointer-events-none" />
-               
-               <span className="text-white font-black text-2xl leading-none drop-shadow-md relative z-10">{winner.rank}</span>
-               <span className="text-white/90 font-bold text-[8px] uppercase leading-none mt-0.5 relative z-10">TOP</span>
-             </div>
-             
-             {/* Decorative Ribbon Below Badge */}
-             <div className="mt-[-10px] -z-10">
-                <svg width="120" height="40" viewBox="0 0 120 40" fill="none">
-                  <path d="M10 10 L30 10 L40 25 L30 40 L10 40 L0 25 Z" fill="#8B0000" />
-                  <path d="M110 10 L90 10 L80 25 L90 40 L110 40 L120 25 Z" fill="#8B0000" />
-                </svg>
-             </div>
+        <div className="absolute inset-[-42%] pointer-events-none z-10">
+          <img
+            src={winner.rank === 1 ? top1Img : winner.rank === 2 ? top2Img : top3Img}
+            alt={`Rank ${winner.rank} frame`}
+            className="w-full h-full object-contain drop-shadow-2xl"
+          />
+        </div>
+        <div className={`absolute ${winner.rank === 1 ? "bottom-[calc(0%+10px)]" : "bottom-[3%]"} z-20 w-[120%] text-center`}>
+          <h3 className={`text-[#4D3302] font-black ${winner.rank === 1 ? "text-[12px] lg:text-[15px]" : "text-[10px] lg:text-[12px]"} uppercase tracking-tighter truncate px-2`}>
+            {winner.name}
+          </h3>
+        </div>
+
+        <div className={`absolute ${winner.rank === 1 ? "bottom-[-26%]" : "bottom-[-26%]"} z-20 w-full text-center`}>
+          <span className={`text-[#4D3302] font-bold ${winner.rank === 1 ? "text-[12px] lg:text-[15px]" : "text-[9px] lg:text-[12px]"} uppercase`}>
+            Team {winner.team}
+          </span>
         </div>
       </div>
 
-      {/* Name & Team Info */}
-      <div className="mt-12 text-center flex flex-col items-center w-64">
-        <h3 className="text-transparent bg-clip-text bg-gradient-to-r from-[#FFD700] via-[#FFF] to-[#FFD700] font-black text-sm lg:text-base uppercase tracking-wider drop-shadow-sm whitespace-nowrap overflow-hidden text-ellipsis w-full filter drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
-          {winner.name}
-        </h3>
-        <div className="mt-1 flex flex-col items-center">
-           <div className="flex items-center gap-2">
-              <div className="h-[1px] w-8 bg-gradient-to-r from-transparent to-yellow-500/50" />
-              <span className="text-yellow-100/80 font-serif italic text-xs lg:text-sm">Team {winner.team}</span>
-              <div className="h-[1px] w-8 bg-gradient-to-l from-transparent to-yellow-500/50" />
-           </div>
-           <div className="mt-1 text-yellow-400 font-bold text-xs lg:text-sm bg-black/20 px-3 py-0.5 rounded-full border border-yellow-500/20 backdrop-blur-sm">
-             Doanh số: {winner.score.toLocaleString()}
-           </div>
+      <div className={`${isCenter ? "mt-20" : "mt-14"} text-center flex flex-col items-center`}>
+        <div className="mt-1 text-yellow-400 font-bold text-xs lg:text-sm bg-black/20 px-3 py-0.5 rounded-full border border-yellow-500/20 backdrop-blur-sm">
+          Doanh số: {winner.score.toLocaleString()}
         </div>
       </div>
     </motion.div>
   );
 }
 
+function AdminModal({ onClose, employees }: { onClose: () => void, employees: Employee[] }) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [formData, setFormData] = useState({
+    name: '',
+    team: '',
+    score: 0,
+    avatar_url: '' as string | null
+  });
 
+  const handleEdit = (emp: Employee) => {
+    setEditId(emp.id);
+    setFormData({
+      name: emp.name,
+      team: emp.team,
+      score: emp.score,
+      avatar_url: emp.avatar_url
+    });
+  };
+
+  const handleReset = () => {
+    setEditId(null);
+    setFormData({ name: '', team: '', score: 0, avatar_url: '' });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsSubmitting(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = fileName;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      setFormData({ ...formData, avatar_url: publicUrl });
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Lỗi khi tải ảnh lên. Hãy đảm bảo bạn đã tạo bucket "avatars" ở chế độ public.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      if (editId) {
+        const { error } = await supabase
+          .from('employees')
+          .update(formData)
+          .eq('id', editId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('employees')
+          .insert([formData]);
+        if (error) throw error;
+      }
+      handleReset();
+      onClose();
+    } catch (error) {
+      console.error('Error saving:', error);
+      alert('Lỗi khi lưu dữ liệu.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa nhân viên này?')) return;
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('employees')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      onClose(); // Refresh data
+    } catch (error) {
+      console.error('Error deleting:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl"
+      >
+        <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Settings className="text-yellow-400" />
+            Quản lý Nhân viên
+          </h2>
+          <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Form Section */}
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold text-yellow-400 flex items-center gap-2">
+              {editId ? <Save size={18} /> : <Plus size={18} />}
+              {editId ? 'Sửa thông tin' : 'Thêm nhân viên mới'}
+            </h3>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="flex justify-center mb-6">
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-24 h-24 rounded-full bg-black/40 border-2 border-dashed border-white/20 hover:border-yellow-400/50 flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all group relative"
+                >
+                  {formData.avatar_url ? (
+                    <>
+                      <img src={formData.avatar_url} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Upload size={20} className="text-white" />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={24} className="text-white/20" />
+                      <span className="text-[10px] text-white/40 mt-1">Chọn ảnh</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    accept="image/*"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-white/50 uppercase font-bold px-1">Tên nhân viên</label>
+                <input
+                  required
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-yellow-400/50 outline-none transition-all"
+                  placeholder="VD: Ms Thái Minh Khuê"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs text-white/50 uppercase font-bold px-1">Team</label>
+                  <input
+                    required
+                    value={formData.team}
+                    onChange={e => setFormData({ ...formData, team: e.target.value })}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-yellow-400/50 outline-none transition-all"
+                    placeholder="VD: Alpha"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-white/50 uppercase font-bold px-1">Doanh số</label>
+                  <input
+                    required
+                    type="text"
+                    inputMode="numeric"
+                    value={formData.score === 0 ? '' : formData.score.toLocaleString('vi-VN')}
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setFormData({ ...formData, score: parseInt(val) || 0 });
+                    }}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-yellow-400/50 outline-none transition-all"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
+                >
+                  {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+                  {editId ? 'Cập nhật' : 'Lưu nhân viên'}
+                </button>
+                {editId && (
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="px-4 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/10"
+                  >
+                    Hủy
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* List Section */}
+          <div className="space-y-6 flex flex-col">
+            <h3 className="text-lg font-semibold text-white/60">Danh sách hiện tại</h3>
+            <div className="flex-1 space-y-2 overflow-y-auto max-h-[400px] pr-2 scrollbar-thin scrollbar-thumb-white/10">
+              {employees.map(emp => (
+                <div key={emp.id} className="p-3 bg-white/5 border border-white/5 rounded-xl flex items-center gap-3 group">
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-black/20 flex-shrink-0">
+                    <img src={emp.avatar_url || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-bold truncate text-sm">{emp.name}</p>
+                    <p className="text-white/40 text-xs">{emp.team} • {emp.score.toLocaleString()} đ</p>
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => handleEdit(emp)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg">
+                      <Settings size={16} />
+                    </button>
+                    <button onClick={() => handleDelete(emp.id)} className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {employees.length === 0 && (
+                <div className="text-center py-10 text-white/20 italic">Chưa có dữ liệu nhân viên</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
