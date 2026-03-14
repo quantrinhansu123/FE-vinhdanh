@@ -5,11 +5,13 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Crown, Star, Medal, Settings, X, Upload, Plus, Save, Trash2, Loader2, User, LogOut, TrendingUp, Menu, EyeOff } from 'lucide-react';
+import { Trophy, Crown, Star, Medal, Settings, X, Upload, Plus, Save, Trash2, Loader2, User, LogOut, TrendingUp, Menu, EyeOff, BarChart3, FileText } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { ReportModal } from './components/ReportModal';
 import { LoginView } from './components/LoginView';
 import { ProgressDashboard } from './components/ProgressDashboard';
+import { GoogleAdsDashboard } from './components/GoogleAdsDashboard';
+import { MarketingDashboard } from './components/MarketingDashboard';
 
 import backgroundImg from './assets/background.png';
 import top1Img from './assets/top1.png';
@@ -66,6 +68,8 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showProgress, setShowProgress] = useState(false);
+  const [showGoogleAds, setShowGoogleAds] = useState(false);
+  const [showMarketingDashboard, setShowMarketingDashboard] = useState(false);
   const [showMenuBar, setShowMenuBar] = useState(true);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
@@ -222,6 +226,18 @@ export default function App() {
             >
               <TrendingUp size={14} /> Tiến bộ
             </button>
+            <button
+              onClick={() => setShowGoogleAds(true)}
+              className="px-3 py-2 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-xl transition-all border border-white/10 backdrop-blur-md text-xs font-semibold flex items-center gap-1"
+            >
+              <BarChart3 size={14} /> Google Ads
+            </button>
+            <button
+              onClick={() => setShowMarketingDashboard(true)}
+              className="px-3 py-2 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-xl transition-all border border-white/10 backdrop-blur-md text-xs font-semibold flex items-center gap-1"
+            >
+              <FileText size={14} /> Marketing Dashboard
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -339,6 +355,20 @@ export default function App() {
           <ProgressDashboard
             onClose={() => {
               setShowProgress(false);
+            }}
+          />
+        )}
+        {showGoogleAds && (
+          <GoogleAdsDashboard
+            onClose={() => {
+              setShowGoogleAds(false);
+            }}
+          />
+        )}
+        {showMarketingDashboard && (
+          <MarketingDashboard
+            onClose={() => {
+              setShowMarketingDashboard(false);
             }}
           />
         )}

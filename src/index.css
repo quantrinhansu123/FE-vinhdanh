@@ -2,10 +2,71 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  /* Google Ads Dashboard Colors */
+  --color-ads-navy: #0c0e2c;
+  --color-ads-sidebar: #13153c;
+  --color-ads-card: #1a1c4e;
+  --color-ads-active: #2d327d;
+  --color-ads-accent: #ff4d8d;
+  --color-ads-table-header: #1d1e45;
+}
+
+@layer utilities {
+  .bg-ads-navy {
+    background-color: var(--color-ads-navy);
+  }
+  
+  .bg-ads-sidebar {
+    background-color: var(--color-ads-sidebar);
+  }
+  
+  .bg-ads-card {
+    background-color: var(--color-ads-card);
+  }
+  
+  .bg-ads-active {
+    background-color: var(--color-ads-active);
+  }
+  
+  .bg-ads-accent {
+    background-color: var(--color-ads-accent);
+  }
+  
+  .bg-ads-table-header {
+    background-color: var(--color-ads-table-header);
+  }
+  
+  .text-ads-accent {
+    color: var(--color-ads-accent);
+  }
+  
+  .border-ads-active {
+    border-color: var(--color-ads-active);
+  }
 }
 
 @layer utilities {
   .glass-panel {
     @apply bg-white/5 border border-white/10 backdrop-blur-md;
+  }
+  
+  /* Custom Scrollbar Styles */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #13153c;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #2d327d;
+    border-radius: 10px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 4px;
   }
 }
