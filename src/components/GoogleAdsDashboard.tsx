@@ -18,8 +18,13 @@ interface SearchTerm {
   avgCPM: string;
 }
 
+export type GoogleAdsDashboardVariant = 'modal' | 'embedded';
+
 interface GoogleAdsDashboardProps {
   onClose?: () => void;
+  variant?: GoogleAdsDashboardVariant;
+  /** Khi embedded — scroll CRM (mặc định crm-dash-google-ads) */
+  embeddedRootId?: string;
 }
 
 interface EmployeeReport {
@@ -55,7 +60,12 @@ interface AdsMetrics {
 
 const REPORT_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 
-export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
+export function GoogleAdsDashboard({
+  onClose,
+  variant = 'modal',
+  embeddedRootId = 'crm-dash-google-ads',
+}: GoogleAdsDashboardProps) {
+  const embedded = variant === 'embedded';
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState<'overview' | 'map' | 'employee-report'>('overview');
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
@@ -721,12 +731,16 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
   const conversionsData = [25, 26, 18, 45, 61, 41, 18];
   const chartDates = ['21 thg 2, 2026', '22 thg 2, 2026', '23 thg 2, 2026', '24 thg 2, 2026', '25 thg 2, 2026', '26 thg 2, 2026', '27 thg 2, 2026'];
 
-  return (
+  const shell = (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[130] bg-ads-navy text-gray-200 font-sans flex flex-col overflow-hidden"
+      className={
+        embedded
+          ? 'relative z-0 w-full rounded-2xl border border-emerald-800/45 flex flex-col h-[min(88vh,1240px)] min-h-[520px] max-h-[min(92vh,1400px)] bg-ads-navy text-gray-200 font-sans overflow-hidden shadow-[0_12px_48px_rgba(0,0,0,0.4)]'
+          : 'fixed inset-0 z-[130] bg-ads-navy text-gray-200 font-sans flex flex-col overflow-hidden'
+      }
     >
       {/* Top Header */}
       <header className="h-16 bg-white flex items-center justify-between px-6 border-b border-gray-200 sticky top-0 z-50">
@@ -791,7 +805,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
         {/* Main Content */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Secondary Header */}
-          <div className="bg-[#1e2154] p-4 border-b border-gray-700">
+          <div className="bg-ads-sidebar p-4 border-b border-emerald-900/50">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-center space-x-4">
                 <div className="bg-white p-2 rounded-lg">
@@ -807,14 +821,14 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                 </div>
               </div>
               <div className="flex items-center space-x-4 flex-wrap">
-                <div className="bg-[#0f1134] px-4 py-2 rounded-lg flex items-center space-x-2 border border-gray-600 cursor-pointer hover:bg-[#13153c] transition">
-                  <div className="w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center text-[10px]">
+                <div className="bg-ads-card px-4 py-2 rounded-lg flex items-center space-x-2 border border-emerald-800/40 cursor-pointer hover:bg-emerald-900/50 transition">
+                  <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-[10px]">
                     <span className="text-white">!</span>
                   </div>
                   <span className="text-sm">heoquay.vn</span>
                   <ChevronDown className="w-4 h-4 text-gray-400" />
                 </div>
-                <div className="bg-[#0f1134] px-4 py-2 rounded-lg border border-gray-600 flex items-center space-x-2 cursor-pointer hover:bg-[#13153c] transition">
+                <div className="bg-ads-card px-4 py-2 rounded-lg border border-emerald-800/40 flex items-center space-x-2 cursor-pointer hover:bg-emerald-900/50 transition">
                   <span className="text-sm">1 thg 1, 2026 - 31 thg 1, 2026</span>
                   <ChevronDown className="w-4 h-4 text-gray-400" />
                 </div>
@@ -823,19 +837,19 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
             
             {/* Filters */}
             <div className="flex flex-wrap gap-4 mt-4">
-              <div className="bg-[#1a1c4e] px-4 py-2 rounded border border-gray-600 text-sm flex items-center justify-between min-w-[200px] cursor-pointer hover:bg-[#1d1e45] transition">
+              <div className="bg-ads-card px-4 py-2 rounded border border-emerald-800/40 text-sm flex items-center justify-between min-w-[200px] cursor-pointer hover:bg-emerald-900/45 transition">
                 <span className="text-gray-400">Advertising channel type</span>
                 <ChevronDown className="w-4 h-4" />
               </div>
-              <div className="bg-[#1a1c4e] px-4 py-2 rounded border border-gray-600 text-sm flex items-center justify-between min-w-[200px] cursor-pointer hover:bg-[#1d1e45] transition">
+              <div className="bg-ads-card px-4 py-2 rounded border border-emerald-800/40 text-sm flex items-center justify-between min-w-[200px] cursor-pointer hover:bg-emerald-900/45 transition">
                 <span className="text-gray-400">Bid Strategy</span>
                 <ChevronDown className="w-4 h-4" />
               </div>
-              <div className="bg-[#1a1c4e] px-4 py-2 rounded border border-gray-600 text-sm flex items-center justify-between min-w-[200px] cursor-pointer hover:bg-[#1d1e45] transition">
+              <div className="bg-ads-card px-4 py-2 rounded border border-emerald-800/40 text-sm flex items-center justify-between min-w-[200px] cursor-pointer hover:bg-emerald-900/45 transition">
                 <span className="text-gray-400">Campaign</span>
                 <ChevronDown className="w-4 h-4" />
               </div>
-              <div className="bg-[#1a1c4e] px-4 py-2 rounded border border-gray-600 text-sm flex items-center justify-between min-w-[200px] cursor-pointer hover:bg-[#1d1e45] transition">
+              <div className="bg-ads-card px-4 py-2 rounded border border-emerald-800/40 text-sm flex items-center justify-between min-w-[200px] cursor-pointer hover:bg-emerald-900/45 transition">
                 <span className="text-gray-400">Campaign status</span>
                 <ChevronDown className="w-4 h-4" />
               </div>
@@ -843,7 +857,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
           </div>
 
           {/* Content Body */}
-          <div className="p-6 bg-[#090b24] flex-1 overflow-y-auto custom-scrollbar">
+          <div className="p-6 bg-ads-navy flex-1 overflow-y-auto custom-scrollbar">
             {/* Tabs */}
             <div className="flex gap-2 mb-6">
               <button
@@ -851,7 +865,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                   activeTab === 'overview'
                     ? 'bg-ads-active text-white'
-                    : 'bg-[#1a1c4e] text-gray-400 hover:text-white'
+                    : 'bg-ads-card text-gray-400 hover:text-white border border-emerald-900/30'
                 }`}
               >
                 Tổng quan
@@ -861,7 +875,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                   activeTab === 'map'
                     ? 'bg-ads-active text-white'
-                    : 'bg-[#1a1c4e] text-gray-400 hover:text-white'
+                    : 'bg-ads-card text-gray-400 hover:text-white border border-emerald-900/30'
                 }`}
               >
                 Bản đồ Đông Nam Á
@@ -873,7 +887,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                 {/* Metric Cards */}
                 <div className="grid grid-cols-2 gap-0 mb-8">
               {/* Project Alpha Card */}
-              <div className="bg-ads-card rounded-xl p-3 border-t-4 border-indigo-500 flex flex-col">
+              <div className="bg-ads-card rounded-xl p-3 border-t-4 border-emerald-600 flex flex-col">
                 <div className="mb-2">
                   <div className="flex items-center justify-between mb-1">
                     <div className="text-xs uppercase text-gray-400 font-bold">{projects[0].name}</div>
@@ -916,8 +930,8 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                     <svg className="w-full h-full" viewBox="0 0 400 100" preserveAspectRatio="none">
                       <defs>
                         <linearGradient id="impressionsGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.4" />
-                          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                          <stop offset="0%" stopColor="#22c55e" stopOpacity="0.4" />
+                          <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
                         </linearGradient>
                       </defs>
                       {(() => {
@@ -955,13 +969,13 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                             <path
                               d={smoothPath}
                               fill="none"
-                              stroke="#3b82f6"
+                              stroke="#22c55e"
                               strokeWidth="2.5"
                               strokeLinecap="round"
                             />
                             {points.map((point, idx) => (
                               <g key={idx}>
-                                <circle cx={point.x} cy={point.y} r="2.5" fill="#3b82f6" />
+                                <circle cx={point.x} cy={point.y} r="2.5" fill="#22c55e" />
                                 <text
                                   x={point.x}
                                   y={point.y - 6}
@@ -998,7 +1012,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                           cy="50"
                           r="35"
                           fill="none"
-                          stroke="#3b82f6"
+                          stroke="#22c55e"
                           strokeWidth="8"
                           strokeDasharray={`${65 * 2 * Math.PI * 35 / 100} ${2 * Math.PI * 35}`}
                           strokeDashoffset="0"
@@ -1013,7 +1027,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
               </div>
 
               {/* Project Beta Card */}
-              <div className="bg-ads-card rounded-xl p-3 border-t-4 border-purple-600 flex flex-col">
+              <div className="bg-ads-card rounded-xl p-3 border-t-4 border-lime-500 flex flex-col">
                 <div className="mb-2">
                   <div className="flex items-center justify-between mb-1">
                     <div className="text-xs uppercase text-gray-400 font-bold">{projects[1].name}</div>
@@ -1056,8 +1070,8 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                       <svg className="w-full h-full" viewBox="0 0 400 100" preserveAspectRatio="none">
                         <defs>
                           <linearGradient id="clicksGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stopColor="#a855f7" stopOpacity="0.4" />
-                            <stop offset="100%" stopColor="#a855f7" stopOpacity="0" />
+                            <stop offset="0%" stopColor="#34d399" stopOpacity="0.4" />
+                            <stop offset="100%" stopColor="#34d399" stopOpacity="0" />
                           </linearGradient>
                         </defs>
                         {(() => {
@@ -1095,13 +1109,13 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                               <path
                                 d={smoothPath}
                                 fill="none"
-                                stroke="#a855f7"
+                                stroke="#34d399"
                                 strokeWidth="2.5"
                                 strokeLinecap="round"
                               />
                               {points.map((point, idx) => (
                                 <g key={idx}>
-                                  <circle cx={point.x} cy={point.y} r="2.5" fill="#a855f7" />
+                                  <circle cx={point.x} cy={point.y} r="2.5" fill="#34d399" />
                                   <text
                                     x={point.x}
                                     y={point.y - 6}
@@ -1139,7 +1153,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                           cy="50"
                           r="35"
                           fill="none"
-                          stroke="#a855f7"
+                          stroke="#34d399"
                           strokeWidth="8"
                           strokeDasharray={`${72 * 2 * Math.PI * 35 / 100} ${2 * Math.PI * 35}`}
                           strokeDashoffset="0"
@@ -1174,7 +1188,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                             cy="50"
                             fill="none"
                             r="40"
-                            stroke="#ff4d8d"
+                            stroke="#22c55e"
                             strokeDasharray={`${75 * 2.512} ${251.2}`}
                             strokeWidth="12"
                           />
@@ -1741,7 +1755,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                     {/* Left Column - Summary Tables */}
                     <div className="space-y-6">
                   {/* Marketing Expenses */}
-                  <div className="bg-[#0f1134] rounded-lg p-4">
+                  <div className="bg-ads-card rounded-lg p-4">
                     <h4 className="text-sm font-bold text-white mb-3">Marketing Expenses</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between text-gray-300">
@@ -1760,7 +1774,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                   </div>
 
                   {/* Comments Report */}
-                  <div className="bg-[#0f1134] rounded-lg p-4">
+                  <div className="bg-ads-card rounded-lg p-4">
                     <h4 className="text-sm font-bold text-white mb-3">Comments Report</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between text-gray-300">
@@ -1779,7 +1793,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                   </div>
 
                   {/* New Messages Report */}
-                  <div className="bg-[#0f1134] rounded-lg p-4">
+                  <div className="bg-ads-card rounded-lg p-4">
                     <h4 className="text-sm font-bold text-white mb-3">New Messages Report</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between text-gray-300">
@@ -1798,7 +1812,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                   </div>
 
                   {/* Sales Report */}
-                  <div className="bg-[#0f1134] rounded-lg p-4">
+                  <div className="bg-ads-card rounded-lg p-4">
                     <h4 className="text-sm font-bold text-white mb-3">Sales Report</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between text-gray-300">
@@ -1817,7 +1831,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                   </div>
 
                   {/* Accounts Report */}
-                  <div className="bg-[#0f1134] rounded-lg p-4">
+                  <div className="bg-ads-card rounded-lg p-4">
                     <h4 className="text-sm font-bold text-white mb-3">Accounts report (Tài khoản - Chi tiêu)</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between text-gray-300">
@@ -1847,7 +1861,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                     {/* Right Column - Charts */}
                     <div className="space-y-6">
                   {/* Chart 1: Spending and Impressions by Day */}
-                  <div className="bg-[#0f1134] rounded-lg p-4">
+                  <div className="bg-ads-card rounded-lg p-4">
                     <h4 className="text-sm font-bold text-white mb-3">Số tiền chi tiêu và lượt hiển thị theo ngày</h4>
                     <div className="h-48 relative">
                       <svg className="w-full h-full" viewBox="0 0 400 200" preserveAspectRatio="none">
@@ -1868,7 +1882,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                         <polyline
                           points="90,80 170,50 250,50 330,100"
                           fill="none"
-                          stroke="#3b82f6"
+                          stroke="#22c55e"
                           strokeWidth="2"
                         />
                         {/* X-axis labels */}
@@ -1881,14 +1895,14 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                   </div>
 
                   {/* Chart 2: Spending by Account (Donut) */}
-                  <div className="bg-[#0f1134] rounded-lg p-4">
+                  <div className="bg-ads-card rounded-lg p-4">
                     <h4 className="text-sm font-bold text-white mb-3">Chi tiêu theo tài khoản</h4>
                     <div className="h-48 flex items-center justify-center">
                       <svg className="w-full h-full" viewBox="0 0 200 200">
                         <circle cx="100" cy="100" r="60" fill="none" stroke="#1e293b" strokeWidth="30" />
                         <circle cx="100" cy="100" r="60" fill="none" stroke="#10b981" strokeWidth="30" strokeDasharray={`${51.2 * 3.77} ${377 - 51.2 * 3.77}`} strokeDashoffset="0" transform="rotate(-90 100 100)" />
                         <circle cx="100" cy="100" r="60" fill="none" stroke="#f97316" strokeWidth="30" strokeDasharray={`${25.3 * 3.77} ${377 - 25.3 * 3.77}`} strokeDashoffset={`${-51.2 * 3.77}`} transform="rotate(-90 100 100)" />
-                        <circle cx="100" cy="100" r="60" fill="none" stroke="#3b82f6" strokeWidth="30" strokeDasharray={`${12.6 * 3.77} ${377 - 12.6 * 3.77}`} strokeDashoffset={`${-(51.2 + 25.3) * 3.77}`} transform="rotate(-90 100 100)" />
+                        <circle cx="100" cy="100" r="60" fill="none" stroke="#22c55e" strokeWidth="30" strokeDasharray={`${12.6 * 3.77} ${377 - 12.6 * 3.77}`} strokeDashoffset={`${-(51.2 + 25.3) * 3.77}`} transform="rotate(-90 100 100)" />
                         <text x="100" y="95" textAnchor="middle" fill="#fff" fontSize="14" fontWeight="bold">51.2%</text>
                         <text x="100" y="110" textAnchor="middle" fill="#9ca3af" fontSize="10">NHATMINH</text>
                       </svg>
@@ -1896,7 +1910,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                   </div>
 
                   {/* Chart 3: Messages, Comments, and Impressions by Day */}
-                  <div className="bg-[#0f1134] rounded-lg p-4">
+                  <div className="bg-ads-card rounded-lg p-4">
                     <h4 className="text-sm font-bold text-white mb-3">Lượt nhắn tin, bình luận và lượt hiển thị theo ngày</h4>
                     <div className="h-48 relative">
                       <svg className="w-full h-full" viewBox="0 0 400 200" preserveAspectRatio="none">
@@ -1916,7 +1930,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                         <polyline
                           points="90,50 170,50 250,50 330,100"
                           fill="none"
-                          stroke="#3b82f6"
+                          stroke="#22c55e"
                           strokeWidth="2"
                         />
                         {/* Line for New Messages */}
@@ -1936,7 +1950,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                   </div>
 
                   {/* Chart 4: Impressions and Sales by Time Slot */}
-                  <div className="bg-[#0f1134] rounded-lg p-4">
+                  <div className="bg-ads-card rounded-lg p-4">
                     <h4 className="text-sm font-bold text-white mb-3">Lượt hiển thị và lượt bán hàng theo khung thời gian</h4>
                     <div className="h-48 relative">
                       <svg className="w-full h-full" viewBox="0 0 400 200" preserveAspectRatio="none">
@@ -1957,7 +1971,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                         <polyline
                           points="65,195 135,195 205,195 275,30 345,0"
                           fill="none"
-                          stroke="#3b82f6"
+                          stroke="#22c55e"
                           strokeWidth="2"
                         />
                         {/* X-axis labels */}
@@ -1971,7 +1985,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                   </div>
 
                   {/* Chart 5: Sales and Impressions by Day */}
-                  <div className="bg-[#0f1134] rounded-lg p-4">
+                  <div className="bg-ads-card rounded-lg p-4">
                     <h4 className="text-sm font-bold text-white mb-3">Lượt bán hàng và lượt hiển thị theo ngày</h4>
                     <div className="h-48 relative">
                       <svg className="w-full h-full" viewBox="0 0 400 200" preserveAspectRatio="none">
@@ -1991,7 +2005,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                         <polyline
                           points="90,50 170,50 250,50 330,100"
                           fill="none"
-                          stroke="#3b82f6"
+                          stroke="#22c55e"
                           strokeWidth="2"
                         />
                         {/* X-axis labels */}
@@ -2004,7 +2018,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                   </div>
 
                   {/* Chart 6: Comments and Messages by Time Slot */}
-                  <div className="bg-[#0f1134] rounded-lg p-4">
+                  <div className="bg-ads-card rounded-lg p-4">
                     <h4 className="text-sm font-bold text-white mb-3">Lượt bình luận và tin nhắn theo khung thời gian</h4>
                     <div className="h-48 relative">
                       <svg className="w-full h-full" viewBox="0 0 400 200" preserveAspectRatio="none">
@@ -2025,7 +2039,7 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
                         <polyline
                           points="65,180 135,175 205,100 275,60 345,40"
                           fill="none"
-                          stroke="#3b82f6"
+                          stroke="#22c55e"
                           strokeWidth="2"
                         />
                         {/* X-axis labels */}
@@ -2266,20 +2280,30 @@ export function GoogleAdsDashboard({ onClose }: GoogleAdsDashboardProps) {
           </div>
         </main>
       </div>
-      <footer className="h-1 bg-ads-accent w-full"></footer>
-      
-      {/* Close Button */}
-      {onClose && (
+      <footer className="h-1 bg-ads-accent w-full shrink-0"></footer>
+
+      {!embedded && onClose ? (
         <button
+          type="button"
           onClick={onClose}
           className="fixed top-4 right-4 z-[140] p-2 bg-black/60 hover:bg-black/80 text-white rounded-full transition-all border border-white/20 backdrop-blur-md"
           title="Đóng"
         >
           <X size={20} />
         </button>
-      )}
+      ) : null}
     </motion.div>
   );
+
+  if (embedded) {
+    return (
+      <div id={embeddedRootId} className="w-full mb-8 min-w-0">
+        {shell}
+      </div>
+    );
+  }
+
+  return shell;
 }
 
 // Southeast Asia Map Component
@@ -2372,14 +2396,14 @@ function SoutheastAsiaMap({ selectedCountry, onCountrySelect }: SoutheastAsiaMap
   return (
     <div className="bg-ads-card rounded-xl p-6">
       <h3 className="text-lg font-bold mb-4">Bản đồ Đông Nam Á</h3>
-      <div className="relative bg-[#0f1134] rounded-lg p-4 overflow-auto">
+      <div className="relative bg-ads-card rounded-lg p-4 overflow-auto">
         <svg
           viewBox="0 0 400 250"
           className="w-full h-auto"
           style={{ minHeight: '500px' }}
         >
           {/* Background */}
-          <rect width="400" height="250" fill="#0f1134" />
+          <rect width="400" height="250" fill="#12261c" />
           
           {/* Countries */}
           {countries.map((country) => {
@@ -2388,8 +2412,8 @@ function SoutheastAsiaMap({ selectedCountry, onCountrySelect }: SoutheastAsiaMap
               <g key={country.id}>
                 <path
                   d={country.path}
-                  fill={isSelected ? '#ff4d8d' : '#2d327d'}
-                  stroke={isSelected ? '#ff4d8d' : '#1a1c4e'}
+                  fill={isSelected ? '#22c55e' : '#166534'}
+                  stroke={isSelected ? '#4ade80' : '#14532d'}
                   strokeWidth={isSelected ? '2' : '1'}
                   className="cursor-pointer transition-all hover:fill-[#3d428d]"
                   onClick={() => onCountrySelect(isSelected ? null : country.id)}
@@ -2420,9 +2444,9 @@ function SoutheastAsiaMap({ selectedCountry, onCountrySelect }: SoutheastAsiaMap
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-4 p-4 bg-ads-active rounded-lg border border-pink-500/30"
+            className="mt-4 p-4 bg-ads-active rounded-lg border border-emerald-400/40"
           >
-            <h4 className="text-lg font-bold text-pink-400 mb-2">
+            <h4 className="text-lg font-bold text-emerald-300 mb-2">
               {countries.find(c => c.id === selectedCountry)?.name}
             </h4>
             <div className="grid grid-cols-2 gap-4 text-sm">

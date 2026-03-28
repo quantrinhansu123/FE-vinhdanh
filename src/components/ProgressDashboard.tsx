@@ -29,7 +29,19 @@ interface DailyReport {
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const REPORT_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 
-export function ProgressDashboard({ onClose }: { onClose: () => void }) {
+export type ProgressDashboardVariant = 'modal' | 'embedded';
+
+export function ProgressDashboard({
+  onClose,
+  variant = 'modal',
+  embeddedRootId = 'crm-dashboard-progress',
+}: {
+  onClose?: () => void;
+  variant?: ProgressDashboardVariant;
+  /** `id` trên wrapper khi embedded — để scroll CRM (vd. Team → Tiến bộ) */
+  embeddedRootId?: string;
+}) {
+  const embedded = variant === 'embedded';
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
@@ -135,51 +147,57 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
   const totalOrders = dailyReports.reduce((sum, r) => sum + (r.order_count || 0), 0);
   const totalAdCost = dailyReports.reduce((sum, r) => sum + (r.ad_cost || 0), 0);
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-sm p-4 overflow-auto"
-    >
+  const shell = (
       <motion.div
-        initial={{ scale: 0.95, y: 12 }}
-        animate={{ scale: 1, y: 0 }}
-        className="mx-auto max-w-7xl bg-gradient-to-br from-teal-950/40 to-slate-950/40 border border-teal-500/30 rounded-2xl flex flex-col overflow-hidden backdrop-blur-sm"
+        initial={embedded ? false : { scale: 0.95, y: 12 }}
+        animate={embedded ? false : { scale: 1, y: 0 }}
+        className={
+          embedded
+            ? 'w-full crm-glass-card rounded-2xl border border-emerald-500/25 flex flex-col overflow-hidden bg-gradient-to-br from-emerald-950/35 to-crm-surface/80'
+            : 'mx-auto max-w-7xl bg-gradient-to-br from-emerald-950/50 to-slate-950/50 border border-emerald-500/35 rounded-2xl flex flex-col overflow-hidden backdrop-blur-sm'
+        }
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-teal-500/30 bg-teal-900/40 backdrop-blur-sm">
-          <div className="flex items-center justify-between mb-4">
+        <div className="px-6 py-4 border-b border-emerald-500/30 bg-emerald-950/50 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4 gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                <TrendingUp className="text-teal-400" />
+              <h2 className="text-xl sm:text-2xl font-bold text-crm-on-surface flex items-center gap-2">
+                <TrendingUp className="text-emerald-400 shrink-0" />
                 Chi tiết tiến bộ nhân viên
               </h2>
-              <p className="text-teal-100/60 text-sm mt-1">Theo dõi báo cáo hàng ngày và biểu đồ tiến bộ</p>
+              <p className="text-emerald-200/70 text-sm mt-1">Theo dõi báo cáo hàng ngày và biểu đồ tiến bộ</p>
             </div>
-            <button onClick={onClose} className="p-2 rounded-lg text-teal-200/60 hover:text-white hover:bg-teal-500/20">
-              <X size={24} />
-            </button>
+            {!embedded && onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 rounded-lg text-emerald-200/70 hover:text-white hover:bg-emerald-500/20 shrink-0"
+              >
+                <X size={24} />
+              </button>
+            ) : null}
           </div>
-          
+
           {/* Tabs */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
+              type="button"
               onClick={() => setActiveTab('individual')}
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                 activeTab === 'individual'
-                  ? 'bg-teal-500 text-white'
-                  : 'bg-teal-800/30 text-teal-200 hover:bg-teal-800/50'
+                  ? 'bg-emerald-600 text-white shadow-[0_0_16px_rgba(34,197,94,0.35)]'
+                  : 'bg-emerald-900/40 text-emerald-200 hover:bg-emerald-800/50 border border-emerald-500/20'
               }`}
             >
               Chi tiết cá nhân
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('comparison')}
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                 activeTab === 'comparison'
-                  ? 'bg-teal-500 text-white'
-                  : 'bg-teal-800/30 text-teal-200 hover:bg-teal-800/50'
+                  ? 'bg-emerald-600 text-white shadow-[0_0_16px_rgba(34,197,94,0.35)]'
+                  : 'bg-emerald-900/40 text-emerald-200 hover:bg-emerald-800/50 border border-emerald-500/20'
               }`}
             >
               So sánh nhân viên
@@ -188,7 +206,7 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
         </div>
 
         {isLoading ? (
-          <div className="h-96 flex items-center justify-center gap-2 text-teal-100">
+          <div className="h-96 flex items-center justify-center gap-2 text-emerald-100">
             <Loader2 className="animate-spin" size={24} />
             <span>Đang tải dữ liệu...</span>
           </div>
@@ -197,19 +215,19 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 p-6">
               {/* Left: Employee List */}
               <div className="lg:col-span-1">
-                <div className="bg-teal-900/30 border border-teal-500/20 rounded-xl p-4 space-y-2 max-h-96 overflow-y-auto">
-                  <h3 className="text-sm font-bold text-teal-200 uppercase mb-3">Chọn nhân viên</h3>
+                <div className="bg-emerald-900/30 border border-emerald-500/20 rounded-xl p-4 space-y-2 max-h-96 overflow-y-auto">
+                  <h3 className="text-sm font-bold text-emerald-200 uppercase mb-3">Chọn nhân viên</h3>
                   {employees.map((emp) => (
                     <button
                       key={emp.id}
                       onClick={() => handleSelectEmployee(emp)}
                       className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${
                         selectedEmployee?.id === emp.id
-                          ? 'bg-teal-500/40 border border-teal-300 text-white'
-                          : 'bg-teal-800/20 border border-teal-500/10 text-teal-100 hover:bg-teal-800/30'
+                          ? 'bg-emerald-500/40 border border-emerald-300 text-white'
+                          : 'bg-emerald-800/20 border border-emerald-500/10 text-emerald-100 hover:bg-emerald-800/30'
                       }`}
                     >
-                      <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-teal-900 border border-teal-500/30">
+                      <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-emerald-900 border border-emerald-500/30">
                         <img
                           src={emp.avatar_url || 'https://via.placeholder.com/40'}
                           alt={emp.name}
@@ -230,8 +248,8 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
                 {selectedEmployee && (
                   <>
                     {/* Employee Card */}
-                    <div className="bg-gradient-to-r from-teal-600/20 to-teal-800/20 border border-teal-500/30 rounded-xl p-6 flex gap-4">
-                      <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 border-2 border-teal-400 shadow-lg">
+                    <div className="bg-gradient-to-r from-emerald-600/20 to-emerald-800/20 border border-emerald-500/30 rounded-xl p-6 flex gap-4">
+                      <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 border-2 border-emerald-400 shadow-lg">
                         <img
                           src={selectedEmployee.avatar_url || 'https://via.placeholder.com/100'}
                           alt={selectedEmployee.name}
@@ -240,16 +258,16 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
                       </div>
                       <div className="flex-1">
                         <h3 className="text-2xl font-bold text-white">{selectedEmployee.name}</h3>
-                        <p className="text-teal-200 text-sm mt-1">Team: {selectedEmployee.team}</p>
-                        <p className="text-teal-100/60 text-sm mt-1">Email: {selectedEmployee.email}</p>
+                        <p className="text-emerald-200 text-sm mt-1">Team: {selectedEmployee.team}</p>
+                        <p className="text-emerald-100/60 text-sm mt-1">Email: {selectedEmployee.email}</p>
                         <div className="flex gap-4 mt-3">
-                          <div className="bg-teal-500/20 border border-teal-500/40 rounded-lg px-3 py-1">
-                            <p className="text-xs text-teal-200">Doanh số</p>
-                            <p className="text-lg font-bold text-teal-100">{selectedEmployee.score.toLocaleString()}</p>
+                          <div className="bg-emerald-500/20 border border-emerald-500/40 rounded-lg px-3 py-1">
+                            <p className="text-xs text-emerald-200">Doanh số</p>
+                            <p className="text-lg font-bold text-emerald-100">{selectedEmployee.score.toLocaleString()}</p>
                           </div>
-                          <div className="bg-teal-500/20 border border-teal-500/40 rounded-lg px-3 py-1">
-                            <p className="text-xs text-teal-200">Tổng báo cáo</p>
-                            <p className="text-lg font-bold text-teal-100">{dailyReports.length}</p>
+                          <div className="bg-emerald-500/20 border border-emerald-500/40 rounded-lg px-3 py-1">
+                            <p className="text-xs text-emerald-200">Tổng báo cáo</p>
+                            <p className="text-lg font-bold text-emerald-100">{dailyReports.length}</p>
                           </div>
                         </div>
                       </div>
@@ -257,17 +275,17 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
 
                     {/* Stats */}
                     <div className="grid grid-cols-3 gap-3">
-                      <div className="bg-teal-800/40 border border-teal-500/20 rounded-lg p-4 text-center">
-                        <p className="text-teal-200/60 text-xs uppercase">Tổng doanh số</p>
-                        <p className="text-2xl font-bold text-teal-100 mt-2">{totalRevenue.toLocaleString()}</p>
+                      <div className="bg-emerald-800/40 border border-emerald-500/20 rounded-lg p-4 text-center">
+                        <p className="text-emerald-200/60 text-xs uppercase">Tổng doanh số</p>
+                        <p className="text-2xl font-bold text-emerald-100 mt-2">{totalRevenue.toLocaleString()}</p>
                       </div>
-                      <div className="bg-teal-800/40 border border-teal-500/20 rounded-lg p-4 text-center">
-                        <p className="text-teal-200/60 text-xs uppercase">Tổng đơn</p>
-                        <p className="text-2xl font-bold text-teal-100 mt-2">{totalOrders.toLocaleString()}</p>
+                      <div className="bg-emerald-800/40 border border-emerald-500/20 rounded-lg p-4 text-center">
+                        <p className="text-emerald-200/60 text-xs uppercase">Tổng đơn</p>
+                        <p className="text-2xl font-bold text-emerald-100 mt-2">{totalOrders.toLocaleString()}</p>
                       </div>
-                      <div className="bg-teal-800/40 border border-teal-500/20 rounded-lg p-4 text-center">
-                        <p className="text-teal-200/60 text-xs uppercase">Chi phí QC</p>
-                        <p className="text-2xl font-bold text-teal-100 mt-2">{totalAdCost.toLocaleString()}</p>
+                      <div className="bg-emerald-800/40 border border-emerald-500/20 rounded-lg p-4 text-center">
+                        <p className="text-emerald-200/60 text-xs uppercase">Chi phí QC</p>
+                        <p className="text-2xl font-bold text-emerald-100 mt-2">{totalAdCost.toLocaleString()}</p>
                       </div>
                     </div>
 
@@ -275,8 +293,8 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
                     {chartData.length > 0 && (
                       <div className="space-y-4">
                         {/* Revenue Chart */}
-                        <div className="bg-teal-900/20 border border-teal-500/20 rounded-xl p-4">
-                          <h4 className="text-sm font-bold text-teal-200 mb-3">Doanh số theo ngày</h4>
+                        <div className="bg-emerald-900/20 border border-emerald-500/20 rounded-xl p-4">
+                          <h4 className="text-sm font-bold text-emerald-200 mb-3">Doanh số theo ngày</h4>
                           <div className="h-64 flex items-end gap-1 px-4">
                             {chartData.map((item, idx) => {
                               const maxRevenue = Math.max(...chartData.map((d) => d.revenue));
@@ -284,15 +302,15 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
                               return (
                                 <div key={idx} className="flex-1 flex flex-col items-center group">
                                   <div
-                                    className="w-full bg-gradient-to-t from-teal-600 to-teal-400 rounded-t-md hover:from-teal-500 hover:to-teal-300 transition-all cursor-pointer relative"
+                                    className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-t-md hover:from-emerald-500 hover:to-emerald-300 transition-all cursor-pointer relative"
                                     style={{ height: `${height}%`, minHeight: height > 0 ? '4px' : '0' }}
                                     title={`${item.date}: ${item.revenue.toLocaleString()}`}
                                   >
-                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-teal-900/90 border border-teal-500/50 rounded px-2 py-1 text-xs text-teal-100 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-emerald-900/90 border border-emerald-500/50 rounded px-2 py-1 text-xs text-emerald-100 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                                       {item.revenue.toLocaleString()}
                                     </div>
                                   </div>
-                                  <p className="text-[10px] text-teal-300/60 mt-1 truncate w-full text-center">
+                                  <p className="text-[10px] text-emerald-300/60 mt-1 truncate w-full text-center">
                                     {item.date.split('-').slice(1).join('/')}
                                   </p>
                                 </div>
@@ -302,18 +320,18 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
                         </div>
 
                         {/* Orders & Ad Cost Chart */}
-                        <div className="bg-teal-900/20 border border-teal-500/20 rounded-xl p-4">
-                          <h4 className="text-sm font-bold text-teal-200 mb-3">Số đơn & Chi phí QC</h4>
+                        <div className="bg-emerald-900/20 border border-emerald-500/20 rounded-xl p-4">
+                          <h4 className="text-sm font-bold text-emerald-200 mb-3">Số đơn & Chi phí QC</h4>
                           <div className="h-64 relative">
                             <svg width="100%" height="100%" viewBox="0 0 600 200" preserveAspectRatio="none">
                               <defs>
                                 <linearGradient id="ordersGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                  <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.3" />
-                                  <stop offset="100%" stopColor="#14b8a6" stopOpacity="0" />
+                                  <stop offset="0%" stopColor="#34d399" stopOpacity="0.35" />
+                                  <stop offset="100%" stopColor="#34d399" stopOpacity="0" />
                                 </linearGradient>
                                 <linearGradient id="adCostGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                  <stop offset="0%" stopColor="#0d9488" stopOpacity="0.3" />
-                                  <stop offset="100%" stopColor="#0d9488" stopOpacity="0" />
+                                  <stop offset="0%" stopColor="#059669" stopOpacity="0.35" />
+                                  <stop offset="100%" stopColor="#059669" stopOpacity="0" />
                                 </linearGradient>
                               </defs>
                               {(() => {
@@ -332,21 +350,21 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
                                 return (
                                   <>
                                     <path d={`${ordersPath} L600,200 L0,200 Z`} fill="url(#ordersGradient)" />
-                                    <path d={ordersPath} stroke="#14b8a6" strokeWidth="2" fill="none" />
+                                    <path d={ordersPath} stroke="#34d399" strokeWidth="2" fill="none" />
                                     <path d={`${adCostPath} L600,200 L0,200 Z`} fill="url(#adCostGradient)" />
-                                    <path d={adCostPath} stroke="#0d9488" strokeWidth="2" fill="none" />
+                                    <path d={adCostPath} stroke="#059669" strokeWidth="2" fill="none" />
                                   </>
                                 );
                               })()}
                             </svg>
                             <div className="absolute bottom-2 right-2 flex gap-4 text-xs">
                               <div className="flex items-center gap-2">
-                                <div className="w-3 h-0.5 bg-teal-500"></div>
-                                <span className="text-teal-200">Số đơn</span>
+                                <div className="w-3 h-0.5 bg-emerald-500"></div>
+                                <span className="text-emerald-200">Số đơn</span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <div className="w-3 h-0.5 bg-teal-600"></div>
-                                <span className="text-teal-200">Chi phí QC</span>
+                                <div className="w-3 h-0.5 bg-emerald-600"></div>
+                                <span className="text-emerald-200">Chi phí QC</span>
                               </div>
                             </div>
                           </div>
@@ -355,32 +373,32 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
                     )}
 
                     {/* Reports Table */}
-                    <div className="bg-teal-900/20 border border-teal-500/20 rounded-xl p-4 overflow-x-auto">
-                      <h4 className="text-sm font-bold text-teal-200 mb-3">Chi tiết báo cáo hàng ngày</h4>
+                    <div className="bg-emerald-900/20 border border-emerald-500/20 rounded-xl p-4 overflow-x-auto">
+                      <h4 className="text-sm font-bold text-emerald-200 mb-3">Chi tiết báo cáo hàng ngày</h4>
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-teal-500/20">
-                            <th className="text-left py-2 px-3 text-teal-300">Ngày</th>
-                            <th className="text-left py-2 px-3 text-teal-300">Sản phẩm</th>
-                            <th className="text-left py-2 px-3 text-teal-300">Thị trường</th>
-                            <th className="text-right py-2 px-3 text-teal-300">AD Cost</th>
-                            <th className="text-right py-2 px-3 text-teal-300">Mess/Cmt</th>
-                            <th className="text-right py-2 px-3 text-teal-300">Đơn</th>
-                            <th className="text-right py-2 px-3 text-teal-300">Doanh số</th>
+                          <tr className="border-b border-emerald-500/20">
+                            <th className="text-left py-2 px-3 text-emerald-300">Ngày</th>
+                            <th className="text-left py-2 px-3 text-emerald-300">Sản phẩm</th>
+                            <th className="text-left py-2 px-3 text-emerald-300">Thị trường</th>
+                            <th className="text-right py-2 px-3 text-emerald-300">AD Cost</th>
+                            <th className="text-right py-2 px-3 text-emerald-300">Mess/Cmt</th>
+                            <th className="text-right py-2 px-3 text-emerald-300">Đơn</th>
+                            <th className="text-right py-2 px-3 text-emerald-300">Doanh số</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-teal-500/10">
+                        <tbody className="divide-y divide-emerald-500/10">
                           {dailyReports.slice(0, 20).map((report, idx) => (
-                            <tr key={idx} className="hover:bg-teal-500/10 transition-colors">
-                              <td className="py-2 px-3 text-teal-100">{report.report_date}</td>
-                              <td className="py-2 px-3 text-teal-100">{report.product || '-'}</td>
-                              <td className="py-2 px-3 text-teal-100">{report.market || '-'}</td>
-                              <td className="py-2 px-3 text-right text-teal-200">
+                            <tr key={idx} className="hover:bg-emerald-500/10 transition-colors">
+                              <td className="py-2 px-3 text-emerald-100">{report.report_date}</td>
+                              <td className="py-2 px-3 text-emerald-100">{report.product || '-'}</td>
+                              <td className="py-2 px-3 text-emerald-100">{report.market || '-'}</td>
+                              <td className="py-2 px-3 text-right text-emerald-200">
                                 {report.ad_cost ? report.ad_cost.toLocaleString() : '-'}
                               </td>
-                              <td className="py-2 px-3 text-right text-teal-200">{report.mess_comment_count || '-'}</td>
-                              <td className="py-2 px-3 text-right text-teal-200">{report.order_count || '-'}</td>
-                              <td className="py-2 px-3 text-right text-teal-100 font-semibold">
+                              <td className="py-2 px-3 text-right text-emerald-200">{report.mess_comment_count || '-'}</td>
+                              <td className="py-2 px-3 text-right text-emerald-200">{report.order_count || '-'}</td>
+                              <td className="py-2 px-3 text-right text-emerald-100 font-semibold">
                                 {report.revenue ? report.revenue.toLocaleString() : '-'}
                               </td>
                             </tr>
@@ -398,15 +416,15 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
             {/* Comparison View */}
             <div className="space-y-6">
               {/* Multi-line Chart */}
-              <div className="bg-teal-900/20 border border-teal-500/20 rounded-xl p-6">
-                <h4 className="text-lg font-bold text-teal-200 mb-4">So sánh doanh số theo thời gian</h4>
+              <div className="bg-emerald-900/20 border border-emerald-500/20 rounded-xl p-6">
+                <h4 className="text-lg font-bold text-emerald-200 mb-4">So sánh doanh số theo thời gian</h4>
                 
                 {/* Legend with Avatars */}
                 <div className="flex flex-wrap gap-3 mb-4">
                   {employees.slice(0, 5).map((emp, idx) => {
                     const colors = ['#22c55e', '#16a34a', '#84cc16', '#65a30d', '#4ade80'];
                     return (
-                      <div key={emp.id} className="flex items-center gap-2 bg-teal-800/30 rounded-lg px-3 py-2">
+                      <div key={emp.id} className="flex items-center gap-2 bg-emerald-800/30 rounded-lg px-3 py-2">
                         <div className="w-8 h-8 rounded-full overflow-hidden border-2" style={{ borderColor: colors[idx] }}>
                           <img
                             src={emp.avatar_url || 'https://via.placeholder.com/32'}
@@ -415,8 +433,8 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
                           />
                         </div>
                         <div className="flex-1">
-                          <p className="text-xs font-semibold text-teal-100">{emp.name}</p>
-                          <p className="text-[10px] text-teal-300/60">{emp.team}</p>
+                          <p className="text-xs font-semibold text-emerald-100">{emp.name}</p>
+                          <p className="text-[10px] text-emerald-300/60">{emp.team}</p>
                         </div>
                         <div className="w-4 h-1 rounded-full" style={{ backgroundColor: colors[idx] }}></div>
                       </div>
@@ -447,7 +465,7 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
                         y1={i * 75}
                         x2="800"
                         y2={i * 75}
-                        stroke="rgba(94,234,212,0.1)"
+                        stroke="rgba(52,211,153,0.12)"
                         strokeDasharray="3,3"
                       />
                     ))}
@@ -527,9 +545,9 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
                   const empData = comparisonData.get(emp.id) || [];
                   const totalRev = empData.reduce((sum, d) => sum + d.revenue, 0);
                   return (
-                    <div key={emp.id} className="bg-teal-800/30 border border-teal-500/20 rounded-xl p-4">
+                    <div key={emp.id} className="bg-emerald-800/30 border border-emerald-500/20 rounded-xl p-4">
                       <div className="flex items-center gap-3 mb-3">
-                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-teal-400">
+                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-emerald-400">
                           <img
                             src={emp.avatar_url || 'https://via.placeholder.com/48'}
                             alt={emp.name}
@@ -537,13 +555,13 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm text-teal-100 truncate">{emp.name}</p>
-                          <p className="text-xs text-teal-300/60">{emp.team}</p>
+                          <p className="font-semibold text-sm text-emerald-100 truncate">{emp.name}</p>
+                          <p className="text-xs text-emerald-300/60">{emp.team}</p>
                         </div>
                       </div>
                       <div>
-                        <p className="text-xs text-teal-200/60 uppercase">Tổng doanh số</p>
-                        <p className="text-xl font-bold text-teal-100 mt-1">{totalRev.toLocaleString()}</p>
+                        <p className="text-xs text-emerald-200/60 uppercase">Tổng doanh số</p>
+                        <p className="text-xl font-bold text-emerald-100 mt-1">{totalRev.toLocaleString()}</p>
                       </div>
                     </div>
                   );
@@ -553,6 +571,24 @@ export function ProgressDashboard({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </motion.div>
+  );
+
+  if (embedded) {
+    return (
+      <div id={embeddedRootId} className="w-full mb-8">
+        {shell}
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-sm p-4 overflow-auto"
+    >
+      {shell}
     </motion.div>
   );
 }

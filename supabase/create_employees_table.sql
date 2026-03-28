@@ -14,9 +14,10 @@ create table if not exists public.employees (
 alter table public.employees add column if not exists email text;
 alter table public.employees add column if not exists pass text;
 
+-- Chỉ unique khi email có ký tự thực (tránh nhiều dòng email = '' bị coi là trùng)
 create unique index if not exists employees_email_unique_idx
-on public.employees (lower(email))
-where email is not null;
+on public.employees (lower(trim(email)))
+where email is not null and length(trim(email)) > 0;
 
 alter table public.employees enable row level security;
 

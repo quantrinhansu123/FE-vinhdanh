@@ -6,7 +6,7 @@ import backgroundImg from '../assets/background.png';
 
 type Role = 'admin' | 'manager' | 'director' | 'user';
 
-interface AuthUser {
+export interface AuthUser {
   id: string;
   email: string;
   role: Role;
@@ -87,7 +87,20 @@ function formatCurrency(value: string): string {
   return num.toLocaleString('vi-VN');
 }
 
-export function ReportModal({ onClose, currentUser }: { onClose: () => void; currentUser?: AuthUser }) {
+export type ReportModalVariant = 'modal' | 'embedded';
+
+export function ReportModal({
+  onClose,
+  currentUser,
+  variant = 'modal',
+  embeddedRootId = 'crm-reports-daily',
+}: {
+  onClose?: () => void;
+  currentUser?: AuthUser;
+  variant?: ReportModalVariant;
+  embeddedRootId?: string;
+}) {
+  const embedded = variant === 'embedded';
   const resolvedUser: AuthUser = currentUser || {
     id: '',
     email: DEFAULT_USER_EMAIL,
@@ -237,39 +250,53 @@ export function ReportModal({ onClose, currentUser }: { onClose: () => void; cur
     setRows([createEmptyRow(resolvedUser)]);
   };
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-sm p-4"
-    >
+  const shell = (
       <motion.div
-        initial={{ scale: 0.95, y: 12 }}
-        animate={{ scale: 1, y: 0 }}
-        className="mx-auto h-full max-w-[98vw] bg-teal-950/40 border border-teal-500/30 rounded-2xl flex flex-col overflow-hidden backdrop-blur-sm"
-        style={{ backgroundImage: `url(${backgroundImg})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        initial={embedded ? false : { scale: 0.95, y: 12 }}
+        animate={embedded ? false : { scale: 1, y: 0 }}
+        className={
+          embedded
+            ? 'w-full max-w-full min-h-[min(70vh,720px)] max-h-[calc(100vh-10rem)] bg-gradient-to-br from-emerald-950/35 to-crm-surface/80 border border-emerald-500/25 rounded-2xl flex flex-col overflow-hidden crm-glass-card shadow-[0_0_40px_rgba(34,197,94,0.08)] ring-1 ring-emerald-500/20'
+            : 'mx-auto h-full max-w-[98vw] bg-emerald-950/50 border border-emerald-500/35 rounded-2xl flex flex-col overflow-hidden backdrop-blur-sm shadow-[0_0_40px_rgba(34,197,94,0.12)] ring-1 ring-emerald-500/20'
+        }
+        style={
+          embedded
+            ? undefined
+            : { backgroundImage: `url(${backgroundImg})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+        }
       >
-        <div className="px-4 py-3 border-b border-teal-500/30 bg-teal-900/40 backdrop-blur-sm flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-emerald-500/30 bg-emerald-950/50 backdrop-blur-sm flex items-center justify-between gap-4 shrink-0">
           <div>
-            <h2 className="text-white font-bold text-lg">Bảng Báo Cáo Marketing</h2>
-            <p className="text-teal-100/60 text-xs">Nhập theo ngày và gửi trực tiếp vào Supabase ({REPORT_TABLE})</p>
+            <h2 className={`font-bold text-lg ${embedded ? 'text-crm-on-surface' : 'text-white'}`}>
+              Bảng Báo Cáo Marketing
+            </h2>
+            <p className={`text-xs ${embedded ? 'text-emerald-200/70' : 'text-emerald-100/60'}`}>
+              Nhập theo ngày và gửi trực tiếp vào Supabase ({REPORT_TABLE})
+            </p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg text-teal-200/60 hover:text-white hover:bg-teal-500/20">
-            <X size={20} />
-          </button>
+          {!embedded && onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-lg text-emerald-200/60 hover:text-white hover:bg-emerald-500/20 shrink-0"
+            >
+              <X size={20} />
+            </button>
+          ) : null}
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 min-h-0 overflow-auto">
           {isLoadingMeta ? (
-            <div className="h-full flex items-center justify-center gap-2 text-white/70">
+            <div
+              className={`h-full min-h-[160px] flex items-center justify-center gap-2 ${embedded ? 'text-crm-on-surface-variant' : 'text-white/70'}`}
+            >
               <Loader2 className="animate-spin" size={20} />
               Đang tải dữ liệu gợi ý...
             </div>
           ) : (
             <table className="min-w-[1800px] w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-teal-900/60 backdrop-blur border-b border-teal-500/30">
-                <tr className="text-teal-200 text-xs uppercase">
+              <thead className="sticky top-0 z-10 bg-emerald-900/60 backdrop-blur border-b border-emerald-500/30">
+                <tr className="text-emerald-200 text-xs uppercase">
                   <th className="p-2 text-left">Tên</th>
                   <th className="p-2 text-left">Ngày</th>
                   <th className="p-2 text-left">Sản phẩm</th>
@@ -284,16 +311,16 @@ export function ReportModal({ onClose, currentUser }: { onClose: () => void; cur
               </thead>
               <tbody>
                 {rows.map((row, index) => (
-                  <tr key={index} className="border-b border-teal-500/10 text-white/90 hover:bg-teal-500/10 transition-colors">
-                    <td className="p-1.5"><input list="staff-name-options" value={row.name} disabled={!canEditIdentity} onChange={(e) => handleNameChange(index, e.target.value)} className="w-[160px] bg-teal-800/60 border border-teal-500/50 rounded px-2 py-1 disabled:opacity-50 focus:bg-teal-700/70 focus:border-teal-400" /></td>
-                    <td className="p-1.5"><input type="date" value={row.report_date} onChange={(e) => updateRow(index, (r) => ({ ...r, report_date: e.target.value }))} className="w-[140px] bg-teal-800/60 border border-teal-500/50 rounded px-2 py-1 focus:bg-teal-700/70 focus:border-teal-400" /></td>
-                    <td className="p-1.5"><input list="product-options" value={row.product} onChange={(e) => updateRow(index, (r) => ({ ...r, product: e.target.value }))} className="w-[140px] bg-teal-800/60 border border-teal-500/50 rounded px-2 py-1 focus:bg-teal-700/70 focus:border-teal-400" /></td>
-                    <td className="p-1.5"><input list="market-options" value={row.market} onChange={(e) => updateRow(index, (r) => ({ ...r, market: e.target.value }))} className="w-[130px] bg-teal-800/60 border border-teal-500/50 rounded px-2 py-1 focus:bg-teal-700/70 focus:border-teal-400" /></td>
-                    <td className="p-1.5"><input value={row.ad_account} onChange={(e) => updateRow(index, (r) => ({ ...r, ad_account: e.target.value }))} className="w-[120px] bg-teal-800/60 border border-teal-500/50 rounded px-2 py-1 focus:bg-teal-700/70 focus:border-teal-400" /></td>
-                    <td className="p-1.5"><input value={formatCurrency(row.ad_cost)} onChange={(e) => updateRow(index, (r) => ({ ...r, ad_cost: e.target.value.replace(/\./g, '') }))} className="w-[110px] bg-teal-800/60 border border-teal-500/50 rounded px-2 py-1 focus:bg-teal-700/70 focus:border-teal-400" placeholder="0" /></td>
-                    <td className="p-1.5"><input value={row.mess_comment_count} onChange={(e) => updateRow(index, (r) => ({ ...r, mess_comment_count: e.target.value }))} className="w-[110px] bg-teal-800/60 border border-teal-500/50 rounded px-2 py-1 focus:bg-teal-700/70 focus:border-teal-400" /></td>
-                    <td className="p-1.5"><input value={row.order_count} onChange={(e) => updateRow(index, (r) => ({ ...r, order_count: e.target.value }))} className="w-[100px] bg-teal-800/60 border border-teal-500/50 rounded px-2 py-1 focus:bg-teal-700/70 focus:border-teal-400" /></td>
-                    <td className="p-1.5"><input value={formatCurrency(row.revenue)} onChange={(e) => updateRow(index, (r) => ({ ...r, revenue: e.target.value.replace(/\./g, '') }))} className="w-[110px] bg-teal-800/60 border border-teal-500/50 rounded px-2 py-1 focus:bg-teal-700/70 focus:border-teal-400" placeholder="0" /></td>
+                  <tr key={index} className="border-b border-emerald-500/10 text-white/90 hover:bg-emerald-500/10 transition-colors">
+                    <td className="p-1.5"><input list="staff-name-options" value={row.name} disabled={!canEditIdentity} onChange={(e) => handleNameChange(index, e.target.value)} className="w-[160px] bg-emerald-800/60 border border-emerald-500/50 rounded px-2 py-1 disabled:opacity-50 focus:bg-emerald-700/70 focus:border-emerald-400" /></td>
+                    <td className="p-1.5"><input type="date" value={row.report_date} onChange={(e) => updateRow(index, (r) => ({ ...r, report_date: e.target.value }))} className="w-[140px] bg-emerald-800/60 border border-emerald-500/50 rounded px-2 py-1 focus:bg-emerald-700/70 focus:border-emerald-400" /></td>
+                    <td className="p-1.5"><input list="product-options" value={row.product} onChange={(e) => updateRow(index, (r) => ({ ...r, product: e.target.value }))} className="w-[140px] bg-emerald-800/60 border border-emerald-500/50 rounded px-2 py-1 focus:bg-emerald-700/70 focus:border-emerald-400" /></td>
+                    <td className="p-1.5"><input list="market-options" value={row.market} onChange={(e) => updateRow(index, (r) => ({ ...r, market: e.target.value }))} className="w-[130px] bg-emerald-800/60 border border-emerald-500/50 rounded px-2 py-1 focus:bg-emerald-700/70 focus:border-emerald-400" /></td>
+                    <td className="p-1.5"><input value={row.ad_account} onChange={(e) => updateRow(index, (r) => ({ ...r, ad_account: e.target.value }))} className="w-[120px] bg-emerald-800/60 border border-emerald-500/50 rounded px-2 py-1 focus:bg-emerald-700/70 focus:border-emerald-400" /></td>
+                    <td className="p-1.5"><input value={formatCurrency(row.ad_cost)} onChange={(e) => updateRow(index, (r) => ({ ...r, ad_cost: e.target.value.replace(/\./g, '') }))} className="w-[110px] bg-emerald-800/60 border border-emerald-500/50 rounded px-2 py-1 focus:bg-emerald-700/70 focus:border-emerald-400" placeholder="0" /></td>
+                    <td className="p-1.5"><input value={row.mess_comment_count} onChange={(e) => updateRow(index, (r) => ({ ...r, mess_comment_count: e.target.value }))} className="w-[110px] bg-emerald-800/60 border border-emerald-500/50 rounded px-2 py-1 focus:bg-emerald-700/70 focus:border-emerald-400" /></td>
+                    <td className="p-1.5"><input value={row.order_count} onChange={(e) => updateRow(index, (r) => ({ ...r, order_count: e.target.value }))} className="w-[100px] bg-emerald-800/60 border border-emerald-500/50 rounded px-2 py-1 focus:bg-emerald-700/70 focus:border-emerald-400" /></td>
+                    <td className="p-1.5"><input value={formatCurrency(row.revenue)} onChange={(e) => updateRow(index, (r) => ({ ...r, revenue: e.target.value.replace(/\./g, '') }))} className="w-[110px] bg-emerald-800/60 border border-emerald-500/50 rounded px-2 py-1 focus:bg-emerald-700/70 focus:border-emerald-400" placeholder="0" /></td>
                     <td className="p-1.5">
                       <div className="flex gap-1">
                         <button onClick={() => copyRow(index)} className="px-2 py-1 rounded bg-emerald-500/30 text-emerald-200 hover:bg-emerald-500/50 transition-colors">➕</button>
@@ -307,11 +334,11 @@ export function ReportModal({ onClose, currentUser }: { onClose: () => void; cur
           )}
         </div>
 
-        <div className="px-4 py-3 border-t border-teal-500/30 bg-teal-900/40 backdrop-blur-sm flex items-center gap-2">
-          <button onClick={addRow} className="px-3 py-2 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-100 text-sm flex items-center gap-1 transition-colors">
+        <div className="px-4 py-3 border-t border-emerald-500/30 bg-emerald-900/40 backdrop-blur-sm flex items-center gap-2">
+          <button onClick={addRow} className="px-3 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-100 text-sm flex items-center gap-1 transition-colors">
             <Plus size={16} /> Thêm dòng
           </button>
-          <button onClick={submitReports} disabled={isSubmitting} className="px-4 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-white font-semibold disabled:opacity-50 ml-auto flex items-center gap-2 transition-colors">
+          <button onClick={submitReports} disabled={isSubmitting} className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold disabled:opacity-50 ml-auto flex items-center gap-2 transition-colors shadow-[0_0_20px_rgba(34,197,94,0.35)]">
             {isSubmitting && <Loader2 size={16} className="animate-spin" />}
             <Send size={16} /> Gửi báo cáo
           </button>
@@ -322,6 +349,24 @@ export function ReportModal({ onClose, currentUser }: { onClose: () => void; cur
         <datalist id="market-options">{MARKET_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
         <datalist id="product-options">{products.map((p) => <option key={p} value={p} />)}</datalist>
       </motion.div>
+  );
+
+  if (embedded) {
+    return (
+      <div id={embeddedRootId} className="w-full mb-8">
+        {shell}
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-sm p-4"
+    >
+      {shell}
     </motion.div>
   );
 }

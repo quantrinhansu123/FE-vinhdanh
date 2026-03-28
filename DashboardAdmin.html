@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CRM Mini Ads - Dashboard Hi-Tech</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#00f2ff",
+                        "primary-variant": "#0066ff",
+                        "secondary": "#7000ff",
+                        "surface": "#0a0c10",
+                        "surface-container": "#161b22",
+                        "surface-accent": "#1c2128",
+                        "on-surface": "#e6edf3",
+                        "on-surface-variant": "#8b949e",
+                        "error": "#ff4d4d",
+                        "success": "#23d18b",
+                        "warning": "#f59e0b",
+                        "outline": "#30363d"
+                    },
+                    fontFamily: {
+                        "sans": ["Plus Jakarta Sans", "ui-sans-serif", "system-ui"],
+                        "headline": ["Plus Jakarta Sans"],
+                        "body": ["Plus Jakarta Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "0.75rem", "xl": "1rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0a0c10;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(0, 242, 255, 0.03) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(112, 0, 255, 0.03) 0px, transparent 50%);
+        }
+        .glass-card {
+            background: rgba(22, 27, 34, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(48, 54, 61, 0.5);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+        .glass-sidebar {
+            background: rgba(13, 17, 23, 0.8);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(48, 54, 61, 0.8);
+        }
+        .glow-primary {
+            text-shadow: 0 0 15px rgba(0, 242, 255, 0.5);
+        }
+        .glow-line {
+            filter: drop-shadow(0 0 8px rgba(0, 242, 255, 0.8));
+        }
+        .nav-item-active {
+            background: linear-gradient(90deg, rgba(0, 242, 255, 0.1) 0%, transparent 100%);
+            border-left: 3px solid #00f2ff;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1) brightness(0.8);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="text-on-surface antialiased">
+<!-- SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-0 glass-sidebar flex flex-col py-8 z-50">
+<div class="px-8 mb-12">
+<h1 class="text-xl font-extrabold tracking-tighter uppercase italic bg-gradient-to-r from-primary to-primary-variant bg-clip-text text-transparent">CRM MINI ADS</h1>
+<p class="text-[10px] font-bold text-on-surface-variant tracking-[0.2em] mt-1 uppercase">Advanced Core v2.0</p>
+</div>
+<nav class="flex-1 space-y-2 px-4">
+<a class="flex items-center gap-3 px-4 py-3 text-primary nav-item-active transition-all group" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="dashboard">dashboard</span>
+<span class="text-sm font-semibold tracking-wide">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-accent/50 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="folder_copy">folder_copy</span>
+<span class="text-sm font-medium tracking-wide">Dự án</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-accent/50 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="group">group</span>
+<span class="text-sm font-medium tracking-wide">Team</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-accent/50 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="campaign">campaign</span>
+<span class="text-sm font-medium tracking-wide">Marketing</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-accent/50 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="ads_click">ads_click</span>
+<span class="text-sm font-medium tracking-wide">Tài khoản Ads</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-accent/50 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="payments">payments</span>
+<span class="text-sm font-medium tracking-wide">Ngân sách</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-accent/50 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="analytics">analytics</span>
+<span class="text-sm font-medium tracking-wide">Báo cáo</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-accent/50 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="text-sm font-medium tracking-wide">Đối chiếu</span>
+</a>
+</nav>
+<div class="mt-auto px-4 space-y-2 border-t border-outline/30 pt-6">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="settings">settings</span>
+<span class="text-sm font-medium tracking-wide">Cài đặt</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-error/80 hover:text-error transition-colors" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="logout">logout</span>
+<span class="text-sm font-medium tracking-wide">Đăng xuất</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-20 bg-surface/50 backdrop-blur-xl z-40 px-10 flex justify-between items-center border-b border-outline/30">
+<div class="flex items-center gap-8">
+<div class="flex items-center bg-surface-container border border-outline/50 rounded-xl px-4 py-2 w-[320px] focus-within:border-primary/50 transition-all shadow-inner">
+<span class="material-symbols-outlined text-on-surface-variant text-xl" data-icon="search">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm w-full placeholder:text-on-surface-variant/50 ml-2" placeholder="Tìm kiếm..." type="text"/>
+</div>
+<!-- Moved Date Range Filter -->
+<div class="flex items-center gap-3 glass-card px-4 py-1.5 rounded-xl border border-outline/50">
+<div class="flex flex-col">
+<span class="text-[9px] font-extrabold text-on-surface-variant uppercase tracking-widest leading-none mb-1">Từ ngày</span>
+<input class="bg-transparent border-none p-0 text-xs font-bold text-on-surface focus:ring-0 w-28" type="date" value="2024-01-01"/>
+</div>
+<div class="h-6 w-px bg-outline/50"></div>
+<div class="flex flex-col">
+<span class="text-[9px] font-extrabold text-on-surface-variant uppercase tracking-widest leading-none mb-1">Đến ngày</span>
+<input class="bg-transparent border-none p-0 text-xs font-bold text-on-surface focus:ring-0 w-28" type="date" value="2024-01-31"/>
+</div>
+<button class="ml-2 p-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="refresh">refresh</span>
+</button>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<button class="hover:bg-surface-accent rounded-lg p-2.5 transition-all text-on-surface-variant hover:text-primary border border-transparent hover:border-outline">
+<span class="material-symbols-outlined text-xl" data-icon="notifications">notifications</span>
+</button>
+<button class="hover:bg-surface-accent rounded-lg p-2.5 transition-all text-on-surface-variant hover:text-primary border border-transparent hover:border-outline">
+<span class="material-symbols-outlined text-xl" data-icon="help_outline">help_outline</span>
+</button>
+</div>
+<div class="h-8 w-px bg-outline/50 mx-1"></div>
+<div class="flex items-center gap-4">
+<div class="text-right">
+<p class="text-sm font-bold text-on-surface tracking-tight leading-none">Admin User</p>
+<p class="text-[10px] text-primary font-bold uppercase tracking-[0.1em] mt-1">Hệ thống cấp cao</p>
+</div>
+<div class="relative group">
+<div class="absolute -inset-0.5 bg-gradient-to-r from-primary to-secondary rounded-full opacity-50 group-hover:opacity-100 transition duration-300 blur-sm"></div>
+<img alt="User Avatar" class="relative w-11 h-11 rounded-full border border-surface" data-alt="User profile avatar circle" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCq4IVGRcDsNW79LSQB6KOK_itTwQjwdyXT1g3NTRY4tK3Xg5TWjwQcenqwvhUbC9YKMoXzIIphIZSdODMCwJywK57DHQelM3IMfgIHVo-35r_S7xeU9MAssW4WuUWGlgDS-p9g8Li04_mufizCVczUnA5rIhJuokNQgTdd3rxvyYEG0auVOSif-1x6BZR-y2Os7yOOqLG5PZKhQYHnmeTFLbNtr8m8L3wbTnkMm3gWMWnt2TIyJ2LT-dLL-BgMX3KN899D7cKqmag"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-64 pt-28 pb-16 px-10 min-h-screen">
+<!-- Hero Metrics Grid -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+<!-- Total Budget -->
+<div class="glass-card p-6 rounded-xl hover:border-primary/50 transition-all group overflow-hidden relative">
+<div class="absolute top-0 right-0 w-24 h-24 bg-primary/5 blur-[40px] rounded-full -mr-10 -mt-10"></div>
+<div class="flex items-center justify-between mb-4">
+<span class="text-[10px] font-extrabold text-on-surface-variant tracking-[0.15em] uppercase">Tổng Ngân Sách</span>
+<span class="material-symbols-outlined text-primary group-hover:scale-110 transition-transform" data-icon="account_balance">account_balance</span>
+</div>
+<h2 class="text-3xl font-extrabold text-on-surface tracking-tighter glow-primary">2.540,0M</h2>
+<div class="mt-3 flex items-center gap-2">
+<span class="text-[10px] font-bold text-success bg-success/10 border border-success/20 px-2 py-0.5 rounded-full">+12.4%</span>
+<span class="text-[10px] text-on-surface-variant font-medium">vs tháng trước</span>
+</div>
+</div>
+<!-- Marketing Cost -->
+<div class="glass-card p-6 rounded-xl hover:border-secondary/50 transition-all group overflow-hidden relative">
+<div class="absolute top-0 right-0 w-24 h-24 bg-secondary/5 blur-[40px] rounded-full -mr-10 -mt-10"></div>
+<div class="flex items-center justify-between mb-4">
+<span class="text-[10px] font-extrabold text-on-surface-variant tracking-[0.15em] uppercase">Chi Phí Marketing</span>
+<span class="material-symbols-outlined text-secondary group-hover:scale-110 transition-transform" data-icon="payments">payments</span>
+</div>
+<h2 class="text-3xl font-extrabold text-on-surface tracking-tighter">984,2M</h2>
+<div class="mt-3 flex items-center gap-2">
+<span class="text-[10px] font-bold text-secondary bg-secondary/10 border border-secondary/20 px-2 py-0.5 rounded-full">38.7%</span>
+<span class="text-[10px] text-on-surface-variant font-medium">Quỹ đã sử dụng</span>
+</div>
+</div>
+<!-- Total Revenue -->
+<div class="glass-card p-6 rounded-xl hover:border-primary/50 transition-all group overflow-hidden relative">
+<div class="absolute top-0 right-0 w-24 h-24 bg-primary/5 blur-[40px] rounded-full -mr-10 -mt-10"></div>
+<div class="flex items-center justify-between mb-4">
+<span class="text-[10px] font-extrabold text-on-surface-variant tracking-[0.15em] uppercase">Tổng Doanh Số</span>
+<span class="material-symbols-outlined text-primary group-hover:scale-110 transition-transform" data-icon="trending_up">trending_up</span>
+</div>
+<h2 class="text-3xl font-extrabold text-on-surface tracking-tighter">3.125,8M</h2>
+<div class="mt-3 flex items-center gap-2">
+<span class="text-[10px] font-bold text-success bg-success/10 border border-success/20 px-2 py-0.5 rounded-full">+8.2%</span>
+<span class="text-[10px] text-on-surface-variant font-medium uppercase tracking-tighter">ROAS: 3.17x</span>
+</div>
+</div>
+<!-- Ads/Revenue Ratio -->
+<div class="glass-card p-6 rounded-xl border-error/30 hover:border-error/60 transition-all group overflow-hidden relative">
+<div class="absolute top-0 right-0 w-24 h-24 bg-error/5 blur-[40px] rounded-full -mr-10 -mt-10"></div>
+<div class="flex items-center justify-between mb-4">
+<span class="text-[10px] font-extrabold text-on-surface-variant tracking-[0.15em] uppercase">% Ads/Doanh Số</span>
+<span class="material-symbols-outlined text-error group-hover:scale-110 transition-transform" data-icon="warning">warning</span>
+</div>
+<h2 class="text-3xl font-extrabold text-error tracking-tighter drop-shadow-[0_0_10px_rgba(255,77,77,0.3)]">46.2%</h2>
+<div class="mt-3 flex items-center gap-2">
+<span class="text-[10px] font-extrabold text-on-surface bg-error px-2 py-0.5 rounded-full uppercase italic">Vượt ngưỡng</span>
+<span class="text-[10px] text-on-surface-variant font-medium">Target: &lt; 39%</span>
+</div>
+</div>
+</div>
+<!-- Charts & Rankings -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+<!-- Revenue Trend Chart -->
+<div class="lg:col-span-2 glass-card p-8 rounded-2xl relative overflow-hidden">
+<div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary to-primary opacity-50"></div>
+<div class="flex items-center justify-between mb-10">
+<div>
+<h3 class="text-xl font-bold text-on-surface tracking-tight">Xu hướng Doanh số</h3>
+<p class="text-xs text-on-surface-variant mt-1">Dữ liệu phân tích thời gian thực (30 ngày gần nhất)</p>
+</div>
+<div class="flex p-1 bg-surface-accent rounded-lg border border-outline/50">
+<button class="text-[10px] font-bold px-4 py-1.5 rounded-md bg-primary text-surface shadow-[0_0_15px_rgba(0,242,255,0.4)] transition-all">NGÀY</button>
+<button class="text-[10px] font-bold px-4 py-1.5 rounded-md text-on-surface-variant hover:text-on-surface transition-colors">TUẦN</button>
+<button class="text-[10px] font-bold px-4 py-1.5 rounded-md text-on-surface-variant hover:text-on-surface transition-colors">THÁNG</button>
+<button class="text-[10px] font-bold px-4 py-1.5 rounded-md text-on-surface-variant hover:text-on-surface transition-colors">NĂM</button>
+</div>
+</div>
+<div class="h-64 flex justify-between gap-2 items-stretch">
+<div class="relative w-full h-full">
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 700 200">
+<defs>
+<lineargradient id="glowing-gradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#00f2ff" stop-opacity="0.25"></stop>
+<stop offset="100%" stop-color="#00f2ff" stop-opacity="0"></stop>
+</lineargradient>
+<filter id="glow">
+<fegaussianblur result="blur" stddeviation="3"></fegaussianblur>
+<fecomposite in="SourceGraphic" in2="blur" operator="over"></fecomposite>
+</filter>
+</defs>
+<path d="M0,150 C50,140 100,120 150,100 C200,80 250,90 300,70 C350,50 400,60 450,40 C500,20 550,50 600,60 C650,70 700,90 700,90 V200 H0 Z" fill="url(#glowing-gradient)"></path>
+<path class="glow-line" d="M0,150 C50,140 100,120 150,100 C200,80 250,90 300,70 C350,50 400,60 450,40 C500,20 550,50 600,60 C650,70 700,90" fill="none" stroke="#00f2ff" stroke-linecap="round" stroke-width="3"></path>
+<circle cx="150" cy="100" fill="#00f2ff" r="4" stroke="#0a0c10" stroke-width="2"></circle>
+<circle cx="300" cy="70" fill="#00f2ff" r="4" stroke="#0a0c10" stroke-width="2"></circle>
+<circle cx="450" cy="40" fill="#00f2ff" r="4" stroke="#0a0c10" stroke-width="2"></circle>
+<circle cx="600" cy="60" fill="#00f2ff" r="4" stroke="#0a0c10" stroke-width="2"></circle>
+</svg>
+</div>
+</div>
+<div class="flex justify-between mt-6 px-2 text-[10px] font-extrabold text-on-surface-variant uppercase tracking-[0.2em]">
+<span>Thứ 2</span>
+<span>Thứ 3</span>
+<span>Thứ 4</span>
+<span>Thứ 5</span>
+<span>Thứ 6</span>
+<span>Thứ 7</span>
+<span>CN</span>
+</div>
+</div>
+<!-- Performance Panels -->
+<div class="space-y-6">
+<div class="glass-card p-6 rounded-2xl border-l-4 border-l-success relative">
+<h4 class="text-xs font-extrabold text-on-surface mb-5 flex items-center gap-2 tracking-widest uppercase">
+<span class="material-symbols-outlined text-success text-lg" data-icon="workspace_premium">workspace_premium</span>
+                        Top Marketing Hiệu Quả
+                    </h4>
+<div class="space-y-5">
+<div class="flex items-center justify-between group cursor-default">
+<div class="flex items-center gap-4">
+<img alt="Profile" class="w-8 h-8 rounded-full border border-success/30 object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdObLplAfnLewrTX2e06_NYzlF3xcNElcxf43Z2FYVubmGp5mP-fPp-tp1eC8-6zdaz8hm2atP8yCo1tHSYd04llhFTStVkALuKcinleQy1XgYEK4gUN-kcy4UZvX1btjmdlpk_yPiruDutvNGOFWyV5cXo1laJXERmXH_E0rp4RicaUmGd83dQpXG8kJrvt5mjuA73XNrrjd2TuO_CHOuy1QijDT9eGpPJo8SpR8Xz87UwuaRQ33SW1RYpXiTmpO0vHI7bjJH60E"/>
+<span class="text-xs font-semibold text-on-surface tracking-tight">Facebook Video Ads</span>
+</div>
+<span class="text-xs font-extrabold text-success">32% %Ads</span>
+</div>
+<div class="flex items-center justify-between group cursor-default">
+<div class="flex items-center gap-4">
+<img alt="Profile" class="w-8 h-8 rounded-full border border-success/30 object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgxZF-08u7EglwvbX1L6xzumxDnS4BcG7DzJJ8EKuglxDs8-rurYRtfJ6_seOTDti_wvqugSN7zFyYHrQRIIg_Gfu2VQ3jtpIzv1pUCR2q4K34MtRi9A6nnHNGClYtI6z2adetBSfoC2wGojJcQdxpzFZv-8B8-LHD8JbV67LFzIz2Lck78gXXc0_YgYd1bJNbXO8Jq7vnHzrGo03OZk7TuD1-OBGuydjtH5gArAy3l2PvOGYyGE9IHm3IrxJ4X72bjQxYUMIQQHI"/>
+<span class="text-xs font-semibold text-on-surface tracking-tight">Tiktok In-feed</span>
+</div>
+<span class="text-xs font-extrabold text-success">35% %Ads</span>
+</div>
+</div>
+</div>
+<div class="glass-card p-6 rounded-2xl border-l-4 border-l-error relative">
+<h4 class="text-xs font-extrabold text-on-surface mb-5 flex items-center gap-2 tracking-widest uppercase">
+<span class="material-symbols-outlined text-error text-lg" data-icon="local_fire_department">local_fire_department</span>
+                        Top Marketing Đốt Tiền
+                    </h4>
+<div class="space-y-5">
+<div class="flex items-center justify-between group cursor-default">
+<div class="flex items-center gap-4">
+<img alt="Profile" class="w-8 h-8 rounded-full border border-error/30 object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdObLplAfnLewrTX2e06_NYzlF3xcNElcxf43Z2FYVubmGp5mP-fPp-tp1eC8-6zdaz8hm2atP8yCo1tHSYd04llhFTStVkALuKcinleQy1XgYEK4gUN-kcy4UZvX1btjmdlpk_yPiruDutvNGOFWyV5cXo1laJXERmXH_E0rp4RicaUmGd83dQpXG8kJrvt5mjuA73XNrrjd2TuO_CHOuy1QijDT9eGpPJo8SpR8Xz87UwuaRQ33SW1RYpXiTmpO0vHI7bjJH60E"/>
+<span class="text-xs font-semibold text-on-surface tracking-tight">Google Display Network</span>
+</div>
+<span class="text-xs font-extrabold text-error">58% %Ads</span>
+</div>
+<div class="flex items-center justify-between group cursor-default">
+<div class="flex items-center gap-4">
+<img alt="Profile" class="w-8 h-8 rounded-full border border-error/30 object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgxZF-08u7EglwvbX1L6xzumxDnS4BcG7DzJJ8EKuglxDs8-rurYRtfJ6_seOTDti_wvqugSN7zFyYHrQRIIg_Gfu2VQ3jtpIzv1pUCR2q4K34MtRi9A6nnHNGClYtI6z2adetBSfoC2wGojJcQdxpzFZv-8B8-LHD8JbV67LFzIz2Lck78gXXc0_YgYd1bJNbXO8Jq7vnHzrGo03OZk7TuD1-OBGuydjtH5gArAy3l2PvOGYyGE9IHm3IrxJ4X72bjQxYUMIQQHI"/>
+<span class="text-xs font-semibold text-on-surface tracking-tight">Youtube Bumper Ads</span>
+</div>
+<span class="text-xs font-extrabold text-error">52% %Ads</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Reconciliation Table -->
+<div class="glass-card rounded-2xl overflow-hidden shadow-2xl">
+<div class="px-8 py-6 border-b border-outline/30 flex justify-between items-center bg-surface-accent/30">
+<div>
+<h3 class="text-xl font-bold text-on-surface tracking-tight">Đối chiếu Ngân sách vs Chi tiêu</h3>
+<p class="text-xs text-on-surface-variant mt-1">Dữ liệu thực thi chiến dịch từng dự án trong tháng hiện tại</p>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 px-5 py-2.5 bg-primary text-surface rounded-xl text-[10px] font-extrabold uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(0,242,255,0.3)] hover:shadow-[0_0_30px_rgba(0,242,255,0.5)]">
+<span class="material-symbols-outlined text-sm" data-icon="download">download</span> Xuất Excel
+                    </button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-accent/20">
+<th class="px-8 py-5 text-[10px] font-extrabold text-on-surface-variant uppercase tracking-[0.2em]">Tên Dự Án</th>
+<th class="px-8 py-5 text-[10px] font-extrabold text-on-surface-variant uppercase tracking-[0.2em] text-right">Ngân Sách</th>
+<th class="px-8 py-5 text-[10px] font-extrabold text-on-surface-variant uppercase tracking-[0.2em] text-right">Chi Tiêu Thực</th>
+<th class="px-8 py-5 text-[10px] font-extrabold text-on-surface-variant uppercase tracking-[0.2em] text-right">Chênh Lệch</th>
+<th class="px-8 py-5 text-[10px] font-extrabold text-on-surface-variant uppercase tracking-[0.2em] text-center">% Ads/Doanh Số</th>
+<th class="px-8 py-5 text-[10px] font-extrabold text-on-surface-variant uppercase tracking-[0.2em] text-right">Tình Trạng</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline/20">
+<tr class="hover:bg-primary/5 transition-colors group">
+<td class="px-8 py-6">
+<p class="text-sm font-bold text-on-surface group-hover:text-primary transition-colors">Bất Động Sản Luxury A</p>
+<span class="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider opacity-60">Alpha Media</span>
+</td>
+<td class="px-8 py-6 text-sm font-medium text-on-surface text-right">450,000,000</td>
+<td class="px-8 py-6 text-sm font-medium text-on-surface text-right">380,500,000</td>
+<td class="px-8 py-6 text-sm font-extrabold text-success text-right">-15.4%</td>
+<td class="px-8 py-6 text-center">
+<span class="inline-block px-3 py-1 rounded-full text-[11px] font-bold bg-success/10 text-success border border-success/20">32.5%</span>
+</td>
+<td class="px-8 py-6 text-right">
+<span class="material-symbols-outlined text-success drop-shadow-[0_0_8px_rgba(35,209,139,0.5)]" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</td>
+</tr>
+<tr class="hover:bg-warning/5 transition-colors group">
+<td class="px-8 py-6">
+<p class="text-sm font-bold text-on-surface">Thời Trang Nữ Trendy</p>
+<span class="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider opacity-60">Beta Creative</span>
+</td>
+<td class="px-8 py-6 text-sm font-medium text-on-surface text-right">220,000,000</td>
+<td class="px-8 py-6 text-sm font-medium text-on-surface text-right">215,200,000</td>
+<td class="px-8 py-6 text-sm font-extrabold text-warning text-right">-2.1%</td>
+<td class="px-8 py-6 text-center">
+<span class="inline-block px-3 py-1 rounded-full text-[11px] font-bold bg-warning/10 text-warning border border-warning/20">41.8%</span>
+</td>
+<td class="px-8 py-6 text-right">
+<span class="material-symbols-outlined text-warning" data-icon="error">error</span>
+</td>
+</tr>
+<tr class="bg-error/5 hover:bg-error/10 transition-colors group">
+<td class="px-8 py-6">
+<p class="text-sm font-bold text-on-surface">Thực Phẩm Chức Năng S+</p>
+<span class="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider opacity-60">Gamma Ads</span>
+</td>
+<td class="px-8 py-6 text-sm font-medium text-on-surface text-right">800,000,000</td>
+<td class="px-8 py-6 text-sm font-medium text-on-surface text-right">895,000,000</td>
+<td class="px-8 py-6 text-sm font-extrabold text-error text-right">+11.8%</td>
+<td class="px-8 py-6 text-center">
+<span class="inline-block px-3 py-1 rounded-full text-[11px] font-bold bg-error text-on-surface shadow-[0_0_15px_rgba(255,77,77,0.4)]">52.4%</span>
+</td>
+<td class="px-8 py-6 text-right">
+<span class="material-symbols-outlined text-error drop-shadow-[0_0_10px_rgba(255,77,77,0.5)]" data-icon="dangerous" style="font-variation-settings: 'FILL' 1;">dangerous</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="px-8 py-5 bg-surface-accent/50 flex justify-between items-center text-[10px] font-extrabold text-on-surface-variant uppercase tracking-[0.2em]">
+<span>HỆ THỐNG HIỂN THỊ 3 / 24 DỰ ÁN ĐANG CHẠY</span>
+<div class="flex gap-6 items-center">
+<button class="hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-base">chevron_left</span> TRƯỚC
+                    </button>
+<div class="flex gap-4">
+<span class="text-primary glow-primary cursor-default underline underline-offset-4 decoration-2">01</span>
+<span class="hover:text-primary cursor-pointer transition-colors">02</span>
+<span class="hover:text-primary cursor-pointer transition-colors">03</span>
+</div>
+<button class="hover:text-primary transition-colors flex items-center gap-1">
+                        SAU <span class="material-symbols-outlined text-base">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual FAB -->
+</body></html>

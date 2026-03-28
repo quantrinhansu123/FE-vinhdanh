@@ -19,7 +19,8 @@ If you see 404 on `rest/v1/employees` or upload errors for `avatars`, create the
 1. Open Supabase Dashboard -> SQL Editor.
 2. Copy and run the SQL from `supabase/create_employees_table.sql`.
 3. Copy and run the SQL from `supabase/create_marketing_reports_schema.sql`.
-3. Restart the app with `npm run dev`.
+4. (Tùy chọn) Bảng dự án & tài khoản quảng cáo: chạy `supabase/create_du_an_tkqc.sql` — tạo `du_an` (ngân sách, chi phí, doanh số, % Ads/DS) và `tkqc` (mã TKQC, `ten_pae`, chỉ số theo dự án).
+5. Restart the app with `npm run dev`.
 
 Default seeded login:
 - Email: `upedu2024@gmail.com`

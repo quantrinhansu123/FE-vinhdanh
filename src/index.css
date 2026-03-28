@@ -2,14 +2,50 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  
-  /* Google Ads Dashboard Colors */
-  --color-ads-navy: #0c0e2c;
-  --color-ads-sidebar: #13153c;
-  --color-ads-card: #1a1c4e;
-  --color-ads-active: #2d327d;
-  --color-ads-accent: #ff4d8d;
-  --color-ads-table-header: #1d1e45;
+  --font-crm: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* CRM Admin — tông xanh lá (emerald/teal), nền tối, vàng nhấn */
+  --color-crm-primary: #22c55e;
+  --color-crm-primary-variant: #15803d;
+  --color-crm-secondary: #14b8a6;
+  --color-crm-surface: #0a1210;
+  --color-crm-surface-container: #121f18;
+  --color-crm-surface-accent: #1a2e22;
+  --color-crm-on-surface: #eaf7ef;
+  --color-crm-on-surface-variant: #8ba899;
+  --color-crm-error: #f87171;
+  --color-crm-success: #4ade80;
+  --color-crm-warning: #fbbf24;
+  --color-crm-outline: #2d4f3e;
+  --color-crm-accent-warm: #fbbf24;
+
+  /* Google Ads Dashboard — tông xanh lá đậm */
+  --color-ads-navy: #06120e;
+  --color-ads-sidebar: #0c1812;
+  --color-ads-card: #12261c;
+  --color-ads-active: #166534;
+  --color-ads-accent: #22c55e;
+  --color-ads-table-header: #0f2918;
+}
+
+/*
+  Gốc CRM Admin: khai báo lại biến trên wrapper để mọi utility Tailwind (bg-crm-primary, …)
+  dùng đúng palette trong cây con — tránh trường hợp cache / thứ tự khiến màu không đổi.
+*/
+.crm-admin-theme {
+  --color-crm-primary: #22c55e;
+  --color-crm-primary-variant: #15803d;
+  --color-crm-secondary: #14b8a6;
+  --color-crm-surface: #0a1210;
+  --color-crm-surface-container: #121f18;
+  --color-crm-surface-accent: #1a2e22;
+  --color-crm-on-surface: #eaf7ef;
+  --color-crm-on-surface-variant: #8ba899;
+  --color-crm-error: #f87171;
+  --color-crm-success: #4ade80;
+  --color-crm-warning: #fbbf24;
+  --color-crm-outline: #2d4f3e;
+  --color-crm-accent-warm: #fbbf24;
 }
 
 @layer utilities {
@@ -58,15 +94,51 @@
   }
   
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: #13153c;
+    background: #0c1812;
   }
   
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #2d327d;
+    background: #166534;
     border-radius: 10px;
   }
   
   .custom-scrollbar::-webkit-scrollbar {
     height: 4px;
+  }
+}
+
+/* CRM Admin dashboard — glass & glow (nền xanh đậm, nhấn xanh lá) */
+@layer utilities {
+  .crm-glass-card {
+    background: color-mix(in srgb, var(--color-crm-surface-container) 72%, transparent);
+    backdrop-filter: blur(12px);
+    border: 1px solid color-mix(in srgb, var(--color-crm-outline) 55%, transparent);
+    box-shadow: 0 4px 28px rgba(0, 0, 0, 0.22);
+  }
+  .crm-glass-sidebar {
+    background: color-mix(in srgb, var(--color-crm-surface) 88%, transparent);
+    backdrop-filter: blur(20px);
+    border-right: 1px solid color-mix(in srgb, var(--color-crm-outline) 65%, transparent);
+  }
+  .crm-glow-primary {
+    text-shadow: 0 0 18px color-mix(in srgb, var(--color-crm-primary) 45%, transparent);
+  }
+  .crm-glow-line {
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--color-crm-primary) 55%, transparent));
+  }
+  .crm-nav-active {
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-crm-primary) 12%, transparent) 0%,
+      transparent 100%
+    );
+    border-left: 3px solid var(--color-crm-primary);
+  }
+  .crm-date-picker-icon input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(0.8);
+    cursor: pointer;
+  }
+  .material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
   }
 }
