@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
-import { MIcon } from '../common/MIcon';
+import { MIcon } from '../../components/common/MIcon';
 
-export function ReconcileHistory() {
+export function ReconcileHistoryPage() {
   return (
     <div id="crm-reconcile-history" className="crm-glass-card rounded-2xl overflow-hidden shadow-2xl border border-crm-outline/30 mt-6 min-h-[400px] flex flex-col items-center justify-center p-12 text-center">
       <motion.div
@@ -13,7 +13,7 @@ export function ReconcileHistory() {
       </motion.div>
       <h3 className="text-2xl font-bold text-crm-on-surface mb-2">Lịch sử chỉnh sửa</h3>
       <p className="text-crm-on-surface-variant max-w-md mx-auto leading-relaxed">
-        Tính năng theo dõi lịch sử chỉnh sửa các bản ghi đối chiếu đang được hoàn thiện. 
+        Tính năng theo dõi lịch sử chỉnh sửa các bản ghi đối chiếu đang được hoàn thiện.
         Vui lòng quay lại sau để xem chi tiết các thay đổi.
       </p>
       <div className="mt-8 flex gap-3">

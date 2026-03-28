@@ -58,7 +58,7 @@ function parseDigitsToInt(digitsRaw: string): number {
   return parseInt(digitsRaw.replace(/\D/g, ''), 10) || 0;
 }
 
-export function BudgetSummaryTable() {
+export function BudgetSummaryPage() {
   const [rows, setRows] = useState<BudgetRequestRow[]>([]);
   const [tkqcAccounts, setTkqcAccounts] = useState<TkqcAccountRow[]>([]);
   const [loading, setLoading] = useState(true);

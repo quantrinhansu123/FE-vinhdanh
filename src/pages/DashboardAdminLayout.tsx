@@ -5,22 +5,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type { Employee, AuthUser as ReportAuthUser, ProjectRow, ReportRow, ChartGranularity } from '../types';
-import { EmployeeTeamAdminPanel } from '../components/dashboard/EmployeeTeamAdminPanel';
-import { AdsAccountsOverview } from '../components/dashboard/AdsAccountsOverview';
-import { AdsTkqcAccountsTable } from '../components/dashboard/AdsTkqcAccountsTable';
-import { BudgetSummaryTable } from '../components/dashboard/BudgetSummaryTable';
-import { ProjectsListTable } from '../components/dashboard/ProjectsListTable';
-import { ProjectsAllocationView } from '../components/dashboard/ProjectsAllocationView';
-import { MarketingChannelsTable } from '../components/dashboard/MarketingChannelsTable';
-import { MarketingCampaignsTable } from '../components/dashboard/MarketingCampaignsTable';
-import { ProgressDashboard } from './ProgressDashboard';
-import { ReportModal } from '../components/dashboard/ReportModal';
-import { GoogleAdsDashboard } from './GoogleAdsDashboard';
+import { TeamMembersPage } from './DashboardAdmin/TeamMembersPage';
+import { AdsOverviewPage } from './DashboardAdmin/AdsOverviewPage';
+import { AdsAccountsPage } from './DashboardAdmin/AdsAccountsPage';
+import { BudgetSummaryPage } from './DashboardAdmin/BudgetSummaryPage';
+import { ProjectsListPage } from './DashboardAdmin/ProjectsListPage';
+import { ProjectsAllocationPage } from './DashboardAdmin/ProjectsAllocationPage';
+import { MarketingChannelsPage } from './DashboardAdmin/MarketingChannelsPage';
+import { MarketingCampaignsPage } from './DashboardAdmin/MarketingCampaignsPage';
+import { ProgressPage } from './DashboardAdmin/ProgressPage';
+import { DailyReportPage } from './DashboardAdmin/DailyReportPage';
+import { GoogleAdsPage } from './DashboardAdmin/GoogleAdsPage';
 import { CrmRevenueAreaChart } from '../components/dashboard/CrmRevenueAreaChart';
-import { OverviewDashboard } from '../components/dashboard/OverviewDashboard';
-import { AlertsDashboard } from '../components/dashboard/AlertsDashboard';
+import { OverviewPage } from './DashboardAdmin/OverviewPage';
+import { AlertsPage } from './DashboardAdmin/AlertsPage';
+import { ReconcileHistoryPage } from './DashboardAdmin/ReconcileHistoryPage';
+import { MarketingGeneralPage } from './DashboardAdmin/MarketingGeneralPage';
 import { DevelopingPlaceholder } from '../components/dashboard/DevelopingPlaceholder';
 
 import { supabase } from '../api/supabase';
@@ -72,7 +74,7 @@ function avatarUrlForLabel(label: string) {
   return `https://ui-avatars.com/api/?background=1a2e22&color=4ade80&size=64&name=${safe}`;
 }
 
-export interface DashboardAdminPageProps {
+export interface DashboardAdminLayoutProps {
   /** Danh sách nhân viên (Vinh danh) — dùng tại Team → Thành viên */
   employees?: Employee[];
   onEmployeesRefresh?: () => void | Promise<void>;
@@ -85,7 +87,7 @@ export interface DashboardAdminPageProps {
   reportUser?: ReportAuthUser | null;
 }
 
-export function DashboardAdminPage({
+export function DashboardAdminLayout({
   employees = [],
   onEmployeesRefresh = () => {},
   onClose,
@@ -94,7 +96,7 @@ export function DashboardAdminPage({
   userSubtitle = 'Hệ thống cấp cao',
   avatarUrl = 'https://lh3.googleusercontent.com/aida-public/AB6AXuCq4IVGRcDsNW79LSQB6KOK_itTwQjwdyXT1g3NTRY4tK3Xg5TWjwQcenqwvhUbC9YKMoXzIIphIZSdODMCwJywK57DHQelM3IMfgIHVo-35r_S7xeU9MAssW4WuUWGlgDS-p9g8Li04_mufizCVczUnA5rIhJuokNQgTdd3rxvyYEG0auVOSif-1x6BZR-y2Os7yOOqLG5PZKhQYHnmeTFLbNtr8m8L3wbTnkMm3gWMWnt2TIyJ2LT-dLL-BgMX3KN899D7cKqmag',
   reportUser = null,
-}: DashboardAdminPageProps) {
+}: DashboardAdminLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -224,6 +226,10 @@ export function DashboardAdminPage({
       navigate(`${CRM_ADMIN_BASE}/dashboard/overview`, { replace: true });
       return;
     }
+    if (p === `${CRM_ADMIN_BASE}/dashboard` || p === `${CRM_ADMIN_BASE}/dashboard/`) {
+      navigate(`${CRM_ADMIN_BASE}/dashboard/overview`, { replace: true });
+      return;
+    }
     if (p === `${CRM_ADMIN_BASE}/ads` || p === `${CRM_ADMIN_BASE}/ads/`) {
       navigate(`${CRM_ADMIN_BASE}/ads/overview`, { replace: true });
       return;
@@ -238,6 +244,10 @@ export function DashboardAdminPage({
     }
     if (p === `${CRM_ADMIN_BASE}/reports` || p === `${CRM_ADMIN_BASE}/reports/`) {
       navigate(`${CRM_ADMIN_BASE}/reports/daily`, { replace: true });
+      return;
+    }
+    if (p === `${CRM_ADMIN_BASE}/projects` || p === `${CRM_ADMIN_BASE}/projects/`) {
+      navigate(`${CRM_ADMIN_BASE}/projects/list`, { replace: true });
       return;
     }
     if (p === `${CRM_ADMIN_BASE}/reconcile` || p === `${CRM_ADMIN_BASE}/reconcile/`) {
@@ -377,6 +387,7 @@ export function DashboardAdminPage({
           userName={userName}
           userSubtitle={userSubtitle}
           avatarUrl={avatarUrl}
+          onClose={onClose}
         />
 
         <main className="flex-1 overflow-y-auto custom-scrollbar pt-8 pb-16 px-6 lg:px-10 relative">
@@ -415,34 +426,29 @@ export function DashboardAdminPage({
           )}
 
           {activeNav === 'team:members' ? (
-            <EmployeeTeamAdminPanel employees={employees} onRefresh={onEmployeesRefresh} />
+            <TeamMembersPage employees={employees} onRefresh={onEmployeesRefresh} />
           ) : activeNav === 'team:progress' ? (
-            <ProgressDashboard variant="embedded" embeddedRootId="crm-team-progress" />
+            <ProgressPage variant="embedded" embeddedRootId="crm-team-progress" />
           ) : activeNav === 'ads:overview' ? (
-            <AdsAccountsOverview />
+            <AdsOverviewPage />
           ) : activeNav === 'ads:accounts' ? (
-            <AdsTkqcAccountsTable />
+            <AdsAccountsPage />
           ) : activeNav === 'budget:summary' ? (
-            <BudgetSummaryTable />
+            <BudgetSummaryPage />
           ) : activeNav === 'projects:list' ? (
-            <ProjectsListTable />
+            <ProjectsListPage />
           ) : activeNav === 'projects:allocation' ? (
-            <ProjectsAllocationView />
+            <ProjectsAllocationPage />
           ) : activeNav === 'marketing:channels' ? (
-            <MarketingChannelsTable />
+            <MarketingChannelsPage />
           ) : activeNav === 'marketing:campaigns' ? (
-            <MarketingCampaignsTable />
+            <MarketingCampaignsPage />
           ) : activeNav === 'reports:daily' ? (
-            <ReportModal variant="embedded" currentUser={reportUser ?? undefined} embeddedRootId="crm-reports-daily" />
+            <DailyReportPage variant="embedded" currentUser={reportUser ?? undefined} embeddedRootId="crm-reports-daily" />
           ) : activeNav === 'reports:summary' ? (
-            <DevelopingPlaceholder
-              id="crm-reports-summary"
-              title="Báo cáo Tổng hợp"
-              description="Tính năng Báo cáo Tổng hợp (General Report Summary) đang được hoàn thiện hệ thống cơ sở dữ liệu. Vui lòng quay lại sau."
-              icon="analytics"
-            />
+            <MarketingGeneralPage variant="embedded" />
           ) : activeNav === 'dashboard:alerts' || activeNav === 'reconcile:table' ? (
-            <AlertsDashboard
+            <AlertsPage
               pagedRows={pagedRows}
               filteredProjects={filteredProjects}
               projectRows={projectRows}
@@ -456,18 +462,13 @@ export function DashboardAdminPage({
               totalProjects={totalProjects}
             />
           ) : activeNav === 'reconcile:history' ? (
-            <DevelopingPlaceholder
-              id="crm-reconcile-history"
-              title="Lịch sử chỉnh sửa"
-              description="Tính năng theo dõi lịch sử chỉnh sửa các bản ghi đối chiếu đang được hoàn thiện hệ thống cơ sở dữ liệu. Vui lòng quay lại sau."
-              icon="history"
-            />
+            <ReconcileHistoryPage />
           ) : (
 
             <>
 
               {activeNav === 'dashboard:overview' ? (
-                <OverviewDashboard
+                <OverviewPage
                   plannedBudget={plannedBudget}
                   totalAdCost={totalAdCost}
                   totalRevenue={totalRevenue}
@@ -495,17 +496,6 @@ export function DashboardAdminPage({
         </main>
       </div>
 
-      {onClose && (
-        <button
-          type="button"
-          onClick={onClose}
-          className="fixed top-4 right-4 z-[140] p-2 bg-black/60 hover:bg-black/80 text-white rounded-full transition-all border border-white/20 backdrop-blur-md"
-          title="Đóng"
-          aria-label="Đóng dashboard"
-        >
-          <X size={20} />
-        </button>
-      )}
     </motion.div>
   );
 }

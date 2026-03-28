@@ -59,7 +59,7 @@ function BarPair({
   );
 }
 
-export function AdsAccountsOverview() {
+export function AdsOverviewPage() {
   const [rows, setRows] = useState<TkqcAccountRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

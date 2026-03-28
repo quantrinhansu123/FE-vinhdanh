@@ -31,7 +31,7 @@ function parseDigitsToInt(digitsRaw: string): number {
 /** Giá trị đặc biệt trong select: dòng chưa có đơn vị */
 const FILTER_EMPTY_DON_VI = '__EMPTY_DON_VI__';
 
-export function AdsTkqcAccountsTable() {
+export function AdsAccountsPage() {
   const [rows, setRows] = useState<TkqcAccountRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

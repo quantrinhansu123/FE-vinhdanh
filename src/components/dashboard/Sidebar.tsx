@@ -45,7 +45,13 @@ export function Sidebar({
                       ? 'text-crm-primary font-semibold'
                       : 'text-crm-on-surface-variant hover:text-crm-on-surface hover:bg-crm-surface-accent/50'
                   }`}
-                  onClick={() => onNavClick(item.id)}
+                  onClick={() => {
+                    if (hasChildren && item.children?.[0]) {
+                      onNavClick(`${item.id}:${item.children[0].id}`);
+                    } else {
+                      onNavClick(item.id);
+                    }
+                  }}
                 >
                   <MIcon name={item.icon} className="text-xl shrink-0" />
                   <span className={`text-sm truncate ${parentActive ? 'font-semibold' : 'font-medium'} tracking-wide`}>{item.label}</span>

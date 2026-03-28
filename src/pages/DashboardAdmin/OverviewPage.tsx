@@ -1,10 +1,10 @@
 import React from 'react';
-import { MIcon } from '../common/MIcon';
-import { GoogleAdsDashboard } from '../../pages/GoogleAdsDashboard';
-import { CrmRevenueAreaChart } from './CrmRevenueAreaChart';
+import { MIcon } from '../../components/common/MIcon';
+import { GoogleAdsPage } from './GoogleAdsPage';
+import { CrmRevenueAreaChart } from '../../components/dashboard/CrmRevenueAreaChart';
 import { formatCompactM, formatSignedPct, ADS_THRESHOLD_OK, ADS_THRESHOLD_WARN } from '../../utils/dashboardAdminUtils';
 
-interface OverviewDashboardProps {
+interface OverviewPageProps {
   plannedBudget: number;
   totalAdCost: number;
   totalRevenue: number;
@@ -35,7 +35,7 @@ const CHART_PERIODS: { key: 'NGÀY' | 'TUẦN' | 'THÁNG' | 'NĂM' }[] = [
   { key: 'NĂM' },
 ];
 
-export function OverviewDashboard({
+export function OverviewPage({
   plannedBudget,
   totalAdCost,
   totalRevenue,
@@ -52,10 +52,10 @@ export function OverviewDashboard({
   topGood,
   topBad,
   activeNav,
-}: OverviewDashboardProps) {
+}: OverviewPageProps) {
   return (
-    <GoogleAdsDashboard variant="embedded">
-      <div id="crm-dash-kpi" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8 mt-6">
+    <GoogleAdsPage variant="embedded">
+      <div id="crm-dash-kpi" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
         <div className="crm-glass-card p-6 rounded-xl hover:border-crm-primary/50 border border-transparent transition-all group overflow-hidden relative">
           <div className="absolute top-0 right-0 w-24 h-24 bg-crm-primary/5 blur-[40px] rounded-full -mr-10 -mt-10 pointer-events-none" />
           <div className="flex items-center justify-between mb-4">
@@ -236,6 +236,6 @@ export function OverviewDashboard({
           </div>
         </div>
       </div>
-    </GoogleAdsDashboard>
+    </GoogleAdsPage>
   );
 }

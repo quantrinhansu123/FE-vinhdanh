@@ -53,7 +53,7 @@ function formatCurrency(value: string): string {
 }
 
 
-export function ReportModal({
+export function DailyReportPage({
   onClose,
   currentUser,
   variant = 'modal',

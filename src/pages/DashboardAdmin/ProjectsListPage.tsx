@@ -37,7 +37,7 @@ function fmtPct(v: number | null | undefined): string {
   return `${Number(v).toFixed(2)}%`;
 }
 
-export function ProjectsListTable() {
+export function ProjectsListPage() {
   const [rows, setRows] = useState<DuAnRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

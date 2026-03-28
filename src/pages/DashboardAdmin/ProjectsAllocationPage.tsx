@@ -39,7 +39,7 @@ function isTableMissingInSchemaCache(err: { message?: string } | null): boolean 
   return m.includes('could not find') && m.includes('table') && m.includes('schema cache');
 }
 
-export function ProjectsAllocationView() {
+export function ProjectsAllocationPage() {
   const [rows, setRows] = useState<MergedTkqc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +63,7 @@ export function ProjectsAllocationView() {
           console.error(accErr);
           setError(
             accErr.message ||
-              `Không đọc được ${TKQC_TABLE} và ${TKQC_ACCOUNTS_TABLE}. Chạy supabase/create_du_an_tkqc.sql (bảng tkqc) hoặc create_tkqc_accounts.sql.`
+            `Không đọc được ${TKQC_TABLE} và ${TKQC_ACCOUNTS_TABLE}. Chạy supabase/create_du_an_tkqc.sql (bảng tkqc) hoặc create_tkqc_accounts.sql.`
           );
           setRows([]);
           setLoading(false);
@@ -253,9 +253,8 @@ export function ProjectsAllocationView() {
           <div className="crm-glass-card rounded-xl p-4 border border-crm-secondary/25 text-center sm:text-left">
             <p className="text-[10px] font-extrabold text-crm-on-surface-variant uppercase tracking-wider">Chênh (KH − phân bổ)</p>
             <p
-              className={`text-xl font-extrabold tabular-nums mt-1 ${
-                totals.tongConLai >= 0 ? 'text-crm-success' : 'text-crm-error'
-              }`}
+              className={`text-xl font-extrabold tabular-nums mt-1 ${totals.tongConLai >= 0 ? 'text-crm-success' : 'text-crm-error'
+                }`}
             >
               {formatVnd(totals.tongConLai)}
             </p>
@@ -300,9 +299,8 @@ export function ProjectsAllocationView() {
                       <td className="px-3 py-2.5 text-sm text-right tabular-nums">{formatVnd(r.keHoach)}</td>
                       <td className="px-3 py-2.5 text-sm text-right tabular-nums font-semibold text-crm-primary">{formatVnd(r.sumPhanBo)}</td>
                       <td
-                        className={`px-3 py-2.5 text-sm text-right tabular-nums font-medium ${
-                          r.conLai >= 0 ? 'text-crm-success' : 'text-crm-error'
-                        }`}
+                        className={`px-3 py-2.5 text-sm text-right tabular-nums font-medium ${r.conLai >= 0 ? 'text-crm-success' : 'text-crm-error'
+                          }`}
                       >
                         {formatVnd(r.conLai)}
                       </td>

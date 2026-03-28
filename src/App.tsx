@@ -8,7 +8,7 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from './api/supabase';
 import { LoginPage } from './pages/LoginPage';
-import { DashboardAdminPage } from './pages/DashboardAdminPage';
+import { DashboardAdminLayout } from './pages/DashboardAdminLayout';
 import { LeaderboardPage } from './pages/LeaderboardPage';
 import type { Employee, AuthUser } from './types';
 
@@ -173,7 +173,7 @@ function AppRoutes() {
         path="/crm-admin/*"
         element={
           authUser ? (
-            <DashboardAdminPage
+            <DashboardAdminLayout
               employees={employees}
               onEmployeesRefresh={fetchEmployees}
               onClose={() => navigate('/')}

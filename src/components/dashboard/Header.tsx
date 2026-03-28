@@ -13,6 +13,7 @@ interface HeaderProps {
   userName: string;
   userSubtitle: string;
   avatarUrl: string | null;
+  onClose?: () => void;
 }
 
 export function Header({
@@ -26,7 +27,8 @@ export function Header({
   onRefresh,
   userName,
   userSubtitle,
-  avatarUrl
+  avatarUrl,
+  onClose
 }: HeaderProps) {
   return (
     <header className="shrink-0 min-h-20 bg-crm-surface/50 backdrop-blur-xl z-40 px-6 lg:px-10 flex flex-wrap justify-between items-center border-b border-crm-outline/30 gap-4 py-3">
@@ -92,6 +94,20 @@ export function Header({
             <img alt="" className="relative w-11 h-11 rounded-full border border-crm-surface object-cover" src={avatarUrl || undefined} />
           </div>
         </div>
+
+        {onClose && (
+          <>
+            <div className="h-8 w-px bg-crm-outline/50 mx-1 hidden sm:block" />
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2.5 bg-crm-surface-accent/50 hover:bg-crm-surface-accent text-crm-on-surface hover:text-crm-primary rounded-xl transition-all border border-crm-outline/50 shadow-sm flex items-center justify-center group"
+              title="Quay lại trang vinh danh"
+            >
+              <MIcon name="arrow_back" className="text-xl group-hover:-translate-x-1 transition-transform" />
+            </button>
+          </>
+        )}
       </div>
     </header>
   );

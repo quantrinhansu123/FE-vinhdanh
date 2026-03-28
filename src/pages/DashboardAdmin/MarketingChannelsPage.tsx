@@ -51,7 +51,7 @@ function mapDetailToLine(d: MarketingChannelDetailRow): DetailLine {
   };
 }
 
-export function MarketingChannelsTable() {
+export function MarketingChannelsPage() {
   const [rows, setRows] = useState<MarketingChannelRow[]>([]);
   const [detailCounts, setDetailCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);

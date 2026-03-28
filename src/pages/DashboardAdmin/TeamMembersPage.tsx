@@ -60,12 +60,12 @@ function logSupabaseError(action: string, error: { code?: string; message?: stri
   }
 }
 
-export interface EmployeeTeamAdminPanelProps {
+export interface TeamMembersPageProps {
   employees: Employee[];
   onRefresh: () => void | Promise<void>;
 }
 
-export function EmployeeTeamAdminPanel({ employees, onRefresh }: EmployeeTeamAdminPanelProps) {
+export function TeamMembersPage({ employees, onRefresh }: TeamMembersPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

@@ -36,7 +36,7 @@ function parseDigitsToInt(digitsRaw: string): number {
   return parseInt(digitsRaw.replace(/\D/g, ''), 10) || 0;
 }
 
-export function MarketingCampaignsTable() {
+export function MarketingCampaignsPage() {
   const [campaigns, setCampaigns] = useState<MarketingCampaignRow[]>([]);
   const [links, setLinks] = useState<CampaignTkqcLink[]>([]);
   const [tkqcAccounts, setTkqcAccounts] = useState<TkqcAccountRow[]>([]);

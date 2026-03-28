@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, X, TrendingUp } from 'lucide-react';
-import { supabase } from '../api/supabase';
+import { supabase } from '../../api/supabase';
 
 interface Employee {
   id: string;
@@ -29,15 +29,15 @@ interface DailyReport {
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const REPORT_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 
-export type ProgressDashboardVariant = 'modal' | 'embedded';
+export type ProgressPageVariant = 'modal' | 'embedded';
 
-export function ProgressDashboard({
+export function ProgressPage({
   onClose,
   variant = 'modal',
   embeddedRootId = 'crm-dashboard-progress',
 }: {
   onClose?: () => void;
-  variant?: ProgressDashboardVariant;
+  variant?: ProgressPageVariant;
   /** `id` trên wrapper khi embedded — để scroll CRM (vd. Team → Tiến bộ) */
   embeddedRootId?: string;
 }) {
