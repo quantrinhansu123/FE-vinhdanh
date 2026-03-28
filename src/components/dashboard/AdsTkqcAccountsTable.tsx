@@ -4,24 +4,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { formatVnd } from './dashboardAdminUtils';
+import { supabase } from '../../api/supabase';
+import { formatVnd } from '../../utils/dashboardAdminUtils';
+import type { TkqcAccountRow } from '../../types';
 
 const TABLE = import.meta.env.VITE_SUPABASE_TKQC_ACCOUNTS_TABLE?.trim() || 'tkqc_accounts';
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 
-export type TkqcAccountRow = {
-  id: string;
-  tkqc: string;
-  page: string | null;
-  don_vi: string | null;
-  employee_id?: string | null;
-  ngan_sach: number | null;
-  tong_chi: number | null;
-  doanh_so: number | null;
-  so_mess: number | null;
-  so_don: number | null;
-};
 
 type EmployeeOption = { id: string; name: string; team: string };
 

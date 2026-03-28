@@ -4,9 +4,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2, Plus, Trash2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { formatVnd } from './dashboardAdminUtils';
-import type { TkqcAccountRow } from './AdsTkqcAccountsTable';
+import { supabase } from '../../api/supabase';
+import { formatVnd } from '../../utils/dashboardAdminUtils';
+import type { TkqcAccountRow, MarketingCampaignRow, CampaignTkqcLink } from '../../types';
 
 const CAMPAIGNS_TABLE =
   import.meta.env.VITE_SUPABASE_MARKETING_CAMPAIGNS_TABLE?.trim() || 'marketing_campaigns';
@@ -14,26 +14,6 @@ const LINK_TABLE =
   import.meta.env.VITE_SUPABASE_MARKETING_CAMPAIGN_TKQC_TABLE?.trim() || 'marketing_campaign_tkqc';
 const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_ACCOUNTS_TABLE?.trim() || 'tkqc_accounts';
 
-export type MarketingCampaignRow = {
-  id: string;
-  ma_chien_dich: string | null;
-  ten_chien_dich: string;
-  mo_ta: string | null;
-  nen_tang: string | null;
-  ngay_bat_dau: string | null;
-  ngay_ket_thuc: string | null;
-  trang_thai: string;
-};
-
-export type CampaignTkqcLink = {
-  id: string;
-  campaign_id: string;
-  tkqc_account_id: string;
-  ngan_sach_gan: number | null;
-  chi_phi_thuc_te: number | null;
-  ghi_chu: string | null;
-  tkqc_accounts?: { tkqc: string; page: string | null; don_vi: string | null } | null;
-};
 
 const TRANG_THAI_LABEL: Record<string, string> = {
   nhap: 'Nháp',

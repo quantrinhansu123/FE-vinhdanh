@@ -6,11 +6,11 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { supabase } from './lib/supabase';
-import { LoginView } from './components/LoginView';
-import { DashboardAdmin } from './components/DashboardAdmin';
-import { LeaderboardPage, type Employee } from './pages/LeaderboardPage';
-import type { AuthUser } from './components/ReportModal';
+import { supabase } from './api/supabase';
+import { LoginPage } from './pages/LoginPage';
+import { DashboardAdminPage } from './pages/DashboardAdminPage';
+import { LeaderboardPage } from './pages/LeaderboardPage';
+import type { Employee, AuthUser } from './types';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const AVATARS_BUCKET = import.meta.env.VITE_SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
@@ -130,7 +130,7 @@ function AppRoutes() {
     <Routes>
       <Route
         path="/login"
-        element={authUser ? <Navigate to="/" replace /> : <LoginView onLogin={handleLogin} />}
+        element={authUser ? <Navigate to="/" replace /> : <LoginPage onLogin={handleLogin} />}
       />
 
       <Route
@@ -173,7 +173,7 @@ function AppRoutes() {
         path="/crm-admin/*"
         element={
           authUser ? (
-            <DashboardAdmin
+            <DashboardAdminPage
               employees={employees}
               onEmployeesRefresh={fetchEmployees}
               onClose={() => navigate('/')}

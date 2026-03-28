@@ -4,25 +4,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { formatVnd } from './dashboardAdminUtils';
+import { supabase } from '../../api/supabase';
+import { formatVnd } from '../../utils/dashboardAdminUtils';
+import type { DuAnRow } from '../../types';
 
 const TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
 
-export type DuAnRow = {
-  id: string;
-  ma_du_an: string | null;
-  ten_du_an: string;
-  don_vi: string | null;
-  mo_ta: string | null;
-  ngan_sach_ke_hoach: number | null;
-  chi_phi_marketing_thuc_te: number | null;
-  tong_doanh_so: number | null;
-  ty_le_ads_doanh_so: number | null;
-  ngay_bat_dau: string | null;
-  ngay_ket_thuc: string | null;
-  trang_thai: string;
-};
 
 const TRANG_THAI_LABEL: Record<string, string> = {
   dang_chay: 'Đang chạy',
@@ -79,9 +66,9 @@ export function ProjectsListTable() {
   }, [fetchRows]);
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-0 sm:px-1">
+    <div className="w-full">
       <div id="crm-projects-list" className="crm-glass-card rounded-2xl overflow-hidden border border-crm-outline/30">
-        <div className="px-5 sm:px-8 py-5 border-b border-crm-outline/30 bg-crm-surface-accent/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="px-6 lg:px-8 py-5 border-b border-crm-outline/30 bg-crm-surface-accent/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="text-center sm:text-left">
             <h2 className="text-xl font-bold text-crm-on-surface tracking-tight">Danh sách dự án</h2>
             <p className="text-xs text-crm-on-surface-variant mt-1">Nguồn: bảng {TABLE}</p>
@@ -98,12 +85,12 @@ export function ProjectsListTable() {
         </div>
 
         {error && (
-          <div className="mx-5 sm:mx-8 mt-4 px-4 py-3 rounded-xl border border-crm-error/50 bg-crm-error/10 text-sm text-crm-error">
+          <div className="mx-6 lg:mx-8 mt-4 px-4 py-3 rounded-xl border border-crm-error/50 bg-crm-error/10 text-sm text-crm-error">
             {error}
           </div>
         )}
 
-        <div className="overflow-x-auto p-4 sm:p-6">
+        <div className="overflow-x-auto p-6 lg:p-8">
           {loading && rows.length === 0 ? (
             <div className="flex justify-center py-16">
               <Loader2 className="animate-spin text-crm-primary w-10 h-10" />

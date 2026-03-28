@@ -3,11 +3,11 @@ import { Loader2, LogIn } from 'lucide-react';
 
 import backgroundImg from '../assets/background.png';
 
-interface LoginViewProps {
+interface LoginPageProps {
   onLogin: (email: string, password: string) => Promise<void>;
 }
 
-export function LoginView({ onLogin }: LoginViewProps) {
+export function LoginPage({ onLogin }: LoginPageProps) {
   const [email, setEmail] = useState('upedu2024@gmail.com');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

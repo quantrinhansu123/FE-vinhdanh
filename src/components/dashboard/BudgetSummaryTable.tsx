@@ -4,30 +4,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Eye, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { formatVnd } from './dashboardAdminUtils';
-import type { TkqcAccountRow } from './AdsTkqcAccountsTable';
+import { supabase } from '../../api/supabase';
+import { formatVnd } from '../../utils/dashboardAdminUtils';
+import type { TkqcAccountRow, BudgetRequestStatus, BudgetRequestRow } from '../../types';
 
 const TABLE = import.meta.env.VITE_SUPABASE_BUDGET_REQUESTS_TABLE?.trim() || 'budget_requests';
 const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_ACCOUNTS_TABLE?.trim() || 'tkqc_accounts';
 
-export type BudgetRequestStatus = 'cho_phe_duyet' | 'dong_y' | 'tu_choi';
-
-export type BudgetRequestRow = {
-  id: string;
-  ngan_sach_xin: number;
-  ngay_gio_xin: string;
-  trang_thai: BudgetRequestStatus;
-  ly_do_tu_choi: string | null;
-  ghi_chu: string | null;
-  tkqc_account_id: string | null;
-  tkqc_accounts?: {
-    id: string;
-    don_vi: string | null;
-    tkqc: string;
-    page: string | null;
-  } | null;
-};
 
 const STATUS_LABEL: Record<BudgetRequestStatus, string> = {
   cho_phe_duyet: 'Chờ phê duyệt',
@@ -329,9 +312,9 @@ export function BudgetSummaryTable() {
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-0 sm:px-1">
+    <div className="w-full">
       <div id="crm-budget-summary" className="crm-glass-card rounded-2xl overflow-hidden border border-crm-outline/30">
-        <div className="px-5 sm:px-8 py-5 border-b border-crm-outline/30 bg-crm-surface-accent/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="px-6 lg:px-8 py-5 border-b border-crm-outline/30 bg-crm-surface-accent/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="text-center sm:text-left">
             <h2 className="text-xl font-bold text-crm-on-surface tracking-tight">Tổng quan ngân sách</h2>
             <p className="text-xs text-crm-on-surface-variant mt-1">Yêu cầu xin ngân sách — liên kết {TKQC_TABLE}</p>
@@ -360,10 +343,10 @@ export function BudgetSummaryTable() {
         </div>
 
         {error && (
-          <div className="mx-5 sm:mx-8 mt-4 px-4 py-3 rounded-xl border border-crm-error/50 bg-crm-error/10 text-sm text-crm-error">{error}</div>
+          <div className="mx-6 lg:mx-8 mt-4 px-4 py-3 rounded-xl border border-crm-error/50 bg-crm-error/10 text-sm text-crm-error">{error}</div>
         )}
 
-        <div className="overflow-x-auto p-4 sm:p-6">
+        <div className="overflow-x-auto p-6 lg:p-8">
           {loading && rows.length === 0 ? (
             <div className="flex justify-center py-16">
               <Loader2 className="animate-spin text-crm-primary w-10 h-10" />

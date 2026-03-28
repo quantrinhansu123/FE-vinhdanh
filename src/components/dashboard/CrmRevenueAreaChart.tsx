@@ -8,9 +8,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { formatCompactM, formatVnd } from './dashboardAdminUtils';
-
-export type CrmRevenueAreaPoint = { label: string; revenue: number };
+import { formatCompactM, formatVnd } from '../../utils/dashboardAdminUtils';
+import type { CrmRevenueAreaPoint } from '../../types';
 
 export function CrmRevenueAreaChart({
   series,

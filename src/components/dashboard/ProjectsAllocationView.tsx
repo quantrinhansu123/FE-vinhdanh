@@ -5,8 +5,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, PieChart } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { formatVnd } from './dashboardAdminUtils';
+import { supabase } from '../../api/supabase';
+import { formatVnd } from '../../utils/dashboardAdminUtils';
+import type { DuAnRow, TkqcRow } from '../../types';
 
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
 const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_PROJECT_TABLE?.trim() || 'tkqc';
@@ -14,26 +15,6 @@ const TKQC_ACCOUNTS_TABLE = import.meta.env.VITE_SUPABASE_TKQC_ACCOUNTS_TABLE?.t
 
 type AllocationSource = 'tkqc' | 'tkqc_accounts';
 
-type DuAnRow = {
-  id: string;
-  ma_du_an: string | null;
-  ten_du_an: string;
-  don_vi: string | null;
-  ngan_sach_ke_hoach: number | null;
-};
-
-type TkqcRow = {
-  id: string;
-  id_du_an: string;
-  ma_tkqc: string;
-  ten_tkqc: string | null;
-  ten_pae: string | null;
-  nen_tang: string | null;
-  ngan_sach_phan_bo: number | null;
-  chi_phi_thuc_te: number | null;
-  tong_doanh_so: number | null;
-  ty_le_ads_doanh_so: number | null;
-};
 
 type MergedTkqc = TkqcRow & {
   du_an: DuAnRow | null;
@@ -220,9 +201,9 @@ export function ProjectsAllocationView() {
   }, [rows, reportByProject]);
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-0 sm:px-1 space-y-6 pb-4">
+    <div className="w-full space-y-6 pb-4">
       <div id="crm-projects-allocation" className="crm-glass-card rounded-2xl overflow-hidden border border-crm-outline/30">
-        <div className="px-5 sm:px-8 py-5 border-b border-crm-outline/30 bg-crm-surface-accent/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="px-6 lg:px-8 py-5 border-b border-crm-outline/30 bg-crm-surface-accent/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="text-center sm:text-left">
             <h2 className="text-xl font-bold text-crm-on-surface tracking-tight flex items-center justify-center sm:justify-start gap-2">
               <PieChart className="text-crm-accent-warm shrink-0" size={22} />
@@ -256,11 +237,11 @@ export function ProjectsAllocationView() {
         </div>
 
         {error && (
-          <div className="mx-5 sm:mx-8 mt-4 px-4 py-3 rounded-xl border border-crm-error/50 bg-crm-error/10 text-sm text-crm-error">{error}</div>
+          <div className="mx-6 lg:mx-8 mt-4 px-4 py-3 rounded-xl border border-crm-error/50 bg-crm-error/10 text-sm text-crm-error">{error}</div>
         )}
 
         {/* Báo cáo tổng */}
-        <div className="px-4 sm:px-8 py-6 grid grid-cols-1 sm:grid-cols-3 gap-4 border-b border-crm-outline/20">
+        <div className="px-6 lg:px-8 py-6 grid grid-cols-1 sm:grid-cols-3 gap-4 border-b border-crm-outline/20">
           <div className="crm-glass-card rounded-xl p-4 border border-crm-outline/30 text-center sm:text-left">
             <p className="text-[10px] font-extrabold text-crm-on-surface-variant uppercase tracking-wider">Tổng NS kế hoạch (dự án có TKQC)</p>
             <p className="text-xl font-extrabold text-crm-on-surface tabular-nums mt-1">{formatVnd(totals.tongKeHoach)}</p>
@@ -282,7 +263,7 @@ export function ProjectsAllocationView() {
         </div>
 
         {/* Theo từng dự án */}
-        <div className="px-4 sm:px-8 py-5">
+        <div className="px-6 lg:px-8 py-6">
           <h3 className="text-sm font-bold text-crm-on-surface mb-3">Báo cáo theo dự án</h3>
           <div className="overflow-x-auto rounded-xl border border-crm-outline/30">
             <table className="w-full text-left border-collapse min-w-[880px]">
@@ -338,7 +319,7 @@ export function ProjectsAllocationView() {
         </div>
 
         {/* Chi tiết từng TKQC */}
-        <div className="px-4 sm:px-8 py-5 border-t border-crm-outline/20">
+        <div className="px-6 lg:px-8 py-8 border-t border-crm-outline/20">
           <h3 className="text-sm font-bold text-crm-on-surface mb-3">Chi tiết từng tài khoản TKQC</h3>
           <div className="overflow-x-auto rounded-xl border border-crm-outline/30">
             {loading && rows.length === 0 ? (

@@ -4,9 +4,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Flame, TrendingUp, MessageCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { formatVnd } from './dashboardAdminUtils';
-import type { TkqcAccountRow } from './AdsTkqcAccountsTable';
+import { supabase } from '../../api/supabase';
+import { formatVnd } from '../../utils/dashboardAdminUtils';
+import type { TkqcAccountRow } from '../../types';
 
 const TABLE = import.meta.env.VITE_SUPABASE_TKQC_ACCOUNTS_TABLE?.trim() || 'tkqc_accounts';
 
@@ -128,9 +128,9 @@ export function AdsAccountsOverview() {
   }, [enriched]);
 
   return (
-    <div id="crm-ads-overview" className="w-full max-w-6xl mx-auto px-0 sm:px-1 space-y-6 pb-6">
+    <div id="crm-ads-overview" className="w-full space-y-6 pb-6">
       <div className="crm-glass-card rounded-2xl overflow-hidden border border-crm-outline/30">
-        <div className="px-5 sm:px-8 py-5 border-b border-crm-outline/30 bg-crm-surface-accent/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="px-6 lg:px-8 py-5 border-b border-crm-outline/30 bg-crm-surface-accent/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-crm-on-surface tracking-tight">Tổng quan tài khoản quảng cáo</h2>
             <p className="text-xs text-crm-on-surface-variant mt-1">
@@ -149,7 +149,7 @@ export function AdsAccountsOverview() {
         </div>
 
         {error && (
-          <div className="mx-5 sm:mx-8 mt-4 px-4 py-3 rounded-xl border border-crm-error/50 bg-crm-error/10 text-sm text-crm-error">
+          <div className="mx-6 lg:mx-8 mt-4 px-4 py-3 rounded-xl border border-crm-error/50 bg-crm-error/10 text-sm text-crm-error">
             {error}
           </div>
         )}
@@ -165,7 +165,7 @@ export function AdsAccountsOverview() {
             <code className="text-crm-primary">create_tkqc_accounts.sql</code>.
           </div>
         ) : (
-          <div className="p-4 sm:p-6 space-y-8">
+          <div className="p-6 lg:p-8 space-y-10">
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <div className="crm-glass-card rounded-xl border border-crm-outline/30 p-4 sm:p-5">
                 <h3 className="text-sm font-bold text-crm-on-surface mb-1 flex items-center gap-2">

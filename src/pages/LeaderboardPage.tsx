@@ -18,16 +18,7 @@ import top1Img from '../assets/top1.png';
 import top2Img from '../assets/top2.png';
 import top3Img from '../assets/top3.png';
 
-export interface Employee {
-  id: string;
-  name: string;
-  team: string;
-  score: number;
-  avatar_url: string | null;
-  email?: string;
-  pass?: string;
-  rank?: number;
-}
+import type { Employee } from '../types';
 
 interface LeaderboardPageProps {
   employees: Employee[];

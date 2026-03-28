@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { X, ChevronDown } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../api/supabase';
+
+export type MarketingDashboardVariant = 'modal' | 'embedded';
 
 interface MarketingDashboardProps {
   onClose?: () => void;
+  variant?: MarketingDashboardVariant;
 }
 
 interface EmployeeReport {
@@ -22,7 +25,9 @@ interface EmployeeReport {
 
 const REPORT_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 
-export function MarketingDashboard({ onClose }: MarketingDashboardProps) {
+export function MarketingDashboard({ onClose, variant = 'modal' }: MarketingDashboardProps) {
+  const embedded = variant === 'embedded';
+
   const [reports, setReports] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dateRange, setDateRange] = useState({
@@ -150,23 +155,30 @@ export function MarketingDashboard({ onClose }: MarketingDashboardProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[130] bg-gray-50 font-sans flex flex-col overflow-hidden"
+      className={
+        embedded
+          ? 'relative w-full flex flex-col text-gray-800'
+          : 'fixed inset-0 z-[130] bg-gray-50 font-sans flex flex-col overflow-hidden'
+      }
     >
       {/* Header */}
-      <div className="bg-blue-600 text-white p-4 shadow-lg">
-        <div className="max-w-7xl mx-auto">
-          <h1 className="text-xl font-bold mb-4">DASHBOARD THỂ HIỆN CÁC CHỈ SỐ SAU</h1>
-          <div className="grid grid-cols-7 gap-2 text-sm font-semibold">
-            <div>Doanh số tổng</div>
-            <div>TỔNG DATA</div>
-            <div>DATA CHỐT ĐƠN</div>
-            <div>DATA KHÔNG CHỐT ĐƯỢC</div>
-            <div>ADS</div>
-            <div>ADS / CHỐT</div>
-            <div>ADS / DOANH SỐ</div>
+      {!embedded && (
+        <div className="bg-blue-600 text-white p-4 shadow-lg">
+          <div className="max-w-7xl mx-auto">
+            <h1 className="text-xl font-bold mb-4">DASHBOARD THỂ HIỆN CÁC CHỈ SỐ SAU</h1>
+            <div className="grid grid-cols-7 gap-2 text-sm font-semibold">
+              <div>Doanh số tổng</div>
+              <div>TỔNG DATA</div>
+              <div>DATA CHỐT ĐƠN</div>
+              <div>DATA KHÔNG CHỐT ĐƯỢC</div>
+              <div>ADS</div>
+              <div>ADS / CHỐT</div>
+              <div>ADS / DOANH SỐ</div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
 
       <div className="flex-1 overflow-y-auto bg-white">
         <div className="max-w-7xl mx-auto p-6">

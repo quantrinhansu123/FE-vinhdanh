@@ -4,31 +4,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, ExternalLink, Plus, Eye, Trash2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { formatVnd } from './dashboardAdminUtils';
+import { supabase } from '../../api/supabase';
+import { formatVnd } from '../../utils/dashboardAdminUtils';
+import type { MarketingChannelRow, MarketingChannelDetailRow } from '../../types';
 
 const TABLE = import.meta.env.VITE_SUPABASE_MARKETING_CHANNELS_TABLE?.trim() || 'marketing_channels';
 const DETAILS_TABLE =
   import.meta.env.VITE_SUPABASE_MARKETING_CHANNEL_DETAILS_TABLE?.trim() || 'marketing_channel_details';
 
-export type MarketingChannelRow = {
-  id: string;
-  loai_kenh: string;
-  link_kenh: string | null;
-  noi_dung: string | null;
-  chi_phi: number | null;
-  so_lead: number | null;
-  so_don: number | null;
-};
-
-export type MarketingChannelDetailRow = {
-  id: string;
-  channel_id: string;
-  content_link: string | null;
-  image_link: string | null;
-  link_nhom: unknown;
-  ghi_chu: string | null;
-};
 
 type DetailLine = {
   id: string;

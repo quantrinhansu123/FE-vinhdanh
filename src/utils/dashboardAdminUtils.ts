@@ -1,18 +1,6 @@
-/** Helpers for DashboardAdmin — aggregations from detail_reports */
+/** Helpers for DashboardAdminPage — aggregations from detail_reports */
 
-export type ReportRow = {
-  report_date: string;
-  name?: string | null;
-  email?: string | null;
-  team?: string | null;
-  product?: string | null;
-  market?: string | null;
-  ad_account?: string | null;
-  ad_cost?: number | null;
-  mess_comment_count?: number | null;
-  order_count?: number | null;
-  revenue?: number | null;
-};
+import type { ReportRow, ChartGranularity, ChannelAgg, ProjectRow } from '../types';
 
 const BUDGET_FACTOR = 1.15;
 export const ADS_THRESHOLD_OK = 39;
@@ -20,12 +8,12 @@ export const ADS_THRESHOLD_WARN = 45;
 
 export function sumReports(rows: ReportRow[]) {
   let revenue = 0;
-  let adCost = 0;
+  let ad_cost = 0;
   for (const r of rows) {
     revenue += Number(r.revenue) || 0;
-    adCost += Number(r.ad_cost) || 0;
+    ad_cost += Number(r.ad_cost) || 0;
   }
-  return { revenue, adCost };
+  return { revenue, ad_cost };
 }
 
 /** Kỳ liền trước cùng độ dài (để so sánh %). */
@@ -51,7 +39,6 @@ export function plannedBudgetFromRevenue(totalRevenue: number) {
   return totalRevenue * BUDGET_FACTOR;
 }
 
-export type ChartGranularity = 'day' | 'week' | 'month' | 'year';
 
 export function aggregateRevenueByPeriod(
   rows: ReportRow[],
@@ -114,17 +101,10 @@ function formatMonthLabel(ym: string) {
   return `T${m}/${y}`;
 }
 
-export type ChannelAgg = {
-  key: string;
-  label: string;
-  revenue: number;
-  adCost: number;
-  adsPct: number;
-};
 
 /** Gom theo thị trường (market) hoặc sản phẩm (product). */
 export function aggregateByChannel(rows: ReportRow[]): ChannelAgg[] {
-  const map = new Map<string, { revenue: number; adCost: number; label: string }>();
+  const map = new Map<string, { revenue: number; ad_cost: number; label: string }>();
 
   for (const r of rows) {
     const market = String(r.market || '').trim();
@@ -132,9 +112,9 @@ export function aggregateByChannel(rows: ReportRow[]): ChannelAgg[] {
     const label = market || product || 'Khác';
     const key = label.toLowerCase();
 
-    const cur = map.get(key) || { revenue: 0, adCost: 0, label };
+    const cur = map.get(key) || { revenue: 0, ad_cost: 0, label };
     cur.revenue += Number(r.revenue) || 0;
-    cur.adCost += Number(r.ad_cost) || 0;
+    cur.ad_cost += Number(r.ad_cost) || 0;
     cur.label = label;
     map.set(key, cur);
   }
@@ -143,31 +123,23 @@ export function aggregateByChannel(rows: ReportRow[]): ChannelAgg[] {
     key,
     label: v.label,
     revenue: v.revenue,
-    adCost: v.adCost,
-    adsPct: v.revenue > 0 ? (v.adCost / v.revenue) * 100 : v.adCost > 0 ? 100 : 0,
+    ad_cost: v.ad_cost,
+    adsPct: v.revenue > 0 ? (v.ad_cost / v.revenue) * 100 : v.ad_cost > 0 ? 100 : 0,
   }));
 }
 
-export type ProjectRow = {
-  project: string;
-  agency: string;
-  budget: number;
-  spend: number;
-  diffPct: number;
-  adsPct: number;
-};
 
 export function aggregateByProject(rows: ReportRow[]): ProjectRow[] {
-  const map = new Map<string, { revenue: number; adCost: number; team: string }>();
+  const map = new Map<string, { revenue: number; ad_cost: number; team: string }>();
 
   for (const r of rows) {
     const product = String(r.product || '').trim() || '(Chưa gán dự án)';
     const team = String(r.team || '').trim() || '—';
     const key = `${product}|||${team}`;
 
-    const cur = map.get(key) || { revenue: 0, adCost: 0, team };
+    const cur = map.get(key) || { revenue: 0, ad_cost: 0, team };
     cur.revenue += Number(r.revenue) || 0;
-    cur.adCost += Number(r.ad_cost) || 0;
+    cur.ad_cost += Number(r.ad_cost) || 0;
     cur.team = team;
     map.set(key, cur);
   }
@@ -175,7 +147,7 @@ export function aggregateByProject(rows: ReportRow[]): ProjectRow[] {
   return Array.from(map.entries()).map(([compound, v]) => {
     const [project] = compound.split('|||');
     const budget = plannedBudgetFromRevenue(v.revenue);
-    const spend = v.adCost;
+    const spend = v.ad_cost;
     const diffPct = budget > 0 ? ((spend - budget) / budget) * 100 : 0;
     const adsPct = v.revenue > 0 ? (spend / v.revenue) * 100 : spend > 0 ? 100 : 0;
     return {

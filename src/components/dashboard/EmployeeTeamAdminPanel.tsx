@@ -4,8 +4,8 @@
 
 import { useState, useRef } from 'react';
 import { Settings, Upload, Plus, Save, Trash2, Loader2, Pencil } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import type { Employee } from '../pages/LeaderboardPage';
+import { supabase } from '../../api/supabase';
+import type { Employee } from '../../types';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const AVATARS_BUCKET = import.meta.env.VITE_SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';

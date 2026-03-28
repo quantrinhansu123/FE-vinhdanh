@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, X, TrendingUp } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../api/supabase';
 
 interface Employee {
   id: string;
