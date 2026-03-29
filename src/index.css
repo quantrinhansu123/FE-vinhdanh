@@ -26,6 +26,35 @@
   --color-ads-active: #166534;
   --color-ads-accent: #22c55e;
   --color-ads-table-header: #0f2918;
+
+  /* Mini Ads Dashboard Colors (from Dashboard.html) */
+  --color-dash-bg0: #07090f;
+  --color-dash-bg1: #0d1118;
+  --color-dash-bg2: #131921;
+  --color-dash-bg3: #1a2233;
+  --color-dash-bg4: #212d42;
+  --color-dash-border: rgba(255, 255, 255, 0.06);
+  --color-dash-border2: rgba(255, 255, 255, 0.11);
+  --color-dash-text: #dde4f0;
+  --color-dash-text2: #8896b0;
+  --color-dash-text3: #4d5d78;
+  --color-dash-accent: #3d8ef0;
+  --color-dash-accent-d: rgba(61, 142, 240, 0.12);
+  --color-dash-green: #0fa86d;
+  --color-dash-green-d: rgba(15, 168, 109, 0.12);
+  --color-dash-green-b: rgba(15, 168, 109, 0.25);
+  --color-dash-yellow: #e8a020;
+  --color-dash-yellow-d: rgba(232, 160, 32, 0.12);
+  --color-dash-yellow-b: rgba(232, 160, 32, 0.3);
+  --color-dash-red: #e03d3d;
+  --color-dash-red-d: rgba(224, 61, 61, 0.12);
+  --color-dash-red-b: rgba(224, 61, 61, 0.28);
+  --color-dash-purple: #7c4dff;
+  --color-dash-purple-d: rgba(124, 77, 255, 0.12);
+  --color-dash-gold: #c9a227;
+
+  --font-dash-main: "Manrope", sans-serif;
+  --font-dash-mono: "JetBrains Mono", monospace;
 }
 
 /*
@@ -46,6 +75,44 @@
   --color-crm-warning: #fbbf24;
   --color-crm-outline: #2d4f3e;
   --color-crm-accent-warm: #fbbf24;
+}
+
+.dash-theme {
+  --bg0: var(--color-dash-bg0);
+  --bg1: var(--color-dash-bg1);
+  --bg2: var(--color-dash-bg2);
+  --bg3: var(--color-dash-bg3);
+  --bg4: var(--color-dash-bg4);
+  --border: var(--color-dash-border);
+  --border2: var(--color-dash-border2);
+  --text: var(--color-dash-text);
+  --text2: var(--color-dash-text2);
+  --text3: var(--color-dash-text3);
+  --accent: var(--color-dash-accent);
+  --accent-d: var(--color-dash-accent-d);
+  --G: var(--color-dash-green);
+  --Gd: var(--color-dash-green-d);
+  --Gb: var(--color-dash-green-b);
+  --Y: var(--color-dash-yellow);
+  --Yd: var(--color-dash-yellow-d);
+  --Yb: var(--color-dash-yellow-b);
+  --R: var(--color-dash-red);
+  --Rd: var(--color-dash-red-d);
+  --Rb: var(--color-dash-red-b);
+  --P: var(--color-dash-purple);
+  --Pd: var(--color-dash-purple-d);
+  --gold: var(--color-dash-gold);
+  
+  --f: var(--font-dash-main);
+  --mono: var(--font-dash-mono);
+  
+  --sw: 220px;
+  --th: 50px;
+  --r: 9px;
+  
+  font-family: var(--f);
+  background-color: var(--bg0);
+  color: var(--text);
 }
 
 @layer utilities {
@@ -140,5 +207,33 @@
   }
   .material-symbols-outlined {
     font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+  }
+
+  /* Dashboard specific utility classes for legacy compatibility or quick styling */
+  .dash-scrollbar::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+  }
+  .dash-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .dash-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--bg4);
+    border-radius: 2px;
+  }
+
+  @keyframes dash-fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .dash-fade-up {
+    animation: dash-fadeUp 0.3s ease both;
   }
 }

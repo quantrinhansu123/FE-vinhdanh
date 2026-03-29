@@ -10,6 +10,7 @@ import { supabase } from './api/supabase';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardAdminLayout } from './pages/DashboardAdminLayout';
 import { LeaderboardPage } from './pages/LeaderboardPage';
+import DashboardPage from './pages/dashboard/DashboardPage';
 import type { Employee, AuthUser } from './types';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
@@ -187,6 +188,11 @@ function AppRoutes() {
             <Navigate to="/login" replace />
           )
         }
+      />
+
+      <Route
+        path="/crm-dashboard/*"
+        element={<DashboardPage />}
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />
