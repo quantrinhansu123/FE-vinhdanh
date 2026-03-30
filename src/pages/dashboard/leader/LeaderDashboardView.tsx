@@ -11,7 +11,7 @@ export const LeaderDashboardView: React.FC = () => {
         <KpiCard label="TỔNG LEAD" value="3.840" sub="CPL: 52.3k" delta="Tuần này" deltaType="up" barColor="var(--P)" animationDelay={0.07} valueSize="xl" />
         <KpiCard label="ĐƠN CHỐT" value="956" sub="Tỷ lệ: 24.9%" delta="AOV: 894k" deltaType="up" barColor="var(--Y)" animationDelay={0.09} valueSize="xl" />
         <KpiCard label="MKT HOẠT ĐỘNG" value="5" sub="Team A" delta="OK" deltaType="nt" barColor="var(--G)" animationDelay={0.11} valueSize="xl" />
-        <KpiCard label="CẦN XỬ LÝ" value="1" sub="Ads/DT > 35%" delta="Phạm QH" deltaType="dn" barColor="var(--R)" animationDelay={0.13} valueColor="var(--R)" valueSize="xl" />
+        <KpiCard label="CẦN XỬ LÝ" value="1" sub="Ads/DT > 35%" delta="Phạm QH" deltaType="dn" barColor="var(--R)" animationDelay={0.13} valueSize="xl" valueColor="var(--R)" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-[14px]">

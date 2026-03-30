@@ -115,6 +115,35 @@
   color: var(--text);
 }
 
+/* Modal Thêm/Sửa dự án (portal ra body): thanh cuộn + option select khớp nền tối */
+.project-form-modal-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(136, 150, 176, 0.4) rgba(255, 255, 255, 0.06);
+}
+
+.project-form-modal-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.project-form-modal-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.project-form-modal-scroll::-webkit-scrollbar-thumb {
+  background: rgba(136, 150, 176, 0.45);
+  border-radius: 8px;
+}
+
+.project-form-modal-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(136, 150, 176, 0.65);
+}
+
+.project-form-modal-root select option {
+  background-color: var(--color-dash-bg2);
+  color: var(--color-dash-text);
+}
+
 @layer utilities {
   .bg-ads-navy {
     background-color: var(--color-ads-navy);

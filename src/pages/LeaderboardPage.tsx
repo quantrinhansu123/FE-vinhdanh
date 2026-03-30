@@ -77,7 +77,7 @@ export function LeaderboardPage({
             transition={{ duration: 0.2 }}
             className="absolute top-4 left-16 z-50 flex flex-wrap gap-2 max-w-[calc(100vw-5rem)]"
           >
-            <Link to="/crm-admin/dashboard/overview" className={navBtn}>
+            <Link to="/crm-admin/admin-dash" className={navBtn}>
               <LayoutDashboard size={14} /> CRM Admin
             </Link>
           </motion.div>

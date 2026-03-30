@@ -11,9 +11,19 @@ export interface Employee {
   email?: string;
   pass?: string;
   rank?: number;
+  /** CRM Module 3 — staff list */
+  ma_ns?: string | null;
+  ngay_bat_dau?: string | null;
+  leader?: string | null;
+  du_an_ten?: string | null;
+  /** Vị trí / chức danh (CRM staff) */
+  vi_tri?: string | null;
+  so_fanpage?: number | null;
+  trang_thai?: string | null;
 }
 
 export type ReportRow = {
+  id?: string;
   report_date: string;
   name?: string | null;
   email?: string | null;
@@ -25,6 +35,11 @@ export type ReportRow = {
   mess_comment_count?: number | null;
   order_count?: number | null;
   revenue?: number | null;
+  /** Tổng data nhận (form MKT) — cần migration alter_detail_reports_mkt_form.sql */
+  tong_data_nhan?: number | null;
+  /** Tổng lead (form MKT) */
+  tong_lead?: number | null;
+  created_at?: string | null;
 };
 
 export type ChannelAgg = {
@@ -80,12 +95,38 @@ export type BudgetRequestRow = {
   ly_do_tu_choi: string | null;
   ghi_chu: string | null;
   tkqc_account_id: string | null;
+  tkqc_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
   tkqc_accounts?: {
     id: string;
     don_vi: string | null;
     tkqc: string;
     page: string | null;
   } | null;
+  /** Embed khi có cột tkqc_id + FK tới public.tkqc */
+  tkqc?: {
+    id: string;
+    ma_tkqc: string;
+    ten_pae: string | null;
+    du_an?: { ten_du_an: string; don_vi: string | null } | null;
+  } | null;
+};
+
+/** Leader KPI mục tiêu tháng — bảng kpi_team_monthly_targets */
+export type KpiTeamMonthlyTargetRow = {
+  id: string;
+  nam_thang: string;
+  team_key: string;
+  muc_tieu_doanh_thu_team: number;
+};
+
+/** Leader KPI mục tiêu tháng — bảng kpi_staff_monthly_targets */
+export type KpiStaffMonthlyTargetRow = {
+  id: string;
+  nam_thang: string;
+  employee_id: string;
+  muc_tieu_vnd: number;
 };
 
 export type CrmRevenueAreaPoint = { label: string; revenue: number };
@@ -136,13 +177,54 @@ export type DuAnRow = {
   ten_du_an: string;
   don_vi: string | null;
   mo_ta?: string | null;
+  /** UI: THỊ TRƯỜNG */
+  thi_truong?: string | null;
+  /** UI: LEADER */
+  leader?: string | null;
+  /** UI: MKT (số lượng) */
+  so_mkt?: number | null;
   ngan_sach_ke_hoach: number | null;
   chi_phi_marketing_thuc_te?: number | null;
   tong_doanh_so?: number | null;
+  /** UI: DT THÁNG (VND) */
+  doanh_thu_thang?: number | null;
   ty_le_ads_doanh_so?: number | null;
   ngay_bat_dau?: string | null;
   ngay_ket_thuc?: string | null;
   trang_thai?: string;
+  /** Danh sách nhân sự trong dự án (jsonb) */
+  staff_ids?: string[] | null;
+};
+
+/** Agency CRM Module 5 — bảng public.crm_agencies */
+export type CrmAgencyRow = {
+  id: string;
+  ma_agency: string;
+  ten_agency: string;
+  lien_he?: string | null;
+  telegram?: string | null;
+  tk_cung_cap?: string | null;
+  du_an?: string | null;
+  tong_da_nap?: number | null;
+  cong_no?: number | null;
+  trang_thai?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+/** Team CRM Module 2 — bảng public.crm_teams */
+export type CrmTeamRow = {
+  id: string;
+  ma_team: string | null;
+  ten_team: string;
+  leader: string | null;
+  so_thanh_vien: number | null;
+  member_ids?: string[] | null;
+  du_an_ids?: string[] | null;
+  doanh_so_thang?: number | null;
+  trang_thai?: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type TkqcRow = {
@@ -156,6 +238,31 @@ export type TkqcRow = {
   chi_phi_thuc_te: number | null;
   tong_doanh_so?: number | null;
   ty_le_ads_doanh_so?: number | null;
+  id_marketing_staff?: string | null;
+  /** Ngày bắt đầu TK (ưu tiên hơn du_an.ngay_bat_dau trên UI) */
+  ngay_bat_dau?: string | null;
+  /** Team CRM (crm_teams.id) */
+  id_crm_team?: string | null;
+  /** Active | Thiếu thiết lập */
+  trang_thai_tkqc?: 'active' | 'thieu_thiet_lap' | null;
+  /** Agency / đơn vị QC (ưu tiên hơn du_an.don_vi khi hiển thị) */
+  agency?: string | null;
+};
+
+/** Module 4 — danh sách TKQC với embed Supabase */
+export type TkqcAdListRow = TkqcRow & {
+  du_an?: {
+    id: string;
+    ma_du_an: string | null;
+    ten_du_an: string;
+    don_vi: string | null;
+    ngay_bat_dau: string | null;
+    trang_thai: string;
+  } | null;
+  marketing_staff?: {
+    id_ns: string;
+    name: string;
+  } | null;
 };
 
 export interface StaffRecord {

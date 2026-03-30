@@ -1,6 +1,7 @@
 -- Yêu cầu xin ngân sách (CRM → Ngân sách → Tổng quan ngân sách)
 -- Cột: id, ngan_sach_xin, ngay_gio_xin, trang_thai, ly_do_tu_choi, tkqc_account_id → tkqc_accounts
 -- Chạy sau create_tkqc_accounts.sql (bảng tkqc_accounts phải tồn tại trước)
+-- Module 4 (tkqc + du_an): sau khi có bảng public.tkqc, chạy alter_budget_requests_tkqc_id.sql để thêm tkqc_id.
 
 create extension if not exists pgcrypto;
 

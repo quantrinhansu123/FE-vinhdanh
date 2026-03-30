@@ -151,22 +151,22 @@ function AppRoutes() {
         }
       />
 
-      <Route path="/admin" element={<Navigate to="/crm-admin/team/members" replace />} />
+      <Route path="/admin" element={<Navigate to="/crm-admin/teams" replace />} />
 
       <Route
         path="/bao-cao"
-        element={authUser ? <Navigate to="/crm-admin/reports/daily" replace /> : <Navigate to="/login" replace />}
+        element={authUser ? <Navigate to="/crm-admin/mkt-report" replace /> : <Navigate to="/login" replace />}
       />
 
       <Route
         path="/tien-bo"
-        element={authUser ? <Navigate to="/crm-admin/team/progress" replace /> : <Navigate to="/login" replace />}
+        element={authUser ? <Navigate to="/crm-admin/leader-dash" replace /> : <Navigate to="/login" replace />}
       />
 
       <Route
         path="/marketing"
         element={
-          authUser ? <Navigate to="/crm-admin/marketing/channels" replace /> : <Navigate to="/login" replace />
+          authUser ? <Navigate to="/crm-admin/leader-mkt" replace /> : <Navigate to="/login" replace />
         }
       />
 

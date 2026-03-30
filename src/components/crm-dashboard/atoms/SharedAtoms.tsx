@@ -24,10 +24,10 @@ export const SectionCard: React.FC<SectionCardProps> = ({
 }) => {
   return (
     <div className={`bg-[var(--bg2)] border border-[var(--border)] rounded-[var(--r)] overflow-hidden flex flex-col ${className}`}>
-      <div className="flex items-center justify-between p-[12px_16px] border-b border-[var(--border)] shrink-0">
-        <div>
-          <div className="flex items-center gap-[8px]">
-            <span className="text-[12px] font-extrabold tracking-[0.2px] text-[var(--text)]">
+      <div className="flex items-center justify-between gap-3 p-[12px_16px] border-b border-[var(--border)] shrink-0 min-w-0">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-[8px] min-w-0">
+            <span className="text-[12px] font-extrabold tracking-[0.2px] text-[var(--text)] truncate">
               {title}
             </span>
             {badge && (
@@ -42,7 +42,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-[6px]">
+        <div className="flex items-center gap-[6px] shrink-0">
           {actions}
         </div>
       </div>

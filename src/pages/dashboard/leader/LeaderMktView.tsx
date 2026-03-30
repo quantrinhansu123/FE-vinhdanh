@@ -1,9 +1,18 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
+import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 
 export const LeaderMktView: React.FC = () => {
   return (
     <div className="dash-fade-up">
+      <p className="text-[11px] text-[var(--text3)] mb-[12px]">
+        Xin / nạp ngân sách cho TKQC:{' '}
+        <Link to={crmAdminPathForView('leader-budget')} className="text-[#3d8ef0] font-bold hover:underline">
+          mở trang Xin ngân sách
+        </Link>
+        .
+      </p>
       <SectionCard 
         title="👥 Quản lý Marketing — Team A" 
         subtitle="5 nhân sự hoạt động · KPI trung bình 68.5%"

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/crm-dashboard/Sidebar';
 import { Topbar } from '../components/crm-dashboard/Topbar';
 import { NotificationPanel } from '../components/crm-dashboard/NotificationPanel';
@@ -35,6 +36,12 @@ import { MktHistoryView } from './dashboard/mkt/MktHistoryView';
 import { MktAccountsView } from './dashboard/mkt/MktAccountsView';
 
 import type { Employee, AuthUser as ReportAuthUser } from '../types';
+import {
+  CRM_ADMIN_BASE,
+  crmAdminPathForView,
+  defaultViewForRole,
+  parseCrmAdminPath,
+} from '../utils/crmAdminRoutes';
 
 export interface DashboardAdminLayoutProps {
   employees?: Employee[];
@@ -57,16 +64,32 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
   avatarUrl,
   reportUser = null,
 }) => {
-  const [currentRole, setCurrentRole] = useState<Role>('admin');
-  const [currentView, setCurrentView] = useState<ViewId>('admin-dash');
+  const location = useLocation();
+  const navigate = useNavigate();
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
+  const parsed = parseCrmAdminPath(location.pathname);
+
+  useEffect(() => {
+    const p = parseCrmAdminPath(location.pathname);
+    if (p.ok === false) {
+      navigate(`${CRM_ADMIN_BASE}/${p.redirect}`, { replace: true });
+      return;
+    }
+    if (p.legacyTwoSegment) {
+      navigate(crmAdminPathForView(p.view), { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
+  const currentRole = parsed.ok ? parsed.role : 'admin';
+  const currentView = parsed.ok ? parsed.view : 'admin-dash';
+
   const handleRoleChange = (role: Role) => {
-    setCurrentRole(role);
-    // Set default view for role
-    if (role === 'admin') setCurrentView('admin-dash');
-    else if (role === 'leader') setCurrentView('leader-dash');
-    else setCurrentView('mkt-dash');
+    navigate(crmAdminPathForView(defaultViewForRole(role)));
+  };
+
+  const handleViewChange = (view: ViewId) => {
+    navigate(crmAdminPathForView(view));
   };
 
   const navGroups = currentRole === 'admin' ? ADMIN_NAV : currentRole === 'leader' ? LEADER_NAV : MKT_NAV;
@@ -89,7 +112,8 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'alerts': return <AlertsView />;
       case 'projects': return <ProjectsView />;
       case 'teams': return <TeamsView />;
-      case 'staff': return <StaffView />;
+      case 'staff':
+        return <StaffView onEmployeesRefresh={onEmployeesRefresh} />;
       case 'ad-accounts': return <AdAccountsView />;
       case 'agencies': return <AgenciesView />;
       case 'budget': return <BudgetView />;
@@ -107,7 +131,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
 
       // MKT Views
       case 'mkt-dash': return <MktDashboardView />;
-      case 'mkt-report': return <MktReportView />;
+      case 'mkt-report': return <MktReportView reportUser={reportUser} />;
       case 'mkt-bill': return <MktBillView />;
       case 'mkt-history': return <MktHistoryView />;
       case 'mkt-accounts': return <MktAccountsView />;
@@ -128,7 +152,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
         currentRole={currentRole}
         onRoleChange={handleRoleChange}
         currentView={currentView}
-        onViewChange={setCurrentView}
+        onViewChange={handleViewChange}
         user={userInfo}
         navGroups={navGroups}
         onLogout={onLogout}
