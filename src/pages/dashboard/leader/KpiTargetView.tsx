@@ -3,6 +3,7 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import type { Employee } from '../../../types';
+import { formatNumberDots, formatTypingGroupedInt } from '../mkt/mktDetailReportShared';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const KPI_TEAM_TABLE =
@@ -20,8 +21,7 @@ function ymNow(): string {
 }
 
 function formatVndDots(n: number): string {
-  if (!Number.isFinite(n)) return '';
-  return Math.round(n).toLocaleString('vi-VN');
+  return formatNumberDots(Math.round(n), true);
 }
 
 function parseVndInput(raw: string): number | null {
@@ -263,10 +263,11 @@ export const KpiTargetView: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  inputMode="numeric"
                   value={teamTargetStr}
-                  onChange={(e) => setTeamTargetStr(e.target.value)}
+                  onChange={(e) => setTeamTargetStr(formatTypingGroupedInt(e.target.value))}
                   placeholder="VD: 1.500.000.000"
-                  className="w-full bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_14px] text-[13px] font-bold text-[var(--accent)] outline-none focus:border-[var(--accent)] transition-all"
+                  className="w-full bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_14px] text-[13px] font-[var(--mono)] font-bold text-[var(--accent)] outline-none focus:border-[var(--accent)] transition-all"
                 />
               </div>
               <div>
@@ -311,10 +312,11 @@ export const KpiTargetView: React.FC = () => {
                       <span className="text-[9px] text-[var(--text3)] uppercase font-bold mb-[4px]">Mục tiêu (VND)</span>
                       <input
                         type="text"
+                        inputMode="numeric"
                         value={staffAmounts[mkt.id] ?? ''}
-                        onChange={(e) => setStaffField(mkt.id, e.target.value)}
+                        onChange={(e) => setStaffField(mkt.id, formatTypingGroupedInt(e.target.value))}
                         placeholder="0"
-                        className="w-[140px] bg-[var(--bg4)] border border-[var(--border)] rounded-[6px] p-[6px_10px] text-[12px] font-bold text-right text-[var(--text)] outline-none focus:border-[var(--accent)] transition-all"
+                        className="w-[160px] bg-[var(--bg4)] border border-[var(--border)] rounded-[6px] p-[6px_10px] text-[12px] font-[var(--mono)] font-bold text-right text-[var(--text)] outline-none focus:border-[var(--accent)] transition-all"
                       />
                     </div>
                   </div>

@@ -1,15 +1,345 @@
-import React from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { KpiCard } from '../../../components/crm-dashboard/atoms/KpiCard';
 import { SectionCard, ProgressRow, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
+import { supabase } from '../../../api/supabase';
+import type { AuthUser, TkqcAdListRow } from '../../../types';
+import { REPORTS_TABLE, formatCompactVnd, formatKpiMoney, formatNumberDots, formatReportDateVi, toLocalYyyyMmDd } from './mktDetailReportShared';
 
-export const MktDashboardView: React.FC = () => {
+const KPI_STAFF_TARGETS_TABLE =
+  import.meta.env.VITE_SUPABASE_KPI_STAFF_MONTHLY_TARGETS_TABLE?.trim() || 'kpi_staff_monthly_targets';
+
+const LEAD_TARGET = 1500;
+const ORDER_TARGET = 400;
+
+const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_TABLE?.trim() || 'tkqc';
+const MARKETING_STAFF_TABLE = import.meta.env.VITE_SUPABASE_MARKETING_STAFF_TABLE?.trim() || 'marketing_staff';
+
+const TKQC_SELECT = `
+  id,
+  id_du_an,
+  ma_tkqc,
+  ten_tkqc,
+  ten_pae,
+  nen_tang,
+  ngan_sach_phan_bo,
+  ngay_bat_dau,
+  trang_thai_tkqc,
+  agency,
+  id_marketing_staff,
+  du_an ( id, ma_du_an, ten_du_an, don_vi, ngay_bat_dau ),
+  marketing_staff ( id_ns, name )
+`;
+
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+function isEffectiveTkqc(trangThai: TkqcAdListRow['trang_thai_tkqc']): boolean {
+  return trangThai !== 'thieu_thiet_lap';
+}
+
+function adsDtToBadgeType(pct: number | null): 'G' | 'Y' | 'R' | null {
+  if (pct == null || !Number.isFinite(pct)) return null;
+  if (pct < 30) return 'G';
+  if (pct <= 45) return 'Y';
+  return 'R';
+}
+
+function closeRateToDeltaType(pct: number | null): 'up' | 'dn' | 'nt' {
+  if (pct == null || !Number.isFinite(pct)) return 'nt';
+  return pct >= 20 ? 'up' : 'dn';
+}
+
+function deltaTypeFromPct(pct: number | null): 'up' | 'dn' | 'nt' {
+  if (pct == null || !Number.isFinite(pct)) return 'nt';
+  return pct >= 85 ? 'up' : pct >= 50 ? 'nt' : 'dn';
+}
+
+type DailyAgg = {
+  revenue: number;
+  adCost: number;
+  lead: number;
+  orders: number;
+};
+
+function emptyDailyAgg(): DailyAgg {
+  return { revenue: 0, adCost: 0, lead: 0, orders: 0 };
+}
+
+export type MktDashboardViewProps = {
+  reportUser?: AuthUser | null;
+};
+
+export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser = null }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [daily, setDaily] = useState<Map<string, DailyAgg>>(() => new Map());
+  const [monthAgg, setMonthAgg] = useState<DailyAgg>(() => emptyDailyAgg());
+  const [targetVnd, setTargetVnd] = useState<number | null>(null);
+  const [accounts, setAccounts] = useState<TkqcAdListRow[]>([]);
+
+  const now = useMemo(() => new Date(), []);
+  const todayStr = useMemo(() => toLocalYyyyMmDd(new Date()), []);
+
+  const load = useCallback(async () => {
+    if (!reportUser?.email?.trim()) {
+      setLoading(false);
+      setError('Đăng nhập CRM để xem dashboard Marketing của bạn.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const emailLower = reportUser.email.trim().toLowerCase();
+    const today = new Date();
+    const yesterday = addDays(today, -1);
+
+    const todayIso = toLocalYyyyMmDd(today);
+    const yIso = toLocalYyyyMmDd(yesterday);
+
+    const last7From = toLocalYyyyMmDd(addDays(today, -6));
+    const last7To = todayIso;
+
+    const ym = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const monthStart = `${ym}-01`;
+    const monthEnd = toLocalYyyyMmDd(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+
+    const dailyMap = new Map<string, DailyAgg>();
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(today, -6 + i);
+      dailyMap.set(toLocalYyyyMmDd(d), emptyDailyAgg());
+    }
+
+    const [last7Res, monthRes, targetRes, accountsRes] = await Promise.all([
+      supabase
+        .from(REPORTS_TABLE)
+        .select('report_date, revenue, ad_cost, tong_lead, order_count')
+        .ilike('email', emailLower)
+        .gte('report_date', last7From)
+        .lte('report_date', last7To)
+        .order('report_date', { ascending: false })
+        .limit(5000),
+      supabase
+        .from(REPORTS_TABLE)
+        .select('revenue, ad_cost, tong_lead, order_count')
+        .ilike('email', emailLower)
+        .gte('report_date', monthStart)
+        .lte('report_date', monthEnd)
+        .limit(12000),
+      supabase
+        .from(KPI_STAFF_TARGETS_TABLE)
+        .select('muc_tieu_vnd')
+        .eq('nam_thang', ym)
+        .eq('employee_id', reportUser.id)
+        .maybeSingle(),
+      (async () => {
+        if (!reportUser.id?.trim()) return { data: [] as TkqcAdListRow[], error: null as any };
+
+        // marketing_staff mapping: employee_id -> marketing_staff.id -> tkqc rows
+        const byEmp = await supabase.from(MARKETING_STAFF_TABLE).select('id').eq('employee_id', reportUser.id.trim());
+        const emailStaff = await supabase.from(MARKETING_STAFF_TABLE).select('id').ilike('email', emailLower);
+        const staffIds = [
+          ...(byEmp.data || []).map((r) => String((r as { id: string }).id)),
+          ...(emailStaff.data || []).map((r) => String((r as { id: string }).id)),
+        ];
+        const uniq = Array.from(new Set(staffIds));
+        if (uniq.length === 0) return { data: [] as TkqcAdListRow[], error: null as any };
+
+        const { data, error: aErr } = await supabase
+          .from(TKQC_TABLE)
+          .select(TKQC_SELECT)
+          .in('id_marketing_staff', uniq)
+          .order('ten_tkqc', { ascending: true, nullsFirst: false })
+          .order('ma_tkqc', { ascending: true });
+        return { data: (data || []) as TkqcAdListRow[], error: aErr };
+      })(),
+    ]);
+
+    if (last7Res.error) {
+      console.error('mkt-dash last7:', last7Res.error);
+      setError(last7Res.error.message || 'Không tải được dữ liệu 7 ngày.');
+      setLoading(false);
+      return;
+    }
+
+    // Reduce last7 rows into daily aggregates.
+    for (const row of (last7Res.data || []) as Array<{
+      report_date?: string;
+      revenue?: number | null;
+      ad_cost?: number | null;
+      tong_lead?: number | null;
+      order_count?: number | null;
+    }>) {
+      const d = row.report_date?.slice(0, 10);
+      if (!d || !dailyMap.has(d)) continue;
+      const cur = dailyMap.get(d) || emptyDailyAgg();
+      cur.revenue += Number(row.revenue) || 0;
+      cur.adCost += Number(row.ad_cost) || 0;
+      cur.lead += Number(row.tong_lead) || 0;
+      cur.orders += Number(row.order_count) || 0;
+      dailyMap.set(d, cur);
+    }
+    setDaily(dailyMap);
+
+    if (monthRes.error) {
+      console.error('mkt-dash month:', monthRes.error);
+      setError(monthRes.error.message || 'Không tải được dữ liệu tháng.');
+    }
+
+    const mAgg = emptyDailyAgg();
+    for (const row of (monthRes.data || []) as Array<{ revenue?: number | null; ad_cost?: number | null; tong_lead?: number | null; order_count?: number | null }>) {
+      mAgg.revenue += Number(row.revenue) || 0;
+      mAgg.adCost += Number(row.ad_cost) || 0;
+      mAgg.lead += Number(row.tong_lead) || 0;
+      mAgg.orders += Number(row.order_count) || 0;
+    }
+    setMonthAgg(mAgg);
+
+    if (targetRes.error) {
+      console.warn('mkt-dash kpi target:', targetRes.error);
+      setTargetVnd(null);
+    } else {
+      const v = Number((targetRes.data as { muc_tieu_vnd?: number } | null)?.muc_tieu_vnd);
+      setTargetVnd(Number.isFinite(v) && v > 0 ? v : null);
+    }
+
+    if (accountsRes.error) {
+      console.warn('mkt-dash tkqc:', accountsRes.error);
+    } else {
+      setAccounts((accountsRes.data || []) as TkqcAdListRow[]);
+    }
+
+    setLoading(false);
+  }, [reportUser?.email, reportUser?.id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const last7DaysDesc = useMemo(() => {
+    const t = new Date();
+    const days = Array.from({ length: 7 }, (_, i) => toLocalYyyyMmDd(addDays(t, -6 + i)));
+    return days.reverse();
+  }, []);
+
+  const todayAgg = daily.get(todayStr) || emptyDailyAgg();
+  const yesterdayStr = toLocalYyyyMmDd(addDays(new Date(), -1));
+  const yAgg = daily.get(yesterdayStr) || emptyDailyAgg();
+
+  const todayRevenue = todayAgg.revenue;
+  const todayAdCost = todayAgg.adCost;
+  const todayLead = todayAgg.lead;
+  const todayOrders = todayAgg.orders;
+
+  const yesterdayRevenue = yAgg.revenue;
+
+  const revDeltaPct = yesterdayRevenue > 0 ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100 : null;
+  const closeRate = todayLead > 0 ? (todayOrders / todayLead) * 100 : null;
+  const adsDtPct = todayRevenue > 0 ? (todayAdCost / todayRevenue) * 100 : null;
+
+  const adsSafe = adsDtPct != null ? adsDtPct <= 35 : false;
+  const kpiPct = targetVnd != null && targetVnd > 0 ? (monthAgg.revenue / targetVnd) * 100 : null;
+
+  const revenueValueText = formatNumberDots(todayRevenue, false);
+  const adsValueText = formatNumberDots(todayAdCost, false);
+  const leadTodayValueText = Math.round(todayLead).toLocaleString('vi-VN');
+  const monthRevenueValue = formatNumberDots(monthAgg.revenue, false);
+
+  const monthTargetText = targetVnd != null ? formatKpiMoney(targetVnd) : '—';
+
+  const firstDeltaText = revDeltaPct != null ? `${revDeltaPct >= 0 ? '+' : ''}${revDeltaPct.toFixed(0)}% hôm qua` : '—';
+  const firstDeltaType = revDeltaPct != null ? (revDeltaPct >= 0 ? 'up' : 'dn') : 'nt';
+
+  const adsDtText = adsDtPct != null ? `${adsDtPct.toFixed(1)}%` : '—';
+  const adsDeltaText = adsDtPct != null ? (adsSafe ? 'An toàn' : 'Theo dõi') : '—';
+  const adsDeltaType = adsDtPct != null ? (adsSafe ? 'up' : 'dn') : 'nt';
+
+  const leadSubText = `${Math.round(todayOrders).toLocaleString('vi-VN')} đơn chốt`;
+  const leadDeltaText = closeRate != null ? `Chốt: ${closeRate.toFixed(1)}%` : 'Chốt: —';
+  const leadDeltaType = closeRate != null ? closeRate >= 20 ? 'up' : 'dn' : 'nt';
+
+  const kpiDeltaText = kpiPct != null ? `${kpiPct.toFixed(1)}% KPI` : '—';
+  const kpiDeltaType = deltaTypeFromPct(kpiPct);
+
+  const leadProgressPct = Math.round((monthAgg.lead / LEAD_TARGET) * 1000) / 10;
+  const orderProgressPct = Math.round((monthAgg.orders / ORDER_TARGET) * 1000) / 10;
+  const leadProgress = Math.min(100, Number.isFinite(leadProgressPct) ? leadProgressPct : 0);
+  const orderProgress = Math.min(100, Number.isFinite(orderProgressPct) ? orderProgressPct : 0);
+
+  const leadValueText = `${formatNumberDots(monthAgg.lead, false)} / ${formatNumberDots(LEAD_TARGET, false)}`;
+  const orderValueText = `${formatNumberDots(monthAgg.orders, false)} / ${formatNumberDots(ORDER_TARGET, false)}`;
+  const revenueValueTextKpi = `${formatKpiMoney(monthAgg.revenue)} / ${targetVnd ? formatKpiMoney(targetVnd) : '—'}`;
+  const revenueProgress = targetVnd && targetVnd > 0 ? Math.min(100, (monthAgg.revenue / targetVnd) * 100) : 0;
+
+  const topAccounts = useMemo(() => accounts.slice(0, 3), [accounts]);
+
+  if (loading) {
+    return (
+      <div className="dash-fade-up">
+        <div className="flex items-center justify-center gap-2 py-14 text-[var(--text3)] text-[12px] font-bold">
+          <Loader2 className="animate-spin" size={20} />
+          Đang tải dashboard Marketing…
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="dash-fade-up p-6 text-[12px] text-[var(--text3)] font-bold">
+        {error}
+      </div>
+    );
+  }
+
   return (
     <div className="dash-fade-up">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-[10px] mb-[14px]">
-        <KpiCard label="Doanh số hôm nay" value="12.400.000" sub="VNĐ" delta="+18% hôm qua" deltaType="up" barColor="var(--G)" animationDelay={0.03} valueSize="lg" />
-        <KpiCard label="Chi phí Ads hôm nay" value="1.880.000" sub="Ads/DT: 15.2%" delta="An toàn" deltaType="up" barColor="var(--accent)" animationDelay={0.06} valueSize="lg" />
-        <KpiCard label="Lead hôm nay" value="42" sub="11 đơn chốt" delta="Chốt: 26.2%" deltaType="up" barColor="var(--P)" animationDelay={0.09} valueSize="lg" />
-        <KpiCard label="DT tháng của tôi" value="342.000.000" sub="Mục tiêu: 400M" delta="85.5% KPI" deltaType="up" barColor="var(--Y)" animationDelay={0.12} valueSize="lg" />
+        <KpiCard
+          label="Doanh số hôm nay"
+          value={revenueValueText}
+          sub="VNĐ"
+          delta={firstDeltaText}
+          deltaType={firstDeltaType}
+          barColor="var(--G)"
+          animationDelay={0.03}
+          valueSize="lg"
+        />
+        <KpiCard
+          label="Chi phí Ads hôm nay"
+          value={adsValueText}
+          sub={`Ads/DT: ${adsDtText}`}
+          delta={adsDeltaText}
+          deltaType={adsDeltaType}
+          barColor="var(--accent)"
+          animationDelay={0.06}
+          valueSize="lg"
+        />
+        <KpiCard
+          label="Lead hôm nay"
+          value={leadTodayValueText}
+          sub={leadSubText}
+          delta={leadDeltaText}
+          deltaType={leadDeltaType}
+          barColor="var(--P)"
+          animationDelay={0.09}
+          valueSize="lg"
+        />
+        <KpiCard
+          label="DT tháng của tôi"
+          value={monthRevenueValue}
+          sub={`Mục tiêu: ${monthTargetText}`}
+          delta={kpiDeltaText}
+          deltaType={kpiDeltaType}
+          barColor="var(--Y)"
+          animationDelay={0.12}
+          valueSize="lg"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-[14px]">
@@ -28,69 +358,53 @@ export const MktDashboardView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="text-[11.5px] text-[var(--text2)] font-[var(--mono)]">
-                <tr className="border-b border-[rgba(255,255,255,0.03)] transition-colors hover:bg-[rgba(255,255,255,0.02)]">
-                  <td className="p-[9px_12px]">25/03</td>
-                  <td className="p-[9px_12px] text-right text-[var(--G)] font-extrabold">12.4M</td>
-                  <td className="p-[9px_12px] text-right">1.88M</td>
-                  <td className="p-[9px_12px] text-right"><Badge type="G">15.2%</Badge></td>
-                  <td className="p-[9px_12px] text-right">42</td>
-                  <td className="p-[9px_12px] text-right">11</td>
-                  <td className="p-[9px_12px] text-right text-[var(--G)]">26.2%</td>
-                </tr>
-                <tr className="border-b border-[rgba(255,255,255,0.03)] transition-colors hover:bg-[rgba(255,255,255,0.02)]">
-                  <td className="p-[9px_12px]">24/03</td>
-                  <td className="p-[9px_12px] text-right">10.5M</td>
-                  <td className="p-[9px_12px] text-right">1.72M</td>
-                  <td className="p-[9px_12px] text-right"><Badge type="G">16.4%</Badge></td>
-                  <td className="p-[9px_12px] text-right">38</td>
-                  <td className="p-[9px_12px] text-right">9</td>
-                  <td className="p-[9px_12px] text-right">23.7%</td>
-                </tr>
-                <tr className="border-b border-[rgba(255,255,255,0.03)] transition-colors hover:bg-[rgba(255,255,255,0.02)]">
-                  <td className="p-[9px_12px]">23/03</td>
-                  <td className="p-[9px_12px] text-right">14.2M</td>
-                  <td className="p-[9px_12px] text-right">2.14M</td>
-                  <td className="p-[9px_12px] text-right"><Badge type="G">15.1%</Badge></td>
-                  <td className="p-[9px_12px] text-right">51</td>
-                  <td className="p-[9px_12px] text-right">14</td>
-                  <td className="p-[9px_12px] text-right">27.5%</td>
-                </tr>
-                <tr className="border-b border-[rgba(255,255,255,0.03)] transition-colors hover:bg-[rgba(255,255,255,0.02)]">
-                  <td className="p-[9px_12px]">22/03</td>
-                  <td className="p-[9px_12px] text-right">11.8M</td>
-                  <td className="p-[9px_12px] text-right">1.64M</td>
-                  <td className="p-[9px_12px] text-right"><Badge type="G">13.9%</Badge></td>
-                  <td className="p-[9px_12px] text-right">44</td>
-                  <td className="p-[9px_12px] text-right">12</td>
-                  <td className="p-[9px_12px] text-right">27.3%</td>
-                </tr>
-                <tr className="border-b border-[rgba(255,255,255,0.03)] transition-colors hover:bg-[rgba(255,255,255,0.02)]">
-                  <td className="p-[9px_12px]">21/03</td>
-                  <td className="p-[9px_12px] text-right">9.2M</td>
-                  <td className="p-[9px_12px] text-right">1.39M</td>
-                  <td className="p-[9px_12px] text-right"><Badge type="G">15.1%</Badge></td>
-                  <td className="p-[9px_12px] text-right">32</td>
-                  <td className="p-[9px_12px] text-right">7</td>
-                  <td className="p-[9px_12px] text-right text-[var(--R)]">21.9%</td>
-                </tr>
-                <tr className="border-b border-[rgba(255,255,255,0.03)] transition-colors hover:bg-[rgba(255,255,255,0.02)]">
-                  <td className="p-[9px_12px]">20/03</td>
-                  <td className="p-[9px_12px] text-right">13.1M</td>
-                  <td className="p-[9px_12px] text-right">1.95M</td>
-                  <td className="p-[9px_12px] text-right"><Badge type="G">14.9%</Badge></td>
-                  <td className="p-[9px_12px] text-right">48</td>
-                  <td className="p-[9px_12px] text-right">13</td>
-                  <td className="p-[9px_12px] text-right">27.1%</td>
-                </tr>
-                <tr className="border-[0] transition-colors hover:bg-[rgba(255,255,255,0.02)]">
-                  <td className="p-[9px_12px]">19/03</td>
-                  <td className="p-[9px_12px] text-right">11.5M</td>
-                  <td className="p-[9px_12px] text-right">1.70M</td>
-                  <td className="p-[9px_12px] text-right"><Badge type="G">14.8%</Badge></td>
-                  <td className="p-[9px_12px] text-right">40</td>
-                  <td className="p-[9px_12px] text-right">10</td>
-                  <td className="p-[9px_12px] text-right">25.0%</td>
-                </tr>
+                {last7DaysDesc.map((d, idx) => {
+                  const a = daily.get(d) || emptyDailyAgg();
+                  const rev = a.revenue;
+                  const ads = a.adCost;
+                  const lead = a.lead;
+                  const orders = a.orders;
+
+                  const revCompact = rev > 0 ? formatCompactVnd(rev) : '—';
+                  const adsCompact = ads > 0 ? formatCompactVnd(ads) : '—';
+
+                  const adsDt = rev > 0 ? (ads / rev) * 100 : null;
+                  const adsBadgeType = adsDtToBadgeType(adsDt);
+                  const adsDtText = adsDt != null ? `${adsDt.toFixed(1)}%` : '—';
+
+                  const chotPct = lead > 0 ? (orders / lead) * 100 : null;
+                  const chotText = chotPct != null ? `${chotPct.toFixed(1)}%` : '—';
+
+                  const chotColorClass =
+                    chotPct == null
+                      ? ''
+                      : chotPct >= 25
+                        ? 'text-[var(--G)]'
+                        : chotPct <= 20
+                          ? 'text-[var(--R)]'
+                          : '';
+
+                  const trCls =
+                    idx === last7DaysDesc.length - 1
+                      ? 'border-[0] transition-colors hover:bg-[rgba(255,255,255,0.02)]'
+                      : 'border-b border-[rgba(255,255,255,0.03)] transition-colors hover:bg-[rgba(255,255,255,0.02)]';
+
+                  return (
+                    <tr key={d} className={trCls}>
+                      <td className="p-[9px_12px]">{formatReportDateVi(d).slice(0, 5)}</td>
+                      <td className={`p-[9px_12px] text-right ${rev > 0 ? 'text-[var(--G)] font-extrabold' : ''}`}>
+                        {revCompact}
+                      </td>
+                      <td className="p-[9px_12px] text-right">{adsCompact}</td>
+                      <td className="p-[9px_12px] text-right">
+                        {adsBadgeType ? <Badge type={adsBadgeType}>{adsDtText}</Badge> : '—'}
+                      </td>
+                      <td className="p-[9px_12px] text-right">{lead > 0 ? Math.round(lead).toLocaleString('vi-VN') : '—'}</td>
+                      <td className="p-[9px_12px] text-right">{orders > 0 ? Math.round(orders).toLocaleString('vi-VN') : '—'}</td>
+                      <td className={`p-[9px_12px] text-right ${chotColorClass}`}>{chotText}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -98,30 +412,60 @@ export const MktDashboardView: React.FC = () => {
 
         <div className="flex flex-col gap-[14px]">
           <SectionCard title="🎯 KPI tháng của tôi">
-            <ProgressRow label="Doanh số" valueText="342M / 400M" percent={85.5} color="var(--G)" height={8} />
-            <ProgressRow label="Lead" valueText="1.240 / 1.500" percent={83} color="var(--P)" height={8} />
-            <ProgressRow label="Đơn chốt" valueText="334 / 400" percent={83} color="var(--Y)" height={8} />
+            <ProgressRow
+              label="Doanh số"
+              valueText={revenueValueTextKpi}
+              percent={revenueProgress}
+              color="var(--G)"
+              height={8}
+            />
+            <ProgressRow
+              label="Lead"
+              valueText={leadValueText}
+              percent={leadProgress}
+              color="var(--P)"
+              height={8}
+            />
+            <ProgressRow
+              label="Đơn chốt"
+              valueText={orderValueText}
+              percent={orderProgress}
+              color="var(--Y)"
+              height={8}
+            />
           </SectionCard>
-          
+
           <SectionCard title="🎯 Tài khoản Ads">
-            <div className="flex flex-col gap-[6px]">
-              <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[11px_14px] flex items-center gap-[12px]">
-                <div className="font-[var(--mono)] text-[10.5px] text-[var(--accent)] font-bold w-[90px] shrink-0">TK-001</div>
-                <div className="flex-1">
-                  <div className="text-[11.5px] font-bold text-[var(--text)]">FB Ads BK Main</div>
-                  <div className="text-[9.5px] text-[var(--text3)]">Media One · VNĐ</div>
-                </div>
-                <Badge type="G">Active</Badge>
+            {topAccounts.length === 0 ? (
+              <div className="text-[12px] text-[var(--text3)] py-8 text-center font-bold">
+                Chưa có TKQC gán cho bạn.
               </div>
-              <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[11px_14px] flex items-center gap-[12px]">
-                <div className="font-[var(--mono)] text-[10.5px] text-[var(--accent)] font-bold w-[90px] shrink-0">TK-002</div>
-                <div className="flex-1">
-                  <div className="text-[11.5px] font-bold text-[var(--text)]">FB Ads BK Backup</div>
-                  <div className="text-[9.5px] text-[var(--text3)]">Media One · VNĐ</div>
-                </div>
-                <Badge type="G">Active</Badge>
+            ) : (
+              <div className="flex flex-col gap-[6px]">
+                {topAccounts.map((row) => {
+                  const agency = row.agency?.trim() || row.du_an?.don_vi?.trim() || row.du_an?.ten_du_an?.trim() || '—';
+                  const displayName = row.ten_tkqc?.trim() || row.ten_pae?.trim() || row.ma_tkqc;
+                  const active = isEffectiveTkqc(row.trang_thai_tkqc);
+                  return (
+                    <div
+                      key={row.id}
+                      className="bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[11px_14px] flex items-center gap-[12px]"
+                    >
+                      <div className="font-[var(--mono)] text-[10.5px] text-[var(--accent)] font-bold w-[90px] shrink-0">
+                        {row.ma_tkqc}
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-[11.5px] font-bold text-[var(--text)]">{displayName}</div>
+                        <div className="text-[9.5px] text-[var(--text3)]">
+                          {agency} · VNĐ
+                        </div>
+                      </div>
+                      <Badge type={active ? 'G' : 'R'}>{active ? 'Active' : 'Thiếu thiết lập'}</Badge>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            )}
           </SectionCard>
         </div>
       </div>

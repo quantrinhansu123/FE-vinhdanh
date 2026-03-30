@@ -11,6 +11,8 @@ const ADMIN_VIEWS = new Set<ViewId>([
   'staff',
   'ad-accounts',
   'agencies',
+  'products',
+  'markets',
   'budget',
   'reconcile',
   'admin-ranking',

@@ -15,6 +15,8 @@ import { TeamsView } from './dashboard/admin/TeamsView';
 import { StaffView } from './dashboard/admin/StaffView';
 import { AdAccountsView } from './dashboard/admin/AdAccountsView';
 import { AgenciesView } from './dashboard/admin/AgenciesView';
+import { ProductsView } from './dashboard/admin/ProductsView';
+import { MarketsView } from './dashboard/admin/MarketsView';
 import { BudgetView } from './dashboard/admin/BudgetView';
 import { ReconcileView } from './dashboard/admin/ReconcileView';
 import { AdminRankingView } from './dashboard/admin/AdminRankingView';
@@ -116,25 +118,27 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
         return <StaffView onEmployeesRefresh={onEmployeesRefresh} />;
       case 'ad-accounts': return <AdAccountsView />;
       case 'agencies': return <AgenciesView />;
+      case 'products': return <ProductsView />;
+      case 'markets': return <MarketsView />;
       case 'budget': return <BudgetView />;
       case 'reconcile': return <ReconcileView />;
       case 'admin-ranking': return <AdminRankingView />;
       case 'compare': return <CompareView />;
 
       // Leader Views
-      case 'leader-dash': return <LeaderDashboardView />;
-      case 'leader-rank': return <LeaderRankingView />;
-      case 'leader-mkt': return <LeaderMktView />;
+      case 'leader-dash': return <LeaderDashboardView viewer={reportUser ?? null} />;
+      case 'leader-rank': return <LeaderRankingView viewer={reportUser ?? null} />;
+      case 'leader-mkt': return <LeaderMktView viewer={reportUser ?? null} />;
       case 'leader-budget': return <LeaderBudgetView />;
       case 'kpi-target': return <KpiTargetView />;
       case 'heatmap': return <HeatmapView />;
 
       // MKT Views
-      case 'mkt-dash': return <MktDashboardView />;
+      case 'mkt-dash': return <MktDashboardView reportUser={reportUser ?? null} />;
       case 'mkt-report': return <MktReportView reportUser={reportUser} />;
       case 'mkt-bill': return <MktBillView />;
-      case 'mkt-history': return <MktHistoryView />;
-      case 'mkt-accounts': return <MktAccountsView />;
+      case 'mkt-history': return <MktHistoryView reportUser={reportUser} />;
+      case 'mkt-accounts': return <MktAccountsView reportUser={reportUser} />;
 
       default:
         return (

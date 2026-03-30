@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
+import { KpiCard } from '../../../components/crm-dashboard/atoms/KpiCard';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
-import type { BudgetRequestRow, BudgetRequestStatus, CrmAgencyRow } from '../../../types';
+import type { BudgetRequestRow, BudgetRequestStatus, CrmAgencyRow, ReportRow } from '../../../types';
+import { formatNumberDots, formatTypingGroupedInt } from '../mkt/mktDetailReportShared';
 
 const BUDGET_TABLE = import.meta.env.VITE_SUPABASE_BUDGET_REQUESTS_TABLE?.trim() || 'budget_requests';
+const REPORTS_TABLE = 'detail_reports';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
 const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_TABLE?.trim() || 'tkqc';
 const AGENCIES_TABLE = import.meta.env.VITE_SUPABASE_AGENCIES_TABLE?.trim() || 'crm_agencies';
@@ -31,9 +34,30 @@ type TkqcOpt = {
   du_an?: { ten_du_an: string; ma_du_an: string | null } | null;
 };
 
+function toLocalYyyyMmDd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function endOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+
 function formatVndDots(n: number): string {
-  if (!Number.isFinite(n)) return '0';
-  return Math.round(n).toLocaleString('vi-VN');
+  if (!Number.isFinite(n)) return '—';
+  const s = formatNumberDots(Math.round(n), false);
+  return s === '' ? '0' : s;
+}
+
+function safeNum(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function displayMa(id: string): string {
@@ -72,6 +96,7 @@ export const LeaderBudgetView: React.FC = () => {
   const [tkqcList, setTkqcList] = useState<TkqcOpt[]>([]);
   const [agencies, setAgencies] = useState<CrmAgencyRow[]>([]);
   const [requests, setRequests] = useState<BudgetRequestRow[]>([]);
+  const [reportRows, setReportRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +107,11 @@ export const LeaderBudgetView: React.FC = () => {
   const [priority, setPriority] = useState('Trung bình');
   const [amountStr, setAmountStr] = useState('');
   const [lyDo, setLyDo] = useState('');
+
+  const monthBounds = useMemo(() => {
+    const t = new Date();
+    return { start: toLocalYyyyMmDd(startOfMonth(t)), end: toLocalYyyyMmDd(endOfMonth(t)), label: t.toLocaleDateString('vi-VN', { month: '2-digit', year: 'numeric' }) };
+  }, []);
 
   const loadRefs = useCallback(async () => {
     const [dRes, aRes] = await Promise.all([
@@ -116,10 +146,19 @@ export const LeaderBudgetView: React.FC = () => {
     setTkqcList((q.data || []) as TkqcOpt[]);
   }, []);
 
-  const loadHistory = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const q = await supabase.from(BUDGET_TABLE).select(BUDGET_SELECT).order('ngay_gio_xin', { ascending: false }).limit(80);
+    const [q, repRes] = await Promise.all([
+      supabase.from(BUDGET_TABLE).select(BUDGET_SELECT).order('ngay_gio_xin', { ascending: false }).limit(200),
+      supabase
+        .from(REPORTS_TABLE)
+        .select('report_date, ad_cost, ma_tkqc')
+        .gte('report_date', monthBounds.start)
+        .lte('report_date', monthBounds.end)
+        .limit(8000),
+    ]);
+
     if (q.error) {
       console.error('budget_requests (leader):', q.error);
       const em = q.error.message || '';
@@ -132,16 +171,24 @@ export const LeaderBudgetView: React.FC = () => {
     } else {
       setRequests((q.data || []) as BudgetRequestRow[]);
     }
+
+    if (repRes.error) {
+      console.warn('leader-budget detail_reports:', repRes.error);
+      setReportRows([]);
+    } else {
+      setReportRows((repRes.data || []) as ReportRow[]);
+    }
+
     setLoading(false);
-  }, []);
+  }, [monthBounds.start, monthBounds.end]);
 
   useEffect(() => {
     void loadRefs();
   }, [loadRefs]);
 
   useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
+    void loadData();
+  }, [loadData]);
 
   useEffect(() => {
     void loadTkqc(idDuAn);
@@ -153,6 +200,43 @@ export const LeaderBudgetView: React.FC = () => {
     const allowed = new Set(tkqcList.map((t) => t.id));
     return requests.filter((r) => r.tkqc_id && allowed.has(r.tkqc_id));
   }, [requests, idDuAn, tkqcList]);
+
+  const maTkqcSet = useMemo(
+    () => new Set(tkqcList.map((t) => t.ma_tkqc?.trim()).filter(Boolean) as string[]),
+    [tkqcList]
+  );
+
+  const adCostMonthScoped = useMemo(() => {
+    if (idDuAn && maTkqcSet.size > 0) {
+      return reportRows.reduce((acc, r) => {
+        const ma = r.ma_tkqc?.trim();
+        if (!ma || !maTkqcSet.has(ma)) return acc;
+        return acc + safeNum(r.ad_cost);
+      }, 0);
+    }
+    return reportRows.reduce((acc, r) => acc + safeNum(r.ad_cost), 0);
+  }, [reportRows, idDuAn, maTkqcSet]);
+
+  const kpi = useMemo(() => {
+    const list = filteredHistory;
+    const pending = list.filter((r) => r.trang_thai === 'cho_phe_duyet');
+    const pendingSum = pending.reduce((a, r) => a + safeNum(r.ngan_sach_xin), 0);
+    const { start, end } = monthBounds;
+    const approved = list.filter((r) => {
+      if (r.trang_thai !== 'dong_y') return false;
+      const u = (r.updated_at || r.ngay_gio_xin || '').slice(0, 10);
+      return u && u >= start && u <= end;
+    });
+    const approvedSum = approved.reduce((a, r) => a + safeNum(r.ngan_sach_xin), 0);
+    const diff = approvedSum - adCostMonthScoped;
+    return {
+      pendingCount: pending.length,
+      pendingSum,
+      approvedCount: approved.length,
+      approvedSum,
+      diff,
+    };
+  }, [filteredHistory, monthBounds, adCostMonthScoped]);
 
   const onSubmit = async () => {
     const amount = parseVndInput(amountStr);
@@ -186,7 +270,7 @@ export const LeaderBudgetView: React.FC = () => {
       if (insErr) throw insErr;
       setAmountStr('');
       setLyDo('');
-      await loadHistory();
+      await loadData();
     } catch (e) {
       console.error('budget insert (leader):', e);
       const msg = e instanceof Error ? e.message : String(e);
@@ -203,9 +287,51 @@ export const LeaderBudgetView: React.FC = () => {
   return (
     <div className="dash-fade-up space-y-[14px]">
       <p className="text-[10px] text-[var(--text3)] leading-relaxed">
-        Dữ liệu: <code className="text-[var(--text2)]">{BUDGET_TABLE}</code> · TKQC:{' '}
-        <code className="text-[var(--text2)]">{TKQC_TABLE}</code>. Chọn dự án → TKQC → số tiền (VNĐ).
+        <strong className="text-[var(--text2)]">Nguồn số liệu:</strong>{' '}
+        <code className="text-[var(--text2)]">{BUDGET_TABLE}</code> (xin / duyệt) · Chi ads khai báo tháng{' '}
+        <code className="text-[var(--text2)]">{REPORTS_TABLE}</code> (<code>ad_cost</code>
+        {idDuAn ? ', lọc theo mã TKQC của dự án đã chọn' : ', toàn hệ thống'}). TKQC:{' '}
+        <code className="text-[var(--text2)]">{TKQC_TABLE}</code>.
       </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[10px]">
+        <KpiCard
+          label="Chờ duyệt"
+          value={String(kpi.pendingCount)}
+          sub={formatVndDots(kpi.pendingSum) + ' VNĐ · trong phạm vi bảng'}
+          delta={idDuAn ? 'Theo dự án đã chọn' : '200 yêu cầu mới nhất'}
+          deltaType="nt"
+          barColor="var(--Y)"
+          animationDelay={0}
+        />
+        <KpiCard
+          label="Đã duyệt tháng này"
+          value={String(kpi.approvedCount)}
+          sub={formatVndDots(kpi.approvedSum) + ' VNĐ'}
+          delta={`Tháng ${monthBounds.label}`}
+          deltaType="nt"
+          barColor="var(--G)"
+          animationDelay={0.03}
+        />
+        <KpiCard
+          label="Chi ads khai báo (tháng)"
+          value={formatVndDots(adCostMonthScoped)}
+          sub="VNĐ · cộng ad_cost"
+          delta={idDuAn ? 'Theo ma_tkqc TKQC dự án' : 'Mọi dòng trong tháng'}
+          deltaType="nt"
+          barColor="var(--accent)"
+          animationDelay={0.06}
+        />
+        <KpiCard
+          label="Đã duyệt − chi khai báo"
+          value={formatVndDots(kpi.diff)}
+          sub="VNĐ · ước lượng (cùng phạm vi)"
+          delta={kpi.diff >= 0 ? 'Dư / chưa chi hết' : 'Chi khai báo vượt duyệt'}
+          deltaType={kpi.diff >= 0 ? 'up' : 'dn'}
+          barColor="var(--P)"
+          animationDelay={0.09}
+        />
+      </div>
 
       {error && (
         <div className="text-[11px] text-[var(--R)] border border-[rgba(224,61,61,0.25)] rounded-[var(--r)] px-3 py-2 bg-[var(--Rd)]/20">
@@ -290,10 +416,11 @@ export const LeaderBudgetView: React.FC = () => {
             <label className="block text-[10px] font-bold text-[var(--text3)] uppercase tracking-[1px] mb-[8px]">Số tiền đề nghị nạp</label>
             <input
               type="text"
+              inputMode="numeric"
               value={amountStr}
-              onChange={(e) => setAmountStr(e.target.value)}
+              onChange={(e) => setAmountStr(formatTypingGroupedInt(e.target.value))}
               placeholder="VD: 150.000.000"
-              className="w-full bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_14px] text-[12px] text-[var(--text)] outline-none focus:border-[var(--accent)] transition-all"
+              className="w-full bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_14px] text-[12px] font-[var(--mono)] text-[var(--text)] outline-none focus:border-[var(--accent)] transition-all"
             />
           </div>
           <div>
@@ -324,7 +451,7 @@ export const LeaderBudgetView: React.FC = () => {
         actions={
           <button
             type="button"
-            onClick={() => void loadHistory()}
+            onClick={() => void loadData()}
             disabled={loading}
             className="flex items-center gap-[6px] bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.1)] text-[var(--text2)] py-[6px] px-[10px] rounded-[6px] text-[11px] font-bold border border-[rgba(255,255,255,0.08)] disabled:opacity-50"
           >

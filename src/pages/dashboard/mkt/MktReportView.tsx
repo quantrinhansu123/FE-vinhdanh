@@ -1,39 +1,38 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { RefreshCw, Loader2 } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { RefreshCw, Loader2, Plus } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import type { AuthUser, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
+import {
+  REPORTS_TABLE,
+  toLocalYyyyMmDd,
+  formatReportDateVi,
+  parseIntVi,
+  formatIntVi,
+  formatKpiMoney,
+  formatTypingGroupedInt,
+  formatNumberDots,
+} from './mktDetailReportShared';
 
-const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
+const PRODUCTS_TABLE = import.meta.env.VITE_SUPABASE_PRODUCTS_TABLE?.trim() || 'crm_products';
+const MARKETS_TABLE = import.meta.env.VITE_SUPABASE_MARKETS_TABLE?.trim() || 'crm_markets';
 
-function toLocalYyyyMmDd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+type CatalogProduct = { ma_san_pham: string; ten_san_pham: string };
+type CatalogMarket = { ma_thi_truong: string; ten_thi_truong: string };
+
+function initialReportDateFromUrl(): string {
+  const d =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('date')?.trim() : '';
+  if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  return toLocalYyyyMmDd(new Date());
 }
 
-function parseIntVi(raw: string): number {
-  const t = raw.replace(/\./g, '').replace(/\s/g, '');
-  const n = parseInt(t, 10);
-  return Number.isFinite(n) ? Math.max(0, n) : 0;
-}
-
-function formatIntVi(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(Number(n)) || Number(n) === 0) return '';
-  return Math.round(Number(n)).toLocaleString('vi-VN');
-}
-
-/** AOV/CPO/CPL: gọn kiểu 1.127M / 171k */
-function formatKpiMoney(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return '—';
-  if (n >= 1_000_000) {
-    const v = n / 1_000_000;
-    return `${v >= 10 ? v.toFixed(0) : v.toFixed(2).replace(/\.?0+$/, '')}M`;
-  }
-  return `${Math.round(n / 1_000)}k`;
+function initialDraftLineIdFromUrl(): string | null {
+  const id =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id')?.trim() : '';
+  return id || null;
 }
 
 export type MktReportViewProps = {
@@ -42,12 +41,22 @@ export type MktReportViewProps = {
 
 export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null }) => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [dayRows, setDayRows] = useState<ReportRow[]>([]);
+  /** null = đang nhập dòng mới; uuid = sửa dòng đó */
+  const [draftLineId, setDraftLineId] = useState<string | null>(initialDraftLineIdFromUrl);
   const [reportId, setReportId] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [reportDateStr, setReportDateStr] = useState(initialReportDateFromUrl);
+  const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
+  const [catalogMarkets, setCatalogMarkets] = useState<CatalogMarket[]>([]);
+  const [catalogErr, setCatalogErr] = useState<string | null>(null);
 
   const [adAccount, setAdAccount] = useState('');
+  const [maTkqcStr, setMaTkqcStr] = useState('');
+  const [pageStr, setPageStr] = useState('');
   const [product, setProduct] = useState('');
   const [market, setMarket] = useState('');
   const [adCostStr, setAdCostStr] = useState('');
@@ -61,22 +70,101 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
   const [syncing, setSyncing] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
-  const todayStr = useMemo(() => toLocalYyyyMmDd(new Date()), []);
-  const titleDate = useMemo(
-    () =>
-      new Date().toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      }),
-    []
-  );
+  useEffect(() => {
+    if (!saveMsg) return;
+    const t = window.setTimeout(() => setSaveMsg(null), 4500);
+    return () => window.clearTimeout(t);
+  }, [saveMsg]);
+
+  useEffect(() => {
+    const d = searchParams.get('date')?.trim();
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) setReportDateStr(d);
+  }, [searchParams]);
+
+  /** Đồng bộ ?id= khi mở từ Lịch sử / đổi query (component có thể không remount). */
+  useEffect(() => {
+    const id = searchParams.get('id')?.trim() || null;
+    setDraftLineId((prev) => (prev === id ? prev : id));
+  }, [searchParams]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCatalogErr(null);
+    void (async () => {
+      const [pRes, mRes] = await Promise.all([
+        supabase
+          .from(PRODUCTS_TABLE)
+          .select('ma_san_pham, ten_san_pham')
+          .eq('trang_thai', 'dang_ban')
+          .order('ten_san_pham', { ascending: true }),
+        supabase
+          .from(MARKETS_TABLE)
+          .select('ma_thi_truong, ten_thi_truong')
+          .eq('trang_thai', 'hoat_dong')
+          .order('ten_thi_truong', { ascending: true }),
+      ]);
+      if (cancelled) return;
+      let missingTbl: string | null = null;
+      if (pRes.error) {
+        console.warn('mkt-report products catalog:', pRes.error);
+        setCatalogProducts([]);
+        if (pRes.error.message?.includes('does not exist') || pRes.error.message?.includes('schema cache')) {
+          missingTbl = PRODUCTS_TABLE;
+        }
+      } else {
+        setCatalogProducts((pRes.data || []) as CatalogProduct[]);
+      }
+      if (mRes.error) {
+        console.warn('mkt-report markets catalog:', mRes.error);
+        setCatalogMarkets([]);
+        if (mRes.error.message?.includes('does not exist') || mRes.error.message?.includes('schema cache')) {
+          missingTbl = missingTbl ? `${missingTbl}, ${MARKETS_TABLE}` : MARKETS_TABLE;
+        }
+      } else {
+        setCatalogMarkets((mRes.data || []) as CatalogMarket[]);
+      }
+      setCatalogErr(
+        missingTbl
+          ? `Thiếu bảng: ${missingTbl}. Admin chạy supabase/create_crm_products.sql và/hoặc create_crm_markets.sql.`
+          : null
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const productSelectOptions = useMemo(() => {
+    const opts = catalogProducts.map((r) => ({
+      value: r.ten_san_pham,
+      label: [r.ma_san_pham, r.ten_san_pham].filter(Boolean).join(' · '),
+    }));
+    const t = product.trim();
+    if (t && !opts.some((o) => o.value === t)) {
+      opts.unshift({ value: t, label: `${t} (không trong danh mục)` });
+    }
+    return opts;
+  }, [catalogProducts, product]);
+
+  const marketSelectOptions = useMemo(() => {
+    const opts = catalogMarkets.map((r) => ({
+      value: r.ten_thi_truong,
+      label: [r.ma_thi_truong, r.ten_thi_truong].filter(Boolean).join(' · '),
+    }));
+    const t = market.trim();
+    if (t && !opts.some((o) => o.value === t)) {
+      opts.unshift({ value: t, label: `${t} (không trong danh mục)` });
+    }
+    return opts;
+  }, [catalogMarkets, market]);
 
   const applyRow = useCallback((row: ReportRow | null) => {
     if (!row) {
       setReportId(null);
       setUpdatedAt(null);
       setAdAccount('');
+      setMaTkqcStr('');
+      setPageStr('');
       setProduct('');
       setMarket('');
       setAdCostStr('');
@@ -90,6 +178,8 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
     setReportId(row.id ?? null);
     setUpdatedAt(row.created_at ?? null);
     setAdAccount(row.ad_account?.trim() || '');
+    setMaTkqcStr(row.ma_tkqc?.trim() || '');
+    setPageStr(row.page?.trim() || '');
     setProduct(row.product?.trim() || '');
     setMarket(row.market?.trim() || '');
     setAdCostStr(formatIntVi(row.ad_cost));
@@ -100,42 +190,109 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
     setTongLeadStr(formatIntVi(row.tong_lead));
   }, []);
 
-  const loadReport = useCallback(async () => {
-    if (!reportUser?.email?.trim()) {
-      applyRow(null);
-      setLoading(false);
+  const loadReport = useCallback(
+    async (options?: { silent?: boolean }): Promise<ReportRow[]> => {
+      const silent = options?.silent === true;
+      if (!reportUser?.email?.trim()) {
+        setDayRows([]);
+        applyRow(null);
+        setLoading(false);
+        setLoadErr(null);
+        return [];
+      }
+      if (!silent) setLoading(true);
       setLoadErr(null);
-      return;
-    }
-    setLoading(true);
-    setLoadErr(null);
-    const email = reportUser.email.trim().toLowerCase();
-    const { data: rows, error } = await supabase
-      .from(REPORTS_TABLE)
-      .select('*')
-      .ilike('email', email)
-      .eq('report_date', todayStr)
-      .order('created_at', { ascending: false })
-      .limit(1);
+      const email = reportUser.email.trim().toLowerCase();
+      const { data: rows, error } = await supabase
+        .from(REPORTS_TABLE)
+        .select('*')
+        .ilike('email', email)
+        .eq('report_date', reportDateStr)
+        .order('created_at', { ascending: false })
+        .limit(200);
 
-    if (error) {
-      console.error('mkt-report load:', error);
-      setLoadErr(
-        error.message?.includes('tong_')
-          ? `${error.message} — Chạy supabase/alter_detail_reports_mkt_form.sql nếu thiếu cột.`
-          : error.message || 'Không tải được báo cáo.'
-      );
-      applyRow(null);
-    } else {
-      const row = (rows?.[0] as ReportRow | undefined) ?? null;
-      applyRow(row);
-    }
-    setLoading(false);
-  }, [applyRow, reportUser?.email, todayStr]);
+      let list: ReportRow[] = [];
+      if (error) {
+        console.error('mkt-report load:', error);
+        const msg = error.message || 'Không tải được báo cáo.';
+        setLoadErr(
+          msg.includes('tong_')
+            ? `${msg} — Chạy supabase/alter_detail_reports_mkt_form.sql nếu thiếu cột.`
+            : msg.includes('ma_tkqc') || (msg.includes('column') && msg.toLowerCase().includes('ma_tkqc'))
+              ? `${msg} — Chạy supabase/alter_detail_reports_ma_tkqc.sql.`
+              : msg.includes('page') || msg.includes('column')
+                ? `${msg} — Chạy supabase/alter_detail_reports_page_multiline.sql (cột page).`
+                : msg
+        );
+        setDayRows([]);
+      } else {
+        list = (rows || []) as ReportRow[];
+        setDayRows(list);
+      }
+      if (!silent) setLoading(false);
+      return list;
+    },
+    [applyRow, reportUser?.email, reportDateStr]
+  );
 
   useEffect(() => {
     void loadReport();
   }, [loadReport]);
+
+  useEffect(() => {
+    if (loading || !draftLineId || !reportUser?.email?.trim()) return;
+    const row = dayRows.find((r) => r.id === draftLineId);
+    if (row) applyRow(row);
+    else {
+      setDraftLineId(null);
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev);
+          p.delete('id');
+          return p;
+        },
+        { replace: true }
+      );
+      applyRow(null);
+    }
+  }, [loading, draftLineId, dayRows, reportUser?.email, applyRow, setSearchParams]);
+
+  const setDateAndUrl = (iso: string) => {
+    setReportDateStr(iso);
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.set('date', iso);
+        p.delete('id');
+        return p;
+      },
+      { replace: true }
+    );
+    setDraftLineId(null);
+    applyRow(null);
+  };
+
+  const selectLine = (id: string | null) => {
+    setDraftLineId(id);
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.set('date', reportDateStr);
+        if (id) p.set('id', id);
+        else p.delete('id');
+        return p;
+      },
+      { replace: true }
+    );
+    if (id) {
+      const row = dayRows.find((r) => r.id === id);
+      if (row) applyRow(row);
+    } else {
+      applyRow(null);
+    }
+  };
+
+  const startNewLine = () => selectLine(null);
 
   const adCost = parseIntVi(adCostStr);
   const mess = parseIntVi(messStr);
@@ -154,15 +311,20 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
   const cplDenom = tongLead > 0 ? tongLead : mess > 0 ? mess : 0;
   const cpl = cplDenom > 0 ? adCost / cplDenom : null;
 
+  const todayStr = toLocalYyyyMmDd(new Date());
+  const isPastDate = reportDateStr < todayStr;
+
   const buildPayload = useCallback(() => {
     const email = reportUser?.email?.trim().toLowerCase() || '';
     const name = (reportUser?.name || email).trim() || email;
     return {
       name,
       email,
-      report_date: todayStr,
+      report_date: reportDateStr,
       team: reportUser?.team?.trim() || null,
       ad_account: adAccount.trim() || null,
+      ma_tkqc: maTkqcStr.trim() || null,
+      page: pageStr.trim() || null,
       product: product.trim() || null,
       market: market.trim() || null,
       ad_cost: adCost,
@@ -176,8 +338,10 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
     reportUser?.email,
     reportUser?.name,
     reportUser?.team,
-    todayStr,
+    reportDateStr,
     adAccount,
+    maTkqcStr,
+    pageStr,
     product,
     market,
     adCost,
@@ -200,62 +364,78 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
       try {
         const email = reportUser.email.trim().toLowerCase();
         const name = (reportUser.name || email).trim() || email;
-        const { data: existingRows, error: selErr } = await supabase
-          .from(REPORTS_TABLE)
-          .select('id')
-          .ilike('email', email)
-          .eq('report_date', todayStr)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (selErr) throw selErr;
-        const existingId = existingRows?.[0]?.id as string | undefined;
-
         if (opts?.orderOnly) {
           const n = orders;
-          if (existingId) {
-            const { error: upErr } = await supabase
-              .from(REPORTS_TABLE)
-              .update({ order_count: n })
-              .eq('id', existingId);
+          const targetId = draftLineId || dayRows[0]?.id;
+          if (targetId) {
+            const { error: upErr } = await supabase.from(REPORTS_TABLE).update({ order_count: n }).eq('id', targetId);
             if (upErr) throw upErr;
             setSaveMsg('Đã cập nhật số đơn TT.');
           } else {
             const { error: insErr } = await supabase.from(REPORTS_TABLE).insert({
               name,
               email,
-              report_date: todayStr,
+              report_date: reportDateStr,
               order_count: n,
               team: reportUser.team?.trim() || null,
             });
             if (insErr) throw insErr;
             setSaveMsg('Đã tạo báo cáo mới với số đơn TT.');
           }
-          await loadReport();
+          const fresh = await loadReport({ silent: true });
+          let tid: string | undefined = (draftLineId || dayRows[0]?.id) ?? undefined;
+          if (!tid && fresh.length > 0) tid = fresh[0].id;
+          if (tid) {
+            const r = fresh.find((x) => x.id === tid);
+            if (r) applyRow(r);
+          }
           return;
         }
 
         const payload = buildPayload();
-        if (existingId) {
-          const { error: upErr } = await supabase.from(REPORTS_TABLE).update(payload).eq('id', existingId);
+        if (draftLineId) {
+          const { error: upErr } = await supabase.from(REPORTS_TABLE).update(payload).eq('id', draftLineId);
           if (upErr) throw upErr;
-          setSaveMsg('Đã lưu báo cáo hôm nay.');
+          setSaveMsg(`Đã cập nhật dòng báo cáo · ${formatReportDateVi(reportDateStr)}.`);
+          const fresh = await loadReport({ silent: true });
+          const r = fresh.find((x) => x.id === draftLineId);
+          if (r) applyRow(r);
         } else {
           const { error: insErr } = await supabase.from(REPORTS_TABLE).insert(payload);
           if (insErr) throw insErr;
-          setSaveMsg('Đã tạo và lưu báo cáo hôm nay.');
+          setSaveMsg(`Đã thêm dòng mới · ${formatReportDateVi(reportDateStr)}.`);
+          await loadReport({ silent: true });
+          selectLine(null);
         }
-        await loadReport();
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Không lưu được.';
         setSaveMsg(
-          msg.includes('tong_') ? `${msg} — Chạy supabase/alter_detail_reports_mkt_form.sql.` : msg
+          msg.includes('tong_')
+            ? `${msg} — Chạy supabase/alter_detail_reports_mkt_form.sql.`
+            : msg.includes('unique') && msg.includes('detail_reports')
+              ? `${msg} — Chạy supabase/alter_detail_reports_page_multiline.sql để cho nhiều dòng/ngày.`
+              : msg.includes('ma_tkqc') || (msg.includes('column') && msg.toLowerCase().includes('ma_tkqc'))
+                ? `${msg} — Chạy supabase/alter_detail_reports_ma_tkqc.sql.`
+                : msg.includes('page') || (msg.includes('column') && msg.includes('schema'))
+                  ? `${msg} — Chạy supabase/alter_detail_reports_page_multiline.sql.`
+                  : msg
         );
       } finally {
         if (opts?.orderOnly) setSyncing(false);
         else setSaving(false);
       }
     },
-    [buildPayload, loadReport, orders, reportUser, todayStr]
+    [
+      buildPayload,
+      loadReport,
+      orders,
+      reportUser,
+      reportDateStr,
+      draftLineId,
+      dayRows,
+      applyRow,
+      selectLine,
+    ]
   );
 
   const handleCapNhatSoDonTT = () => void persistReport({ orderOnly: true });
@@ -263,10 +443,13 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
   const subtitleParts = [
     reportUser?.name,
     reportUser?.team,
+    `${dayRows.length} dòng trong ngày`,
+    draftLineId ? 'Đang sửa dòng đã lưu' : 'Dòng mới (lưu để ghi DB)',
     product.trim() || undefined,
+    pageStr.trim() || undefined,
     updatedAt
       ? `Cập nhật: ${new Date(updatedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
-      : 'Chưa có bản ghi hôm nay',
+      : null,
   ].filter(Boolean);
 
   if (loading) {
@@ -281,48 +464,179 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
   return (
     <div className="dash-fade-up max-w-[700px] mx-auto">
       <SectionCard
-        title={`✏️ Module 7 — Nhập báo cáo hôm nay · ${titleDate}`}
+        title={`✏️ Module 7 — Báo cáo · ${formatReportDateVi(reportDateStr)}`}
         subtitle={subtitleParts.join(' · ')}
-        badge={{ text: reportId ? '✓ Đã có bản ghi' : '⏳ Chưa có bản ghi', type: reportId ? 'G' : 'Y' }}
+        badge={{
+          text: draftLineId ? `✓ Dòng đã lưu (${dayRows.length} trong ngày)` : `➕ Dòng mới · ${dayRows.length} dòng đã có`,
+          type: draftLineId ? 'G' : 'Y',
+        }}
       >
-        {loadErr && (
-          <div className="bg-[rgba(224,61,61,0.1)] border border-[var(--R)] rounded-[8px] p-[10px_13px] mb-[14px] text-[11px] text-[var(--R)]">
-            {loadErr}
+        {(loadErr || catalogErr) && (
+          <div className="bg-[rgba(224,61,61,0.1)] border border-[var(--R)] rounded-[8px] p-[10px_13px] mb-[14px] text-[11px] text-[var(--R)] space-y-1">
+            {loadErr ? <div>{loadErr}</div> : null}
+            {catalogErr ? <div>{catalogErr}</div> : null}
           </div>
         )}
 
-        <div className="bg-[var(--bg3)] border border-[var(--Yb)] rounded-[8px] p-[10px_13px] mb-[14px] text-[11px] text-[var(--Y)]">
-          ⚠ Nguyên tắc: Một email — một ngày — một dòng trong <code className="text-[10px]">{REPORTS_TABLE}</code>
-          (theo index email + ngày). Lưu sẽ cập nhật dòng đó hoặc tạo mới.
+        <div className="flex flex-col sm:flex-row flex-wrap gap-[10px] mb-[14px] p-[12px] bg-[var(--bg3)] border border-[var(--border)] rounded-[10px]">
+          <label className="flex flex-col gap-1 min-w-[160px] flex-1">
+            <span className="text-[9px] font-extrabold uppercase text-[var(--text3)] tracking-wide">Ngày báo cáo</span>
+            <input
+              type="date"
+              value={reportDateStr}
+              onChange={(e) => setDateAndUrl(e.target.value || toLocalYyyyMmDd(new Date()))}
+              className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] text-[13px] font-[var(--mono)] p-[8px_10px] outline-none focus:border-[var(--accent)]"
+            />
+          </label>
+          <div className="flex items-end gap-2">
+            <button
+              type="button"
+              onClick={() => setReportDateStr(todayStr)}
+              className="text-[10px] font-bold px-3 py-2 rounded-[8px] border border-[var(--border)] bg-[var(--bg4)] text-[var(--text2)] hover:bg-[var(--bg2)]"
+            >
+              Hôm nay
+            </button>
+            <button
+              type="button"
+              onClick={() => void loadReport()}
+              className="text-[10px] font-bold px-3 py-2 rounded-[8px] border border-[var(--border)] bg-[var(--bg4)] text-[var(--text2)] hover:bg-[var(--bg2)]"
+            >
+              Tải lại
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(crmAdminPathForView('mkt-history'))}
+              className="text-[10px] font-bold px-3 py-2 rounded-[8px] border border-[var(--accent)] text-[var(--accent)] hover:bg-[rgba(61,142,240,0.08)]"
+            >
+              Lịch sử
+            </button>
+          </div>
+          {isPastDate && (
+            <p className="w-full text-[10px] text-[var(--Y)] font-bold mt-[-4px]">
+              Đang sửa ngày trong quá khứ — Lưu sẽ cập nhật đúng dòng {reportDateStr}.
+            </p>
+          )}
         </div>
+
+        <div className="bg-[var(--bg3)] border border-[var(--Yb)] rounded-[8px] p-[10px_13px] mb-[14px] text-[11px] text-[var(--Y)]">
+          ⚠ Nhiều dòng / ngày / email trong <code className="text-[10px]">{REPORTS_TABLE}</code> — cần chạy{' '}
+          <code className="text-[10px]">alter_detail_reports_page_multiline.sql</code>. SP/TT từ{' '}
+          <code className="text-[10px]">{PRODUCTS_TABLE}</code> / <code className="text-[10px]">{MARKETS_TABLE}</code> (lưu{' '}
+          <strong>tên</strong> vào <code className="text-[10px]">product</code> / <code className="text-[10px]">market</code>). Cột{' '}
+          <code className="text-[10px]">page</code> (Page), <code className="text-[10px]">ma_tkqc</code> (TKQC). Migration:{' '}
+          <code className="text-[10px]">alter_detail_reports_ma_tkqc.sql</code>.
+        </div>
+
+        {reportUser?.email && (
+          <div className="mb-[14px] flex flex-col gap-[8px]">
+            <div className="flex flex-wrap items-center justify-between gap-[10px]">
+              <span className="text-[10px] font-extrabold uppercase text-[var(--text3)] tracking-wide">
+                Dòng báo cáo trong ngày ({dayRows.length})
+              </span>
+              <button
+                type="button"
+                onClick={() => startNewLine()}
+                className="inline-flex items-center gap-[6px] text-[10px] font-bold px-3 py-2 rounded-[8px] bg-[#10b981] text-white hover:brightness-110"
+              >
+                <Plus size={14} />
+                Thêm dòng mới
+              </button>
+            </div>
+            {dayRows.length > 0 ? (
+              <div className="flex flex-wrap gap-[6px]">
+                {dayRows.map((r) => {
+                  const active = draftLineId === r.id;
+                  const label =
+                    [r.product, r.ma_tkqc, r.ad_account, r.page].filter(Boolean).join(' · ') || r.id?.slice(0, 8) || '—';
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => selectLine(r.id || null)}
+                      className={`max-w-[220px] truncate text-[10px] font-bold px-2 py-1.5 rounded-[6px] border transition-all ${
+                        active
+                          ? 'border-[var(--accent)] bg-[rgba(61,142,240,0.15)] text-[var(--accent)]'
+                          : 'border-[var(--border)] bg-[var(--bg4)] text-[var(--text2)] hover:bg-[var(--bg2)]'
+                      }`}
+                      title={label}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              !loading && (
+                <p className="text-[10px] text-[var(--text3)]">Chưa có dòng nào — điền form và bấm Lưu, hoặc Thêm dòng mới.</p>
+              )
+            )}
+          </div>
+        )}
 
         <div className="flex flex-col gap-[10px] mb-[20px]">
           <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] p-[14px_16px] flex flex-col sm:flex-row sm:items-center gap-[12px]">
             <div className="flex flex-col sm:flex-row sm:items-center gap-[12px] flex-1 min-w-0">
-              <label className="font-[var(--mono)] text-[11px] text-[var(--accent)] font-extrabold w-full sm:w-[100px] shrink-0">
-                <span className="text-[9px] text-[var(--text3)] block uppercase mb-1">Mã TK</span>
-                <input
-                  value={adAccount}
-                  onChange={(e) => setAdAccount(e.target.value)}
-                  placeholder="VD: TK-001"
-                  className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[11px] p-[7px_10px] outline-none focus:border-[var(--accent)]"
-                />
-              </label>
-              <div className="flex-1 min-w-0 space-y-1">
-                <div className="text-[10px] text-[var(--text3)] uppercase font-bold">Tên / sản phẩm → product</div>
-                <input
-                  value={product}
-                  onChange={(e) => setProduct(e.target.value)}
-                  placeholder="VD: FB Ads BK Main"
-                  className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[12px] font-bold text-[var(--text)] p-[7px_10px] outline-none focus:border-[var(--accent)]"
-                />
-                <div className="text-[10px] text-[var(--text3)] uppercase font-bold">Ghi chú / thị trường → market</div>
-                <input
-                  value={market}
-                  onChange={(e) => setMarket(e.target.value)}
-                  placeholder="VD: Media One · VNĐ · BIOKAMA"
-                  className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[10px] text-[var(--text3)] p-[6px_10px] outline-none focus:border-[var(--accent)]"
-                />
+              <div className="flex flex-col sm:flex-row gap-[10px] shrink-0 w-full sm:w-auto">
+                <label className="font-[var(--mono)] text-[11px] text-[var(--accent)] font-extrabold w-full sm:w-[100px] shrink-0">
+                  <span className="text-[9px] text-[var(--text3)] block uppercase mb-1">TKQC</span>
+                  <input
+                    value={maTkqcStr}
+                    onChange={(e) => setMaTkqcStr(e.target.value)}
+                    placeholder="VD: QC-A01"
+                    className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[11px] p-[7px_10px] outline-none focus:border-[var(--accent)]"
+                  />
+                  <span className="text-[8px] text-[var(--text3)] block mt-1">ma_tkqc</span>
+                </label>
+                <label className="font-[var(--mono)] text-[11px] text-[var(--accent)] font-extrabold w-full sm:w-[100px] shrink-0">
+                  <span className="text-[9px] text-[var(--text3)] block uppercase mb-1">Mã TK</span>
+                  <input
+                    value={adAccount}
+                    onChange={(e) => setAdAccount(e.target.value)}
+                    placeholder="VD: TK-001"
+                    className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[11px] p-[7px_10px] outline-none focus:border-[var(--accent)]"
+                  />
+                </label>
+              </div>
+              <div className="flex-1 min-w-0 space-y-[10px]">
+                <label className="block space-y-1">
+                  <span className="text-[10px] text-[var(--text3)] uppercase font-bold">Sản phẩm → product</span>
+                  <select
+                    value={productSelectOptions.some((o) => o.value === product) ? product : ''}
+                    onChange={(e) => setProduct(e.target.value)}
+                    className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[12px] font-bold text-[var(--text)] p-[7px_10px] outline-none focus:border-[var(--accent)]"
+                  >
+                    <option value="">— Chọn sản phẩm —</option>
+                    {productSelectOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[10px] text-[var(--text3)] uppercase font-bold">Thị trường → market</span>
+                  <select
+                    value={marketSelectOptions.some((o) => o.value === market) ? market : ''}
+                    onChange={(e) => setMarket(e.target.value)}
+                    className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[12px] font-bold text-[var(--text)] p-[7px_10px] outline-none focus:border-[var(--accent)]"
+                  >
+                    <option value="">— Chọn thị trường —</option>
+                    {marketSelectOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[10px] text-[var(--text3)] uppercase font-bold">Page → page</span>
+                  <input
+                    value={pageStr}
+                    onChange={(e) => setPageStr(e.target.value)}
+                    placeholder="VD: Fanpage ABC · FB"
+                    className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[12px] font-bold text-[var(--text)] p-[7px_10px] outline-none focus:border-[var(--accent)]"
+                  />
+                </label>
               </div>
             </div>
             <div className="flex gap-[12px] shrink-0 flex-wrap">
@@ -331,7 +645,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
                 <input
                   inputMode="numeric"
                   value={adCostStr}
-                  onChange={(e) => setAdCostStr(e.target.value)}
+                  onChange={(e) => setAdCostStr(formatTypingGroupedInt(e.target.value))}
                   placeholder="0"
                   className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[12px] p-[7px_12px] outline-none w-[120px] text-right focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all"
                 />
@@ -342,7 +656,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
                 <input
                   inputMode="numeric"
                   value={messStr}
-                  onChange={(e) => setMessStr(e.target.value)}
+                  onChange={(e) => setMessStr(formatTypingGroupedInt(e.target.value))}
                   placeholder="0"
                   className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[12px] p-[7px_12px] outline-none w-[100px] text-right focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all"
                 />
@@ -362,7 +676,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
             <input
               inputMode="numeric"
               value={tongDataStr}
-              onChange={(e) => setTongDataStr(e.target.value)}
+              onChange={(e) => setTongDataStr(formatTypingGroupedInt(e.target.value))}
               placeholder="0"
               className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--text)] font-[var(--mono)] text-[13px] p-[10px_14px] outline-none focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all w-full"
             />
@@ -374,7 +688,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
             <input
               inputMode="numeric"
               value={revenueStr}
-              onChange={(e) => setRevenueStr(e.target.value)}
+              onChange={(e) => setRevenueStr(formatTypingGroupedInt(e.target.value))}
               placeholder="0"
               className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--text)] font-[var(--mono)] text-[13px] p-[10px_14px] outline-none focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all w-full"
             />
@@ -386,7 +700,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
             <input
               inputMode="numeric"
               value={orderStr}
-              onChange={(e) => setOrderStr(e.target.value)}
+              onChange={(e) => setOrderStr(formatTypingGroupedInt(e.target.value))}
               placeholder="0"
               className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--text)] font-[var(--mono)] text-[13px] p-[10px_14px] outline-none focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all w-full"
             />
@@ -395,12 +709,12 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
           <div className="md:col-span-3 flex flex-col sm:flex-row gap-[12px] sm:items-end pt-[4px]">
             <label className="flex flex-col gap-[6px] flex-1 min-w-0">
               <span className="text-[10px] font-bold tracking-[0.5px] uppercase text-[var(--text3)]">
-                Số đơn thanh toán (TT) — cùng cột <code className="text-[9px] normal-case">order_count</code>
+                Số đơn thanh toán (TT) — <code className="text-[9px] normal-case">order_count</code>
               </span>
               <input
                 inputMode="numeric"
                 value={orderStr}
-                onChange={(e) => setOrderStr(e.target.value)}
+                onChange={(e) => setOrderStr(formatTypingGroupedInt(e.target.value))}
                 placeholder="Trùng với số đơn chốt nếu cùng nghiệp vụ"
                 className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--text)] font-[var(--mono)] text-[13px] p-[10px_14px] outline-none focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all w-full"
               />
@@ -432,7 +746,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
             <input
               inputMode="numeric"
               value={tongLeadStr}
-              onChange={(e) => setTongLeadStr(e.target.value)}
+              onChange={(e) => setTongLeadStr(formatTypingGroupedInt(e.target.value))}
               placeholder="0"
               className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--text)] font-[var(--mono)] text-[13px] p-[10px_14px] outline-none focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all w-full"
             />
@@ -440,7 +754,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
           <div className="flex flex-col gap-[6px]">
             <div className="text-[10px] font-bold tracking-[0.5px] uppercase text-[var(--text3)]">Số data chưa chốt</div>
             <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--text)] font-[var(--mono)] text-[13px] p-[10px_14px] w-full">
-              {tongData > 0 || orders > 0 ? dataChuaChot.toLocaleString('vi-VN') : '—'}
+              {tongData > 0 || orders > 0 ? formatNumberDots(dataChuaChot, false) : '—'}
             </div>
             <div className="text-[8px] text-[var(--text3)]">max(0, tong_data_nhan − order_count)</div>
           </div>
@@ -495,7 +809,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
             className="bg-[var(--accent)] text-[#fff] flex-1 min-w-[140px] py-[11px] rounded-[10px] text-[13px] font-black flex items-center justify-center gap-[8px] shadow-lg shadow-[rgba(61,142,240,0.3)] hover:brightness-110 active:scale-[0.98] transition-all whitespace-nowrap disabled:opacity-50"
           >
             {saving ? <Loader2 className="animate-spin" size={18} /> : '💾'}
-            Lưu báo cáo
+            {draftLineId ? 'Lưu dòng này' : 'Thêm & lưu dòng'}
           </button>
           <button
             type="button"
@@ -503,13 +817,6 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
             className="bg-[var(--bg3)] border border-[var(--border)] text-[var(--text2)] flex-1 min-w-[140px] py-[10px] rounded-[10px] text-[13px] font-extrabold flex items-center justify-center gap-[6px] hover:bg-[var(--bg4)] transition-all"
           >
             📋 Xem bill
-          </button>
-          <button
-            type="button"
-            onClick={() => void loadReport()}
-            className="bg-[var(--bg3)] border border-[var(--border)] text-[var(--text2)] px-[14px] py-[10px] rounded-[10px] text-[12px] font-bold hover:bg-[var(--bg4)] transition-all"
-          >
-            Tải lại
           </button>
         </div>
       </SectionCard>

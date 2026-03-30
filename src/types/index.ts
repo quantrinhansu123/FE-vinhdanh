@@ -30,6 +30,10 @@ export type ReportRow = {
   team?: string | null;
   product?: string | null;
   market?: string | null;
+  /** Page / fanpage — migration alter_detail_reports_page_multiline.sql */
+  page?: string | null;
+  /** Mã TKQC — migration alter_detail_reports_ma_tkqc.sql */
+  ma_tkqc?: string | null;
   ad_account?: string | null;
   ad_cost?: number | null;
   mess_comment_count?: number | null;
@@ -207,6 +211,33 @@ export type CrmAgencyRow = {
   du_an?: string | null;
   tong_da_nap?: number | null;
   cong_no?: number | null;
+  trang_thai?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+/** Sản phẩm — bảng public.crm_products */
+export type CrmProductRow = {
+  id: string;
+  ma_san_pham: string;
+  ten_san_pham: string;
+  mo_ta?: string | null;
+  danh_muc?: string | null;
+  gia_ban?: number | null;
+  don_vi_tinh?: string | null;
+  id_du_an?: string | null;
+  trang_thai?: string;
+  created_at?: string;
+  updated_at?: string;
+  du_an?: { id: string; ma_du_an: string | null; ten_du_an: string } | null;
+};
+
+/** Thị trường — bảng public.crm_markets */
+export type CrmMarketRow = {
+  id: string;
+  ma_thi_truong: string;
+  ten_thi_truong: string;
+  mo_ta?: string | null;
   trang_thai?: string;
   created_at?: string;
   updated_at?: string;

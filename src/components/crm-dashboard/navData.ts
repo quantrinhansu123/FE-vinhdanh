@@ -5,8 +5,8 @@ export const ADMIN_NAV: NavGroup[] = [
     label: 'Tổng quan',
     items: [
       { id: 'admin-dash', label: 'Dashboard', icon: '📊' },
-      { id: 'burn-detect', label: 'Phát hiện đốt tiền', icon: '🔥', badge: { text: '3', type: 'r' } },
-      { id: 'alerts', label: 'Cảnh báo hệ thống', icon: '🚨', badge: { text: '7', type: 'r' } },
+      { id: 'burn-detect', label: 'Phát hiện đốt tiền', icon: '🔥' },
+      { id: 'alerts', label: 'Cảnh báo hệ thống', icon: '🚨' },
     ]
   },
   {
@@ -17,6 +17,8 @@ export const ADMIN_NAV: NavGroup[] = [
       { id: 'staff', label: 'Nhân sự (Module 3)', icon: '👤' },
       { id: 'ad-accounts', label: 'TK Ads (Module 4)', icon: '🎯' },
       { id: 'agencies', label: 'Agency (Module 5)', icon: '🏢' },
+      { id: 'products', label: 'Sản phẩm', icon: '📦' },
+      { id: 'markets', label: 'Thị trường', icon: '🌍' },
     ]
   },
   {
@@ -48,7 +50,7 @@ export const LEADER_NAV: NavGroup[] = [
     label: 'Quản lý',
     items: [
       { id: 'leader-mkt', label: 'Marketing', icon: '👤' },
-      { id: 'leader-budget', label: 'Xin ngân sách', icon: '💰', badge: { text: '2', type: 'b' } },
+      { id: 'leader-budget', label: 'Xin ngân sách', icon: '💰' },
       { id: 'kpi-target', label: 'KPI Mục tiêu', icon: '🎯' },
     ]
   }
@@ -81,6 +83,8 @@ export const VIEW_TITLES: Record<string, string> = {
   'staff': 'Nhân sự (Module 3)',
   'ad-accounts': 'Tài khoản Ads (Module 4)',
   'agencies': 'Agency (Module 5)',
+  'products': 'Sản phẩm',
+  'markets': 'Thị trường',
   'budget': 'Ngân sách (Module 6)',
   'reconcile': 'Đối chiếu 3 Lớp',
   'admin-ranking': 'Bảng xếp hạng',
