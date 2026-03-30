@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import type { CrmTeamRow, DuAnRow, Employee } from '../../../types';
+import { formatNumberDots, formatTypingGroupedInt } from '../mkt/mktDetailReportShared';
 
 const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
@@ -20,7 +21,7 @@ const FIELD_CLASS =
 const LABEL_CLASS = 'text-[10px] font-bold uppercase tracking-wide text-[var(--text2)]';
 
 function parseOptionalNumber(raw: string): number | null {
-  const t = raw.trim().replace(/\s/g, '').replace(/,/g, '');
+  const t = raw.trim().replace(/\./g, '').replace(/\s/g, '').replace(/,/g, '');
   if (t === '') return null;
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
@@ -74,7 +75,9 @@ export const TeamFormModal: React.FC<Props> = ({ open, initial, onClose, onSaved
       setMaTeam(initial.ma_team || '');
       setTenTeam(initial.ten_team || '');
       setLeader(initial.leader || '');
-      setDoanhSoThang(initial.doanh_so_thang != null ? String(initial.doanh_so_thang) : '');
+      setDoanhSoThang(
+        initial.doanh_so_thang != null ? formatNumberDots(Math.round(Number(initial.doanh_so_thang)), false) : ''
+      );
       setTrangThai(initial.trang_thai || 'hoat_dong');
       setSelectedMemberIds(asStringIdArray(initial.member_ids));
       setSelectedDuAnIds(asStringIdArray(initial.du_an_ids));
@@ -297,7 +300,7 @@ export const TeamFormModal: React.FC<Props> = ({ open, initial, onClose, onSaved
                 <input
                   inputMode="numeric"
                   value={doanhSoThang}
-                  onChange={(e) => setDoanhSoThang(e.target.value)}
+                  onChange={(e) => setDoanhSoThang(formatTypingGroupedInt(e.target.value))}
                   className={FIELD_CLASS}
                   placeholder="VND"
                 />

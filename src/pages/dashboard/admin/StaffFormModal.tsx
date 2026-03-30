@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
@@ -6,6 +6,7 @@ import type { CrmTeamRow, Employee } from '../../../types';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
+const AVATARS_BUCKET = import.meta.env.VITE_SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
 
 const TRANG_THAI_OPTIONS = [
   { value: 'dang_lam', label: 'Đang làm' },
@@ -56,10 +57,17 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
   const [formError, setFormError] = useState<string | null>(null);
   const [crmTeams, setCrmTeams] = useState<CrmTeamRow[]>([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const avatarObjectUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setFormError(null);
+    if (avatarObjectUrlRef.current) {
+      URL.revokeObjectURL(avatarObjectUrlRef.current);
+      avatarObjectUrlRef.current = null;
+    }
     if (initial) {
       setMaNs(initial.ma_ns || '');
       setName(initial.name || '');
@@ -71,6 +79,8 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
       setViTri(initial.vi_tri || '');
       setSoFanpage(String(initial.so_fanpage ?? 0));
       setTrangThai(initial.trang_thai || 'dang_lam');
+      setAvatarFile(null);
+      setAvatarPreview(initial.avatar_url || null);
     } else {
       setMaNs('');
       setName('');
@@ -82,6 +92,8 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
       setViTri('');
       setSoFanpage('0');
       setTrangThai('dang_lam');
+      setAvatarFile(null);
+      setAvatarPreview(null);
     }
   }, [open, initial]);
 
@@ -163,6 +175,34 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
 
     setSaving(true);
     try {
+      if (avatarFile) {
+        if (!avatarFile.type.startsWith('image/')) {
+          throw new Error('Ảnh không đúng định dạng.');
+        }
+        const maxBytes = 3 * 1024 * 1024; // 3MB
+        if (avatarFile.size > maxBytes) {
+          throw new Error('Ảnh tối đa 3MB.');
+        }
+
+        const staffKey = isEdit && initial?.id ? initial.id : 'new';
+        const safeFileName = (avatarFile.name || 'avatar')
+          .replace(/[\\/:*?"<>|]/g, '_')
+          .replace(/\s+/g, '_');
+        const objectPath = `staff/${staffKey}/avatar_${Date.now()}_${safeFileName}`;
+
+        const { error: upErr } = await supabase.storage
+          .from(AVATARS_BUCKET)
+          .upload(objectPath, avatarFile, {
+            upsert: true,
+            contentType: avatarFile.type || undefined,
+          });
+        if (upErr) throw new Error(upErr.message || 'Upload ảnh thất bại.');
+
+        const { data: urlData } = supabase.storage.from(AVATARS_BUCKET).getPublicUrl(objectPath);
+        if (!urlData?.publicUrl) throw new Error('Không lấy được URL ảnh.');
+        basePayload.avatar_url = urlData.publicUrl;
+      }
+
       if (isEdit && initial?.id) {
         const payload = { ...basePayload };
         if (!pass.trim()) {
@@ -293,6 +333,44 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
                 placeholder="VD: MKT, Leader, Designer"
               />
             </label>
+
+            <div className="flex items-start gap-[12px] sm:gap-[14px]">
+              <div className="w-[64px] h-[64px] shrink-0 rounded-full overflow-hidden border border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.05)] flex items-center justify-center">
+                {avatarPreview ? (
+                  // eslint-disable-next-line jsx-a11y/alt-text
+                  <img src={avatarPreview} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-[10px] text-[var(--text3)]">No img</span>
+                )}
+              </div>
+
+              <div className="flex-1 space-y-[6px]">
+                <span className={LABEL_CLASS}>Up ảnh</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    if (avatarObjectUrlRef.current) {
+                      URL.revokeObjectURL(avatarObjectUrlRef.current);
+                      avatarObjectUrlRef.current = null;
+                    }
+                    setAvatarFile(f);
+                    if (f) {
+                      avatarObjectUrlRef.current = URL.createObjectURL(f);
+                      setAvatarPreview(avatarObjectUrlRef.current);
+                    } else {
+                      setAvatarPreview(initial?.avatar_url || null);
+                    }
+                  }}
+                  className={FIELD_CLASS}
+                />
+                <p className="text-[10px] text-[var(--text3)]">
+                  Ảnh đại diện (PNG/JPG/WEBP), tối đa 3MB. Để trống thì giữ ảnh cũ.
+                </p>
+                {avatarFile ? <div className="text-[10px] text-[var(--text2)] truncate">{avatarFile.name}</div> : null}
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-[10px]">
               <label className="block space-y-1.5">

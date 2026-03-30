@@ -10,6 +10,7 @@ import {
 } from '../mkt/mktDetailReportShared';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
 const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_TABLE?.trim() || 'tkqc';
 const MARKETING_STAFF_TABLE =
   import.meta.env.VITE_SUPABASE_MARKETING_STAFF_TABLE?.trim() || 'marketing_staff';
@@ -82,31 +83,54 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
   const [ym, setYm] = useState(ymNow);
 
   const [rows, setRows] = useState<Row[]>([]);
+  const [managedTeams, setManagedTeams] = useState<string[]>([]);
 
   const load = useCallback(async () => {
-    const team = viewer?.team?.trim() || '';
+    const fallbackTeam = viewer?.team?.trim() || '';
+    const viewerName = viewer?.name?.trim() || '';
     const viewerEmail = viewer?.email?.trim().toLowerCase() || '';
     setLoading(true);
     setError(null);
     setRows([]);
+    setManagedTeams([]);
 
-    if (!viewerEmail && !team) {
+    if (!viewerEmail && !fallbackTeam && !viewerName) {
       setError('Cần đăng nhập để xem danh sách Marketing.');
-      setLoading(false);
-      return;
-    }
-    if (!team) {
-      setError('Tài khoản không có team — cập nhật tại nhân sự CRM.');
       setLoading(false);
       return;
     }
 
     const { start, end } = monthBounds(ym);
 
+    // Ưu tiên team leader đang phụ trách từ CRM teams, fallback về viewer.team
+    let teamKeys: string[] = [];
+    if (viewerName) {
+      const teamRes = await supabase
+        .from(TEAMS_TABLE)
+        .select('ten_team, leader')
+        .eq('leader', viewerName);
+      if (!teamRes.error) {
+        teamKeys = (teamRes.data || [])
+          .map((r) => safeTrim((r as { ten_team?: string }).ten_team))
+          .filter(Boolean);
+      } else {
+        console.warn('leader-mkt teams:', teamRes.error);
+      }
+    }
+    if (!teamKeys.length && fallbackTeam) teamKeys = [fallbackTeam];
+    teamKeys = [...new Set(teamKeys.map((x) => x.trim()).filter(Boolean))];
+    setManagedTeams(teamKeys);
+
+    if (!teamKeys.length) {
+      setError('Không xác định được team phụ trách của tài khoản leader.');
+      setLoading(false);
+      return;
+    }
+
     const empRes = await supabase
       .from(EMPLOYEES_TABLE)
       .select('id, name, email, team, ma_ns, ngay_bat_dau, du_an_ten, vi_tri, trang_thai')
-      .eq('team', team)
+      .in('team', teamKeys)
       .order('name', { ascending: true });
 
     if (empRes.error) {
@@ -252,10 +276,11 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
   const subtitle = useMemo(() => {
     const n = rows.length;
     const avg = avgKpiPct != null ? `${avgKpiPct.toFixed(1)}%` : '—';
-    return `${n} nhân sự hoạt động · KPI trung bình ${avg}`;
-  }, [rows.length, avgKpiPct]);
+    const teamLabel = managedTeams.length ? managedTeams.join(', ') : '—';
+    return `${n} nhân sự hoạt động · KPI trung bình ${avg} · Team: ${teamLabel}`;
+  }, [rows.length, avgKpiPct, managedTeams]);
 
-  const teamLabel = viewer?.team?.trim() || '—';
+  const teamLabel = managedTeams.length ? managedTeams.join(', ') : viewer?.team?.trim() || '—';
 
   return (
     <div className="dash-fade-up">

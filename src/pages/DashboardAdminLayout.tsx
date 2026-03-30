@@ -130,7 +130,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'leader-rank': return <LeaderRankingView viewer={reportUser ?? null} />;
       case 'leader-mkt': return <LeaderMktView viewer={reportUser ?? null} />;
       case 'leader-budget': return <LeaderBudgetView />;
-      case 'kpi-target': return <KpiTargetView />;
+      case 'kpi-target': return <KpiTargetView viewer={reportUser ?? null} />;
       case 'heatmap': return <HeatmapView />;
 
       // MKT Views

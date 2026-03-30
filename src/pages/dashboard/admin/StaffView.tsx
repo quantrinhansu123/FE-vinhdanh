@@ -233,7 +233,22 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
                         className="border-b border-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.015)] transition-colors"
                       >
                         <td className="p-[12px_16px] font-bold text-[#3d8ef0]">{displayMaNs(row)}</td>
-                        <td className="p-[12px_16px] font-extrabold text-[#fff] tracking-[0.2px]">{row.name}</td>
+                        <td className="p-[12px_16px] font-extrabold text-[#fff] tracking-[0.2px]">
+                          <div className="flex items-center gap-[10px] min-w-0">
+                            <div className="w-[26px] h-[26px] rounded-full overflow-hidden bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.1)] shrink-0 flex items-center justify-center">
+                              {row.avatar_url ? (
+                                <img src={row.avatar_url} alt={`${row.name} avatar`} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-[11px] font-extrabold text-[var(--text3)]">
+                                  {(row.name || '?').trim().slice(0, 1).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <span className="truncate" title={row.name}>
+                              {row.name}
+                            </span>
+                          </div>
+                        </td>
                         <td className="p-[12px_16px] max-w-[140px] truncate" title={row.vi_tri || ''}>
                           {row.vi_tri?.trim() || '—'}
                         </td>

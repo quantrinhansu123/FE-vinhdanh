@@ -1,8 +1,9 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap");
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-crm: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --font-crm: "Roboto", ui-sans-serif, system-ui, sans-serif;
 
   /* CRM Admin — tông xanh lá (emerald/teal), nền tối, vàng nhấn */
   --color-crm-primary: #22c55e;
@@ -53,8 +54,12 @@
   --color-dash-purple-d: rgba(124, 77, 255, 0.12);
   --color-dash-gold: #c9a227;
 
-  --font-dash-main: "Manrope", sans-serif;
+  --font-dash-main: "Roboto", sans-serif;
   --font-dash-mono: "JetBrains Mono", monospace;
+}
+
+html, body, #root {
+  font-family: "Roboto", ui-sans-serif, system-ui, sans-serif;
 }
 
 /*

@@ -107,7 +107,20 @@ export const StaffDetailModal: React.FC<Props> = ({ open, row, onClose, onDelete
             </div>
             <div className={ROW_CLASS}>
               <span className={LABEL_CLASS}>Họ tên</span>
-              <span className={`${VALUE_CLASS} font-extrabold text-[#fff]`}>{row.name}</span>
+              <span className={`${VALUE_CLASS} font-extrabold text-[#fff]`}>
+                <div className="flex items-center gap-[12px]">
+                  <div className="w-[34px] h-[34px] rounded-full overflow-hidden bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.12)] shrink-0 flex items-center justify-center">
+                    {row.avatar_url ? (
+                      <img src={row.avatar_url} alt={`${row.name} avatar`} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-[12px] font-extrabold text-[var(--text3)]">
+                        {(row.name || '?').trim().slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <span className="min-w-0 truncate">{row.name}</span>
+                </div>
+              </span>
             </div>
             <div className={ROW_CLASS}>
               <span className={LABEL_CLASS}>Email</span>
