@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/crm-dashboard/Sidebar';
 import { Topbar } from '../components/crm-dashboard/Topbar';
@@ -11,6 +11,7 @@ import { AdminDashboardView } from './dashboard/admin/AdminDashboardView';
 import { BurnDetectionView } from './dashboard/admin/BurnDetectionView';
 import { AlertsView } from './dashboard/admin/AlertsView';
 import { ProjectsView } from './dashboard/admin/ProjectsView';
+import { ProjectQcExcelView } from './dashboard/admin/ProjectQcExcelView';
 import { TeamsView } from './dashboard/admin/TeamsView';
 import { StaffView } from './dashboard/admin/StaffView';
 import { AdAccountsView } from './dashboard/admin/AdAccountsView';
@@ -26,6 +27,7 @@ import { CompareView } from './dashboard/admin/CompareView';
 import { LeaderDashboardView } from './dashboard/leader/LeaderDashboardView';
 import { LeaderRankingView } from './dashboard/leader/LeaderRankingView';
 import { LeaderMktView } from './dashboard/leader/LeaderMktView';
+import { LeaderTkqcView } from './dashboard/leader/LeaderTkqcView';
 import { LeaderBudgetView } from './dashboard/leader/LeaderBudgetView';
 import { KpiTargetView } from './dashboard/leader/KpiTargetView';
 import { HeatmapView } from './dashboard/leader/HeatmapView';
@@ -44,6 +46,13 @@ import {
   defaultViewForRole,
   parseCrmAdminPath,
 } from '../utils/crmAdminRoutes';
+import {
+  crmAllowedRolesForTier,
+  crmNavTierFromUser,
+  defaultViewForTier,
+  tierAllowsRole,
+  tierAllowsView,
+} from '../utils/crmNavAccess';
 
 export interface DashboardAdminLayoutProps {
   employees?: Employee[];
@@ -72,6 +81,9 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
 
   const parsed = parseCrmAdminPath(location.pathname);
 
+  const tier = useMemo(() => crmNavTierFromUser(reportUser ?? null), [reportUser?.role, reportUser?.vi_tri]);
+  const allowedRoles = crmAllowedRolesForTier(tier);
+
   useEffect(() => {
     const p = parseCrmAdminPath(location.pathname);
     if (p.ok === false) {
@@ -80,13 +92,18 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
     }
     if (p.legacyTwoSegment) {
       navigate(crmAdminPathForView(p.view), { replace: true });
+      return;
     }
-  }, [location.pathname, navigate]);
+    if (!tierAllowsView(tier, p.view)) {
+      navigate(crmAdminPathForView(defaultViewForTier(tier)), { replace: true });
+    }
+  }, [location.pathname, navigate, tier]);
 
   const currentRole = parsed.ok ? parsed.role : 'admin';
   const currentView = parsed.ok ? parsed.view : 'admin-dash';
 
   const handleRoleChange = (role: Role) => {
+    if (!tierAllowsRole(tier, role)) return;
     navigate(crmAdminPathForView(defaultViewForRole(role)));
   };
 
@@ -113,6 +130,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'burn-detect': return <BurnDetectionView />;
       case 'alerts': return <AlertsView />;
       case 'projects': return <ProjectsView />;
+      case 'project-qc-excel': return <ProjectQcExcelView />;
       case 'teams': return <TeamsView />;
       case 'staff':
         return <StaffView onEmployeesRefresh={onEmployeesRefresh} />;
@@ -129,6 +147,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'leader-dash': return <LeaderDashboardView viewer={reportUser ?? null} />;
       case 'leader-rank': return <LeaderRankingView viewer={reportUser ?? null} />;
       case 'leader-mkt': return <LeaderMktView viewer={reportUser ?? null} />;
+      case 'leader-tkqc': return <LeaderTkqcView viewer={reportUser ?? null} />;
       case 'leader-budget': return <LeaderBudgetView />;
       case 'kpi-target': return <KpiTargetView viewer={reportUser ?? null} />;
       case 'heatmap': return <HeatmapView />;
@@ -151,8 +170,9 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
   };
 
   return (
-    <div className="dash-theme flex h-screen w-full overflow-hidden">
+    <div className="dash-theme flex h-screen w-full overflow-hidden font-sans antialiased">
       <Sidebar
+        allowedRoles={allowedRoles}
         currentRole={currentRole}
         onRoleChange={handleRoleChange}
         currentView={currentView}

@@ -7,6 +7,7 @@ const ADMIN_VIEWS = new Set<ViewId>([
   'burn-detect',
   'alerts',
   'projects',
+  'project-qc-excel',
   'teams',
   'staff',
   'ad-accounts',
@@ -24,6 +25,7 @@ const LEADER_VIEWS = new Set<ViewId>([
   'leader-rank',
   'heatmap',
   'leader-mkt',
+  'leader-tkqc',
   'leader-budget',
   'kpi-target',
 ]);

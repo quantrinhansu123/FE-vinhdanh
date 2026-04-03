@@ -25,6 +25,8 @@ type MktStaffRow = { id: string; id_ns: string; name: string; employee_id?: stri
 function isMktEmployee(viTri: string | null | undefined): boolean {
   const raw = (viTri || '').trim();
   if (!raw) return false;
+  const t = raw.toLowerCase();
+  if (t === 'nhân viên mkt') return true;
   const u = raw.toUpperCase();
   if (u === 'MKT' || u === 'MARKETING') return true;
   if (/\bMKT\b/.test(u)) return true;
@@ -101,6 +103,7 @@ export const AdAccountFormModal: React.FC<Props> = ({ open, initial, onClose, on
   const [idDuAn, setIdDuAn] = useState('');
   const [maTkqc, setMaTkqc] = useState('');
   const [tenTkqc, setTenTkqc] = useState('');
+  const [tenQuangCao, setTenQuangCao] = useState('');
   const [tenPae, setTenPae] = useState('');
   const [nenTang, setNenTang] = useState('');
   const [nganSach, setNganSach] = useState('');
@@ -128,6 +131,7 @@ export const AdAccountFormModal: React.FC<Props> = ({ open, initial, onClose, on
         setIdDuAn(initial.id_du_an);
         setMaTkqc(initial.ma_tkqc || '');
         setTenTkqc(initial.ten_tkqc || '');
+        setTenQuangCao(initial.ten_quang_cao?.trim() ? initial.ten_quang_cao.trim() : '');
         setTenPae(initial.ten_pae || '');
         setNenTang(initial.nen_tang || '');
         setNganSach(
@@ -142,6 +146,7 @@ export const AdAccountFormModal: React.FC<Props> = ({ open, initial, onClose, on
         setIdDuAn('');
         setMaTkqc('');
         setTenTkqc('');
+        setTenQuangCao('');
         setTenPae('');
         setNenTang('');
         setNganSach('');
@@ -218,6 +223,7 @@ export const AdAccountFormModal: React.FC<Props> = ({ open, initial, onClose, on
           .from(TKQC_TABLE)
           .update({
             ten_tkqc: tenTkqc.trim() || null,
+            ten_quang_cao: tenQuangCao.trim() || null,
             ten_pae: tenPae.trim() || null,
             nen_tang: nenTang.trim() || null,
             ngan_sach_phan_bo: ns ?? 0,
@@ -233,6 +239,7 @@ export const AdAccountFormModal: React.FC<Props> = ({ open, initial, onClose, on
           id_du_an: idDuAn,
           ma_tkqc: ma,
           ten_tkqc: tenTkqc.trim() || null,
+          ten_quang_cao: tenQuangCao.trim() || null,
           ten_pae: tenPae.trim() || null,
           nen_tang: nenTang.trim() || null,
           ngan_sach_phan_bo: ns ?? 0,
@@ -332,6 +339,17 @@ export const AdAccountFormModal: React.FC<Props> = ({ open, initial, onClose, on
                 onChange={(e) => setTenTkqc(e.target.value)}
                 className={FIELD_CLASS}
                 placeholder="Tên hiển thị"
+                autoComplete="off"
+              />
+            </label>
+
+            <label className="block space-y-1.5">
+              <span className={LABEL_CLASS}>Tên quảng cáo</span>
+              <input
+                value={tenQuangCao}
+                onChange={(e) => setTenQuangCao(e.target.value)}
+                className={FIELD_CLASS}
+                placeholder="VD: FABICO - 122120954511034419"
                 autoComplete="off"
               />
             </label>

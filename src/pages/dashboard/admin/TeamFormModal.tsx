@@ -36,6 +36,8 @@ function asStringIdArray(v: unknown): string[] {
 function isLeaderViTri(viTri: string | null | undefined): boolean {
   const t = viTri?.trim().toLowerCase();
   if (!t) return false;
+  if (t === 'admin') return true;
+  if (t.includes('quản lý dự án')) return true;
   if (t.includes('leader')) return true;
   if (t.includes('trưởng nhóm')) return true;
   if (t.includes('team lead')) return true;
@@ -290,7 +292,7 @@ export const TeamFormModal: React.FC<Props> = ({ open, initial, onClose, onSaved
                 </select>
                 {!listsLoading && leaderCandidates.length === 0 ? (
                   <p className="text-[10px] text-[var(--text3)] leading-snug">
-                    Chưa có nhân sự nào: đặt cột <span className="font-bold">vi_tri</span> chứa «Leader», «Trưởng nhóm» hoặc «Team lead» trong{' '}
+                    Chưa có nhân sự nào: đặt <span className="font-bold">vi_tri</span> là Admin, Quản lý dự án, Leader (hoặc «Trưởng nhóm» / «Team lead») trong{' '}
                     <span className="font-mono">/crm-admin/staff</span>.
                   </p>
                 ) : null}

@@ -150,6 +150,7 @@ alter table public.tkqc add constraint tkqc_trang_thai_tkqc_check
   check (trang_thai_tkqc in ('active', 'thieu_thiet_lap'));
 
 alter table public.tkqc add column if not exists agency text;
+alter table public.tkqc add column if not exists ten_quang_cao text;
 
 create index if not exists tkqc_du_an_idx on public.tkqc (id_du_an);
 create index if not exists tkqc_ma_tkqc_idx on public.tkqc (ma_tkqc);
@@ -160,6 +161,7 @@ comment on column public.tkqc.ngan_sach_phan_bo is 'Ngân sách phân bổ cho T
 comment on column public.tkqc.chi_phi_thuc_te is 'Chi phí ads thực tế (VND)';
 comment on column public.tkqc.tong_doanh_so is 'Doanh số ghi nhận cho TK (VND)';
 comment on column public.tkqc.agency is 'Agency / đơn vị QC — ưu tiên hiển thị hơn du_an.don_vi khi có';
+comment on column public.tkqc.ten_quang_cao is 'Tên quảng cáo (ad name — vd export Meta)';
 
 -- Cập nhật updated_at (PostgreSQL 11+)
 create or replace function public.du_an_tkqc_set_updated_at()

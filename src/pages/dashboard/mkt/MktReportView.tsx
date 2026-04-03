@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { RefreshCw, Loader2, Plus } from 'lucide-react';
+import { RefreshCw, Loader2 } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import type { AuthUser, ReportRow } from '../../../types';
@@ -8,6 +8,7 @@ import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import {
   REPORTS_TABLE,
   toLocalYyyyMmDd,
+  localYesterdayYyyyMmDd,
   formatReportDateVi,
   parseIntVi,
   formatIntVi,
@@ -18,6 +19,34 @@ import {
 
 const PRODUCTS_TABLE = import.meta.env.VITE_SUPABASE_PRODUCTS_TABLE?.trim() || 'crm_products';
 const MARKETS_TABLE = import.meta.env.VITE_SUPABASE_MARKETS_TABLE?.trim() || 'crm_markets';
+const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+
+/** Nhân viên tuyến MKT (bị giới hạn nhập báo cáo ngày hôm qua sau 10h), không gồm Admin / Leader / QLDA */
+function isNhanVienMktLineRole(viTri: string | null | undefined): boolean {
+  const raw = (viTri || '').trim();
+  if (!raw) return false;
+  const t = raw.toLowerCase();
+  if (t === 'admin' || t === 'quản lý dự án' || t === 'leader') return false;
+  if (t.includes('trưởng nhóm') || t.includes('team lead')) return false;
+  if (t === 'nhân viên mkt') return true;
+  const u = raw.toUpperCase();
+  if (u === 'MKT' || u === 'MARKETING') return true;
+  if (/\bMKT\b/.test(u)) return true;
+  return u.startsWith('MKT/') || u.startsWith('MKT-');
+}
+
+function isYesterdayMktEntryBlocked(
+  reportUser: AuthUser | null | undefined,
+  viTriEffective: string | null | undefined,
+  reportDateStr: string,
+  now: Date
+): boolean {
+  if (!reportUser?.email?.trim()) return false;
+  if (reportUser.role === 'admin') return false;
+  if (!isNhanVienMktLineRole(viTriEffective)) return false;
+  if (now.getHours() < 10) return false;
+  return reportDateStr === localYesterdayYyyyMmDd(now);
+}
 
 type CatalogProduct = { ma_san_pham: string; ten_san_pham: string };
 type CatalogMarket = { ma_thi_truong: string; ten_thi_truong: string };
@@ -64,11 +93,16 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
   const [tongDataStr, setTongDataStr] = useState('');
   const [revenueStr, setRevenueStr] = useState('');
   const [orderStr, setOrderStr] = useState('');
-  const [tongLeadStr, setTongLeadStr] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  /** Tick mỗi phút để khi qua 10h vẫn khóa nhập ngày hôm qua */
+  const [timeTick, setTimeTick] = useState(0);
+  const [fetchedViTri, setFetchedViTri] = useState<string | null>(null);
+
+  const viTriEffective =
+    reportUser?.vi_tri?.trim() || (fetchedViTri?.trim() ? fetchedViTri.trim() : null);
 
   useEffect(() => {
     if (!saveMsg) return;
@@ -77,9 +111,31 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
   }, [saveMsg]);
 
   useEffect(() => {
-    const d = searchParams.get('date')?.trim();
-    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) setReportDateStr(d);
-  }, [searchParams]);
+    if (!reportUser?.id?.trim()) return;
+    if (reportUser.vi_tri != null && String(reportUser.vi_tri).trim() !== '') return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from(EMPLOYEES_TABLE)
+        .select('vi_tri')
+        .eq('id', reportUser.id.trim())
+        .maybeSingle();
+      if (cancelled || error) return;
+      const vt = (data as { vi_tri?: string | null } | null)?.vi_tri;
+      setFetchedViTri(vt?.trim() ? vt.trim() : null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reportUser?.id, reportUser?.vi_tri]);
+
+  useEffect(() => {
+    if (!reportUser?.email || reportUser.role === 'admin' || !isNhanVienMktLineRole(viTriEffective)) return;
+    const yesterday = localYesterdayYyyyMmDd();
+    const ms = reportDateStr === yesterday ? 15_000 : 60_000;
+    const id = window.setInterval(() => setTimeTick((n) => n + 1), ms);
+    return () => window.clearInterval(id);
+  }, [reportUser?.email, reportUser?.role, viTriEffective, reportDateStr]);
 
   /** Đồng bộ ?id= khi mở từ Lịch sử / đổi query (component có thể không remount). */
   useEffect(() => {
@@ -172,7 +228,6 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
       setTongDataStr('');
       setRevenueStr('');
       setOrderStr('');
-      setTongLeadStr('');
       return;
     }
     setReportId(row.id ?? null);
@@ -187,8 +242,34 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
     setTongDataStr(formatIntVi(row.tong_data_nhan));
     setRevenueStr(formatIntVi(row.revenue));
     setOrderStr(formatIntVi(row.order_count));
-    setTongLeadStr(formatIntVi(row.tong_lead));
   }, []);
+
+  useLayoutEffect(() => {
+    const d = searchParams.get('date')?.trim();
+    const now = new Date();
+    const todayStr = toLocalYyyyMmDd(now);
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      if (isYesterdayMktEntryBlocked(reportUser, viTriEffective, d, now)) {
+        setReportDateStr(todayStr);
+        setDraftLineId(null);
+        applyRow(null);
+        setSearchParams(
+          (prev) => {
+            const p = new URLSearchParams(prev);
+            p.set('date', todayStr);
+            p.delete('id');
+            return p;
+          },
+          { replace: true }
+        );
+        setSaveMsg(
+          'Sau 10h sáng (từ 10:00), nhân viên MKT không được nhập/sửa báo cáo ngày hôm qua — đã chuyển về hôm nay.'
+        );
+        return;
+      }
+      setReportDateStr(d);
+    }
+  }, [searchParams, reportUser, viTriEffective, timeTick, applyRow, setSearchParams]);
 
   const loadReport = useCallback(
     async (options?: { silent?: boolean }): Promise<ReportRow[]> => {
@@ -258,6 +339,13 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
   }, [loading, draftLineId, dayRows, reportUser?.email, applyRow, setSearchParams]);
 
   const setDateAndUrl = (iso: string) => {
+    const now = new Date();
+    if (isYesterdayMktEntryBlocked(reportUser, viTriEffective, iso, now)) {
+      setSaveMsg(
+        'Sau 10h sáng (từ 10:00), nhân viên MKT không được chọn ngày hôm qua để nhập báo cáo.'
+      );
+      return;
+    }
     setReportDateStr(iso);
     setSearchParams(
       (prev) => {
@@ -292,27 +380,30 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
     }
   };
 
-  const startNewLine = () => selectLine(null);
-
   const adCost = parseIntVi(adCostStr);
   const mess = parseIntVi(messStr);
   const tongData = parseIntVi(tongDataStr);
   const revenue = parseIntVi(revenueStr);
   const orders = parseIntVi(orderStr);
-  const tongLead = parseIntVi(tongLeadStr);
 
   const dataChuaChot = Math.max(0, tongData - orders);
   const tyLeChotPct =
-    tongData > 0 ? (orders / tongData) * 100 : tongLead > 0 ? (orders / tongLead) * 100 : null;
-  const tyLeXinSoPct = tongData > 0 && tongLead > 0 ? (tongLead / tongData) * 100 : null;
+    tongData > 0 ? (orders / tongData) * 100 : mess > 0 ? (orders / mess) * 100 : null;
+  const tyLeXinSoPct = tongData > 0 && mess > 0 ? (mess / tongData) * 100 : null;
   const adsDsPct = revenue > 0 ? (adCost / revenue) * 100 : null;
   const aov = orders > 0 ? revenue / orders : null;
   const cpo = orders > 0 ? adCost / orders : null;
-  const cplDenom = tongLead > 0 ? tongLead : mess > 0 ? mess : 0;
+  const cplDenom = mess > 0 ? mess : 0;
   const cpl = cplDenom > 0 ? adCost / cplDenom : null;
 
   const todayStr = toLocalYyyyMmDd(new Date());
   const isPastDate = reportDateStr < todayStr;
+  const yesterdayEntryBlocked = isYesterdayMktEntryBlocked(
+    reportUser,
+    viTriEffective,
+    reportDateStr,
+    new Date()
+  );
 
   const buildPayload = useCallback(() => {
     const email = reportUser?.email?.trim().toLowerCase() || '';
@@ -332,7 +423,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
       revenue,
       order_count: orders,
       tong_data_nhan: tongData,
-      tong_lead: tongLead,
+      tong_lead: null,
     };
   }, [
     reportUser?.email,
@@ -349,13 +440,18 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
     revenue,
     orders,
     tongData,
-    tongLead,
   ]);
 
   const persistReport = useCallback(
     async (opts?: { orderOnly?: boolean }) => {
       if (!reportUser?.email?.trim()) {
         window.alert('Cần đăng nhập để lưu báo cáo.');
+        return;
+      }
+      if (isYesterdayMktEntryBlocked(reportUser, viTriEffective, reportDateStr, new Date())) {
+        window.alert(
+          'Sau 10h sáng (từ 10:00), nhân viên MKT không được nhập hay sửa báo cáo ngày hôm qua.'
+        );
         return;
       }
       setSaveMsg(null);
@@ -430,6 +526,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
       loadReport,
       orders,
       reportUser,
+      viTriEffective,
       reportDateStr,
       draftLineId,
       dayRows,
@@ -443,7 +540,6 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
   const subtitleParts = [
     reportUser?.name,
     reportUser?.team,
-    `${dayRows.length} dòng trong ngày`,
     draftLineId ? 'Đang sửa dòng đã lưu' : 'Dòng mới (lưu để ghi DB)',
     product.trim() || undefined,
     pageStr.trim() || undefined,
@@ -462,12 +558,12 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
   }
 
   return (
-    <div className="dash-fade-up max-w-[700px] mx-auto">
+    <div className="dash-fade-up max-w-[min(1120px,100%)] mx-auto px-[2px]">
       <SectionCard
-        title={`✏️ Module 7 — Báo cáo · ${formatReportDateVi(reportDateStr)}`}
+        title={`✏️ Module 7 — ${formatReportDateVi(reportDateStr)}`}
         subtitle={subtitleParts.join(' · ')}
         badge={{
-          text: draftLineId ? `✓ Dòng đã lưu (${dayRows.length} trong ngày)` : `➕ Dòng mới · ${dayRows.length} dòng đã có`,
+          text: draftLineId ? '✓ Đang sửa dòng' : '➕ Dòng mới',
           type: draftLineId ? 'G' : 'Y',
         }}
       >
@@ -478,17 +574,17 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row flex-wrap gap-[10px] mb-[14px] p-[12px] bg-[var(--bg3)] border border-[var(--border)] rounded-[10px]">
-          <label className="flex flex-col gap-1 min-w-[160px] flex-1">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3 p-3 bg-[var(--bg3)] border border-[var(--border)] rounded-[10px]">
+          <label className="flex flex-col gap-1 min-w-0">
             <span className="text-[9px] font-extrabold uppercase text-[var(--text3)] tracking-wide">Ngày báo cáo</span>
             <input
               type="date"
               value={reportDateStr}
               onChange={(e) => setDateAndUrl(e.target.value || toLocalYyyyMmDd(new Date()))}
-              className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] text-[13px] font-[var(--mono)] p-[8px_10px] outline-none focus:border-[var(--accent)]"
+              className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] text-[13px] font-[var(--mono)] p-2 outline-none focus:border-[var(--accent)] w-full"
             />
           </label>
-          <div className="flex items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2 lg:justify-center">
             <button
               type="button"
               onClick={() => setReportDateStr(todayStr)}
@@ -511,264 +607,202 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
               Lịch sử
             </button>
           </div>
-          {isPastDate && (
-            <p className="w-full text-[10px] text-[var(--Y)] font-bold mt-[-4px]">
-              Đang sửa ngày trong quá khứ — Lưu sẽ cập nhật đúng dòng {reportDateStr}.
-            </p>
-          )}
-        </div>
-
-        <div className="bg-[var(--bg3)] border border-[var(--Yb)] rounded-[8px] p-[10px_13px] mb-[14px] text-[11px] text-[var(--Y)]">
-          ⚠ Nhiều dòng / ngày / email trong <code className="text-[10px]">{REPORTS_TABLE}</code> — cần chạy{' '}
-          <code className="text-[10px]">alter_detail_reports_page_multiline.sql</code>. SP/TT từ{' '}
-          <code className="text-[10px]">{PRODUCTS_TABLE}</code> / <code className="text-[10px]">{MARKETS_TABLE}</code> (lưu{' '}
-          <strong>tên</strong> vào <code className="text-[10px]">product</code> / <code className="text-[10px]">market</code>). Cột{' '}
-          <code className="text-[10px]">page</code> (Page), <code className="text-[10px]">ma_tkqc</code> (TKQC). Migration:{' '}
-          <code className="text-[10px]">alter_detail_reports_ma_tkqc.sql</code>.
-        </div>
-
-        {reportUser?.email && (
-          <div className="mb-[14px] flex flex-col gap-[8px]">
-            <div className="flex flex-wrap items-center justify-between gap-[10px]">
-              <span className="text-[10px] font-extrabold uppercase text-[var(--text3)] tracking-wide">
-                Dòng báo cáo trong ngày ({dayRows.length})
-              </span>
-              <button
-                type="button"
-                onClick={() => startNewLine()}
-                className="inline-flex items-center gap-[6px] text-[10px] font-bold px-3 py-2 rounded-[8px] bg-[#10b981] text-white hover:brightness-110"
-              >
-                <Plus size={14} />
-                Thêm dòng mới
-              </button>
-            </div>
-            {dayRows.length > 0 ? (
-              <div className="flex flex-wrap gap-[6px]">
-                {dayRows.map((r) => {
-                  const active = draftLineId === r.id;
-                  const label =
-                    [r.product, r.ma_tkqc, r.ad_account, r.page].filter(Boolean).join(' · ') || r.id?.slice(0, 8) || '—';
-                  return (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => selectLine(r.id || null)}
-                      className={`max-w-[220px] truncate text-[10px] font-bold px-2 py-1.5 rounded-[6px] border transition-all ${
-                        active
-                          ? 'border-[var(--accent)] bg-[rgba(61,142,240,0.15)] text-[var(--accent)]'
-                          : 'border-[var(--border)] bg-[var(--bg4)] text-[var(--text2)] hover:bg-[var(--bg2)]'
-                      }`}
-                      title={label}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              !loading && (
-                <p className="text-[10px] text-[var(--text3)]">Chưa có dòng nào — điền form và bấm Lưu, hoặc Thêm dòng mới.</p>
-              )
+          <div className="text-[10px] text-[var(--text3)] lg:text-right lg:self-end space-y-1 min-w-0">
+            {isPastDate && (
+              <p className="text-[var(--Y)] font-bold leading-snug">Ngày quá khứ — lưu sẽ ghi đúng {reportDateStr}.</p>
             )}
-          </div>
-        )}
-
-        <div className="flex flex-col gap-[10px] mb-[20px]">
-          <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] p-[14px_16px] flex flex-col sm:flex-row sm:items-center gap-[12px]">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-[12px] flex-1 min-w-0">
-              <div className="flex flex-col sm:flex-row gap-[10px] shrink-0 w-full sm:w-auto">
-                <label className="font-[var(--mono)] text-[11px] text-[var(--accent)] font-extrabold w-full sm:w-[100px] shrink-0">
-                  <span className="text-[9px] text-[var(--text3)] block uppercase mb-1">TKQC</span>
-                  <input
-                    value={maTkqcStr}
-                    onChange={(e) => setMaTkqcStr(e.target.value)}
-                    placeholder="VD: QC-A01"
-                    className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[11px] p-[7px_10px] outline-none focus:border-[var(--accent)]"
-                  />
-                  <span className="text-[8px] text-[var(--text3)] block mt-1">ma_tkqc</span>
-                </label>
-                <label className="font-[var(--mono)] text-[11px] text-[var(--accent)] font-extrabold w-full sm:w-[100px] shrink-0">
-                  <span className="text-[9px] text-[var(--text3)] block uppercase mb-1">Mã TK</span>
-                  <input
-                    value={adAccount}
-                    onChange={(e) => setAdAccount(e.target.value)}
-                    placeholder="VD: TK-001"
-                    className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[11px] p-[7px_10px] outline-none focus:border-[var(--accent)]"
-                  />
-                </label>
-              </div>
-              <div className="flex-1 min-w-0 space-y-[10px]">
-                <label className="block space-y-1">
-                  <span className="text-[10px] text-[var(--text3)] uppercase font-bold">Sản phẩm → product</span>
-                  <select
-                    value={productSelectOptions.some((o) => o.value === product) ? product : ''}
-                    onChange={(e) => setProduct(e.target.value)}
-                    className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[12px] font-bold text-[var(--text)] p-[7px_10px] outline-none focus:border-[var(--accent)]"
-                  >
-                    <option value="">— Chọn sản phẩm —</option>
-                    {productSelectOptions.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block space-y-1">
-                  <span className="text-[10px] text-[var(--text3)] uppercase font-bold">Thị trường → market</span>
-                  <select
-                    value={marketSelectOptions.some((o) => o.value === market) ? market : ''}
-                    onChange={(e) => setMarket(e.target.value)}
-                    className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[12px] font-bold text-[var(--text)] p-[7px_10px] outline-none focus:border-[var(--accent)]"
-                  >
-                    <option value="">— Chọn thị trường —</option>
-                    {marketSelectOptions.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block space-y-1">
-                  <span className="text-[10px] text-[var(--text3)] uppercase font-bold">Page → page</span>
-                  <input
-                    value={pageStr}
-                    onChange={(e) => setPageStr(e.target.value)}
-                    placeholder="VD: Fanpage ABC · FB"
-                    className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[12px] font-bold text-[var(--text)] p-[7px_10px] outline-none focus:border-[var(--accent)]"
-                  />
-                </label>
-              </div>
-            </div>
-            <div className="flex gap-[12px] shrink-0 flex-wrap">
-              <div className="text-right">
-                <div className="text-[9px] text-[var(--text3)] mb-[4px] uppercase font-bold tracking-[0.5px]">Chi phí (VNĐ)</div>
-                <input
-                  inputMode="numeric"
-                  value={adCostStr}
-                  onChange={(e) => setAdCostStr(formatTypingGroupedInt(e.target.value))}
-                  placeholder="0"
-                  className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[12px] p-[7px_12px] outline-none w-[120px] text-right focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all"
-                />
-                <div className="text-[8px] text-[var(--text3)] mt-1">ad_cost</div>
-              </div>
-              <div className="text-right">
-                <div className="text-[9px] text-[var(--text3)] mb-[4px] uppercase font-bold tracking-[0.5px]">Số mess</div>
-                <input
-                  inputMode="numeric"
-                  value={messStr}
-                  onChange={(e) => setMessStr(formatTypingGroupedInt(e.target.value))}
-                  placeholder="0"
-                  className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[12px] p-[7px_12px] outline-none w-[100px] text-right focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all"
-                />
-                <div className="text-[8px] text-[var(--text3)] mt-1">mess_comment_count</div>
-              </div>
-            </div>
+            {reportUser?.role !== 'admin' && isNhanVienMktLineRole(viTriEffective) ? (
+              <p className="leading-snug">
+                MKT: trước <strong className="text-[var(--text2)]">10:00</strong> được nhập{' '}
+                <strong className="text-[var(--text2)]">hôm qua</strong>; sau đó chỉ <strong className="text-[var(--text2)]">hôm nay</strong>.
+              </p>
+            ) : null}
           </div>
         </div>
 
-        <div className="h-[1px] bg-[var(--border)] my-[12px]" />
+        <details className="mb-3 rounded-[8px] border border-[var(--Yb)] bg-[var(--bg3)] text-[var(--Y)] open:bg-[rgba(234,179,8,0.06)]">
+          <summary className="cursor-pointer select-none text-[10px] font-bold px-3 py-2 list-none flex items-center gap-2 [&::-webkit-details-marker]:hidden">
+            <span>⚠</span> Ghi chú DB / migration (admin)
+          </summary>
+          <div className="px-3 pb-2.5 text-[10px] leading-relaxed text-[var(--text2)] border-t border-[var(--border)] pt-2">
+            Nhiều dòng/ngày/email: <code className="text-[9px]">{REPORTS_TABLE}</code> +{' '}
+            <code className="text-[9px]">alter_detail_reports_page_multiline.sql</code>. Danh mục{' '}
+            <code className="text-[9px]">{PRODUCTS_TABLE}</code> / <code className="text-[9px]">{MARKETS_TABLE}</code> →{' '}
+            <code className="text-[9px]">product</code> / <code className="text-[9px]">market</code>. Cột{' '}
+            <code className="text-[9px]">page</code>, <code className="text-[9px]">ma_tkqc</code> —{' '}
+            <code className="text-[9px]">alter_detail_reports_ma_tkqc.sql</code>.
+          </div>
+        </details>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-[12px] gap-y-[14px]">
-          <div className="flex flex-col gap-[6px]">
-            <div className="text-[10px] font-bold tracking-[0.5px] uppercase text-[var(--text3)]">
-              Tổng data nhận → tong_data_nhan
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 p-4 bg-[var(--bg3)] border border-[var(--border)] rounded-[10px]">
+          <div className="space-y-3 min-w-0">
+            <div className="text-[9px] font-extrabold uppercase tracking-wider text-[var(--accent)] border-b border-[var(--border)] pb-1">
+              ① Tài khoản & Page
             </div>
+            <label className="block space-y-1">
+              <span className="text-[9px] text-[var(--text3)] uppercase font-bold">TKQC</span>
+              <input
+                value={maTkqcStr}
+                onChange={(e) => setMaTkqcStr(e.target.value)}
+                placeholder="VD: QC-A01"
+                className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[12px] p-2 outline-none focus:border-[var(--accent)]"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[9px] text-[var(--text3)] uppercase font-bold">Mã TK Ads</span>
+              <input
+                value={adAccount}
+                onChange={(e) => setAdAccount(e.target.value)}
+                placeholder="VD: TK-001"
+                className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[12px] p-2 outline-none focus:border-[var(--accent)]"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[9px] text-[var(--text3)] uppercase font-bold">Page</span>
+              <input
+                value={pageStr}
+                onChange={(e) => setPageStr(e.target.value)}
+                placeholder="Fanpage · kênh"
+                className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[12px] font-bold text-[var(--text)] p-2 outline-none focus:border-[var(--accent)]"
+              />
+            </label>
+          </div>
+          <div className="space-y-3 min-w-0">
+            <div className="text-[9px] font-extrabold uppercase tracking-wider text-[var(--accent)] border-b border-[var(--border)] pb-1">
+              ② Sản phẩm & thị trường
+            </div>
+            <label className="block space-y-1">
+              <span className="text-[9px] text-[var(--text3)] uppercase font-bold">Sản phẩm</span>
+              <select
+                value={productSelectOptions.some((o) => o.value === product) ? product : ''}
+                onChange={(e) => setProduct(e.target.value)}
+                className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[12px] font-bold text-[var(--text)] p-2 outline-none focus:border-[var(--accent)]"
+              >
+                <option value="">— Chọn —</option>
+                {productSelectOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[9px] text-[var(--text3)] uppercase font-bold">Thị trường</span>
+              <select
+                value={marketSelectOptions.some((o) => o.value === market) ? market : ''}
+                onChange={(e) => setMarket(e.target.value)}
+                className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[12px] font-bold text-[var(--text)] p-2 outline-none focus:border-[var(--accent)]"
+              >
+                <option value="">— Chọn —</option>
+                {marketSelectOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="space-y-3 min-w-0">
+            <div className="text-[9px] font-extrabold uppercase tracking-wider text-[var(--accent)] border-b border-[var(--border)] pb-1">
+              ③ Chi phí & tương tác
+            </div>
+            <label className="block space-y-1">
+              <span className="text-[9px] text-[var(--text3)] uppercase font-bold">Chi phí (VNĐ)</span>
+              <input
+                inputMode="numeric"
+                value={adCostStr}
+                onChange={(e) => setAdCostStr(formatTypingGroupedInt(e.target.value))}
+                placeholder="0"
+                className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[13px] p-2 text-right outline-none focus:border-[var(--accent)]"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[9px] text-[var(--text3)] uppercase font-bold">Số mess / comment</span>
+              <input
+                inputMode="numeric"
+                value={messStr}
+                onChange={(e) => setMessStr(formatTypingGroupedInt(e.target.value))}
+                placeholder="0"
+                className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[13px] p-2 text-right outline-none focus:border-[var(--accent)]"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 p-4 bg-[var(--bg3)] border border-[var(--border)] rounded-[10px]">
+          <div className="text-[9px] font-extrabold uppercase tracking-wider text-[var(--text3)] lg:col-span-3 border-b border-[var(--border)] pb-1 -mt-1 mb-1">
+            Kết quả & đơn hàng
+          </div>
+          <label className="flex flex-col gap-1.5 min-w-0">
+            <span className="text-[9px] font-bold uppercase text-[var(--text3)]">Tổng data nhận</span>
             <input
               inputMode="numeric"
               value={tongDataStr}
               onChange={(e) => setTongDataStr(formatTypingGroupedInt(e.target.value))}
               placeholder="0"
-              className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--text)] font-[var(--mono)] text-[13px] p-[10px_14px] outline-none focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all w-full"
+              className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[13px] p-2.5 outline-none focus:border-[var(--accent)] w-full"
             />
-          </div>
-          <div className="flex flex-col gap-[6px]">
-            <div className="text-[10px] font-bold tracking-[0.5px] uppercase text-[var(--text3)]">
-              Doanh số chốt (VNĐ) → revenue
-            </div>
+          </label>
+          <label className="flex flex-col gap-1.5 min-w-0">
+            <span className="text-[9px] font-bold uppercase text-[var(--text3)]">Doanh số chốt (VNĐ)</span>
             <input
               inputMode="numeric"
               value={revenueStr}
               onChange={(e) => setRevenueStr(formatTypingGroupedInt(e.target.value))}
               placeholder="0"
-              className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--text)] font-[var(--mono)] text-[13px] p-[10px_14px] outline-none focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all w-full"
+              className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[13px] p-2.5 outline-none focus:border-[var(--accent)] w-full"
             />
-          </div>
-          <div className="flex flex-col gap-[6px]">
-            <div className="text-[10px] font-bold tracking-[0.5px] uppercase text-[var(--text3)]">
-              Số đơn chốt → order_count
-            </div>
+          </label>
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <span className="text-[9px] font-bold uppercase text-[var(--text3)]">Số đơn chốt / TT</span>
             <input
               inputMode="numeric"
               value={orderStr}
               onChange={(e) => setOrderStr(formatTypingGroupedInt(e.target.value))}
               placeholder="0"
-              className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--text)] font-[var(--mono)] text-[13px] p-[10px_14px] outline-none focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all w-full"
+              className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[13px] p-2.5 outline-none focus:border-[var(--accent)] w-full"
             />
+            <span className="text-[8px] text-[var(--text3)] leading-tight">order_count — nút bên dưới chỉ cập nhật trường này</span>
           </div>
 
-          <div className="md:col-span-3 flex flex-col sm:flex-row gap-[12px] sm:items-end pt-[4px]">
-            <label className="flex flex-col gap-[6px] flex-1 min-w-0">
-              <span className="text-[10px] font-bold tracking-[0.5px] uppercase text-[var(--text3)]">
-                Số đơn thanh toán (TT) — <code className="text-[9px] normal-case">order_count</code>
-              </span>
-              <input
-                inputMode="numeric"
-                value={orderStr}
-                onChange={(e) => setOrderStr(formatTypingGroupedInt(e.target.value))}
-                placeholder="Trùng với số đơn chốt nếu cùng nghiệp vụ"
-                className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--text)] font-[var(--mono)] text-[13px] p-[10px_14px] outline-none focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all w-full"
-              />
-            </label>
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <span className="text-[9px] font-bold uppercase text-[var(--text3)]">Data chưa chốt</span>
+            <div className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[13px] p-2.5 w-full min-h-[42px] flex items-center">
+              {tongData > 0 || orders > 0 ? formatNumberDots(dataChuaChot, false) : '—'}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <span className="text-[9px] font-bold uppercase text-[var(--text3)]">Tỷ lệ chốt</span>
+            <div className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--G)] font-[var(--mono)] text-[13px] font-bold p-2.5 w-full min-h-[42px] flex items-center">
+              {tyLeChotPct != null && Number.isFinite(tyLeChotPct) ? `${tyLeChotPct.toFixed(1)}%` : '—'}
+            </div>
+          </div>
+          <div className="flex flex-col justify-end gap-2 min-w-0">
             <button
               type="button"
               onClick={() => void handleCapNhatSoDonTT()}
               disabled={syncing || saving || !reportUser?.email}
-              className="shrink-0 flex items-center justify-center gap-[8px] bg-[#3d8ef0] hover:bg-[#2e7dd1] disabled:opacity-50 text-white py-[11px] px-[18px] rounded-[10px] text-[13px] font-black shadow-lg shadow-[rgba(61,142,240,0.3)] transition-all whitespace-nowrap"
+              className="w-full flex items-center justify-center gap-2 bg-[#3d8ef0] hover:bg-[#2e7dd1] disabled:opacity-50 text-white py-2.5 px-3 rounded-[8px] text-[11px] font-black shadow-md shadow-[rgba(61,142,240,0.25)] transition-all"
             >
-              {syncing ? <Loader2 className="animate-spin" size={18} /> : <RefreshCw size={18} />}
-              Cập nhật Số đơn TT
+              {syncing ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+              Cập nhật số đơn TT
             </button>
           </div>
+
           {saveMsg && (
-            <div className="md:col-span-3 text-[11px] text-[var(--text2)] bg-[rgba(61,142,240,0.08)] border border-[rgba(61,142,240,0.2)] rounded-[8px] px-3 py-2">
+            <div className="lg:col-span-3 text-[11px] text-[var(--text2)] bg-[rgba(61,142,240,0.08)] border border-[rgba(61,142,240,0.2)] rounded-[8px] px-3 py-2">
               {saveMsg}
             </div>
           )}
           {!reportUser?.email && (
-            <div className="md:col-span-3 text-[10px] text-[var(--text3)]">
+            <div className="lg:col-span-3 text-[10px] text-[var(--text3)]">
               Đăng nhập qua CRM để đồng bộ (email nhân sự + ngày báo cáo).
             </div>
           )}
-          <div className="flex flex-col gap-[6px]">
-            <div className="text-[10px] font-bold tracking-[0.5px] uppercase text-[var(--text3)]">
-              Tổng Lead → tong_lead
-            </div>
-            <input
-              inputMode="numeric"
-              value={tongLeadStr}
-              onChange={(e) => setTongLeadStr(formatTypingGroupedInt(e.target.value))}
-              placeholder="0"
-              className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--text)] font-[var(--mono)] text-[13px] p-[10px_14px] outline-none focus:border-[var(--accent)] focus:bg-[var(--bg2)] transition-all w-full"
-            />
-          </div>
-          <div className="flex flex-col gap-[6px]">
-            <div className="text-[10px] font-bold tracking-[0.5px] uppercase text-[var(--text3)]">Số data chưa chốt</div>
-            <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--text)] font-[var(--mono)] text-[13px] p-[10px_14px] w-full">
-              {tongData > 0 || orders > 0 ? formatNumberDots(dataChuaChot, false) : '—'}
-            </div>
-            <div className="text-[8px] text-[var(--text3)]">max(0, tong_data_nhan − order_count)</div>
-          </div>
-          <div className="flex flex-col gap-[6px]">
-            <div className="text-[10px] font-bold tracking-[0.5px] uppercase text-[var(--text3)]">Tỷ lệ chốt</div>
-            <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[10px] text-[var(--G)] font-[var(--mono)] text-[13px] font-bold p-[10px_14px] w-full flex items-center">
-              {tyLeChotPct != null && Number.isFinite(tyLeChotPct) ? `${tyLeChotPct.toFixed(1)}%` : '—'}
-            </div>
-          </div>
         </div>
 
-        <div className="h-[1px] bg-[var(--border)] my-[12px]" />
-
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-[10px] mt-[12px]">
+        <div className="text-[9px] font-extrabold uppercase tracking-wider text-[var(--text3)] mb-2">Chỉ số nhanh</div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
           <div className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] p-[12px_14px]">
             <div className="text-[9px] text-[var(--text3)] mb-[5px] uppercase font-bold tracking-[0.5px]">Ads / Doanh số</div>
             <div className={`text-[16px] font-bold font-[var(--mono)] ${adsDsPct != null && adsDsPct <= 35 ? 'text-[var(--G)]' : 'text-[var(--text)]'}`}>

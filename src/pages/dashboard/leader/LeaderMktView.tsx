@@ -37,6 +37,8 @@ function monthBounds(ym: string): { start: string; end: string } {
 function isMktEmployee(viTri: string | null | undefined): boolean {
   const raw = (viTri || '').trim();
   if (!raw) return false;
+  const t = raw.toLowerCase();
+  if (t === 'nhân viên mkt') return true;
   const u = raw.toUpperCase();
   if (u === 'MKT' || u === 'MARKETING') return true;
   if (/\bMKT\b/.test(u)) return true;

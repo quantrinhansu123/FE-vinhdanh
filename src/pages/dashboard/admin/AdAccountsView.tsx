@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import type { CrmTeamRow, TkqcAdListRow } from '../../../types';
@@ -13,6 +13,7 @@ const TKQC_SELECT = `
   id_du_an,
   ma_tkqc,
   ten_tkqc,
+  ten_quang_cao,
   ten_pae,
   nen_tang,
   ngan_sach_phan_bo,
@@ -98,6 +99,7 @@ export const AdAccountsView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TkqcAdListRow | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadTeams = useCallback(async () => {
     const { data, error: qErr } = await supabase
@@ -134,6 +136,31 @@ export const AdAccountsView: React.FC = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const handleDelete = useCallback(
+    async (row: TkqcAdListRow) => {
+      const label = [row.ma_tkqc, row.ten_tkqc].filter(Boolean).join(' · ') || row.id;
+      if (!window.confirm(`Xoá tài khoản Ads «${label}»? Không hoàn tác.`)) return;
+      setDeletingId(row.id);
+      setError(null);
+      const closeForm = editing?.id === row.id;
+      try {
+        const { error: delErr } = await supabase.from(TKQC_TABLE).delete().eq('id', row.id);
+        if (delErr) throw delErr;
+        if (closeForm) {
+          setEditing(null);
+          setFormOpen(false);
+        }
+        await load();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Không xoá được.';
+        setError(msg);
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [load, editing?.id]
+  );
 
   const rowNeedsSetup = useCallback((row: TkqcAdListRow) => effectiveTkqcTrangThai(row) === 'thieu_thiet_lap', []);
 
@@ -191,6 +218,7 @@ export const AdAccountsView: React.FC = () => {
                 <tr className="border-b border-[var(--border)] text-[9px] font-bold tracking-[1px] uppercase text-[var(--text3)] text-left">
                   <th className="p-[12px_16px]">MÃ TK</th>
                   <th className="p-[12px_16px]">TÊN TK ADS</th>
+                  <th className="p-[12px_16px]">TÊN QUẢNG CÁO</th>
                   <th className="p-[12px_16px]">MARKETING</th>
                   <th className="p-[12px_16px]">TEAM/DỰ ÁN</th>
                   <th className="p-[12px_16px]">AGENCY</th>
@@ -247,6 +275,12 @@ export const AdAccountsView: React.FC = () => {
                         <td className="p-[12px_16px] font-extrabold text-[#fff] tracking-[0.2px]">
                           {row.ten_tkqc || '—'}
                         </td>
+                        <td
+                          className="p-[12px_16px] max-w-[180px] truncate text-[var(--text2)]"
+                          title={row.ten_quang_cao?.trim() || ''}
+                        >
+                          {row.ten_quang_cao?.trim() || '—'}
+                        </td>
                         <td className={`p-[12px_16px] ${!mkt ? 'text-[var(--text3)]' : ''}`}>{mktCell}</td>
                         <td className="p-[12px_16px] max-w-[200px] truncate" title={tp}>
                           {tp}
@@ -266,16 +300,32 @@ export const AdAccountsView: React.FC = () => {
                         <td className="p-[12px_16px]">{formatDateVn(row.ngay_bat_dau || row.du_an?.ngay_bat_dau)}</td>
                         <td className="p-[12px_16px]">{tkqcTrangThaiCell(row)}</td>
                         <td className="p-[12px_16px] text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditing(row);
-                              setFormOpen(true);
-                            }}
-                            className="bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] text-[10px] p-[4px_10px] rounded-[4px] border border-[rgba(255,255,255,0.08)] transition-all"
-                          >
-                            Sửa
-                          </button>
+                          <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditing(row);
+                                setFormOpen(true);
+                              }}
+                              disabled={deletingId === row.id}
+                              className="bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] text-[10px] p-[4px_10px] rounded-[4px] border border-[rgba(255,255,255,0.08)] transition-all disabled:opacity-40"
+                            >
+                              Sửa
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDelete(row)}
+                              disabled={deletingId !== null || loading}
+                              className="inline-flex items-center gap-1 bg-[rgba(224,61,61,0.1)] hover:bg-[rgba(224,61,61,0.18)] text-[var(--R)] text-[10px] font-bold p-[4px_10px] rounded-[4px] border border-[rgba(224,61,61,0.28)] transition-all disabled:opacity-40"
+                            >
+                              {deletingId === row.id ? (
+                                <Loader2 className="animate-spin shrink-0" size={12} />
+                              ) : (
+                                <Trash2 className="shrink-0" size={12} />
+                              )}
+                              Xoá
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

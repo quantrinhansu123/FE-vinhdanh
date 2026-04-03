@@ -4,6 +4,8 @@ import { LogOut } from 'lucide-react';
 
 interface SidebarProps {
   currentRole: Role;
+  /** Chỉ hiển thị nút chuyển khu vực tương ứng (theo vị trí / phân quyền) */
+  allowedRoles: Role[];
   onRoleChange: (role: Role) => void;
   currentView: ViewId;
   onViewChange: (view: ViewId) => void;
@@ -14,6 +16,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentRole,
+  allowedRoles,
   onRoleChange,
   currentView,
   onViewChange,
@@ -21,6 +24,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   navGroups,
   onLogout
 }) => {
+  const roleTabs = (['admin', 'leader', 'mkt'] as Role[]).filter((r) => allowedRoles.includes(r));
+  const gridCols =
+    roleTabs.length >= 3 ? 'grid-cols-3' : roleTabs.length === 2 ? 'grid-cols-2' : 'grid-cols-1';
+
   return (
     <aside className="w-[var(--sw)] shrink-0 bg-[var(--bg1)] border-r border-[var(--border)] flex flex-col overflow-hidden z-20">
       <div className="p-[14px_14px_10px] border-b border-[var(--border)] shrink-0">
@@ -38,21 +45,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
         
-        <div className="grid grid-cols-3 gap-[3px] bg-[var(--bg2)] rounded-[7px] p-[3px]">
-          {(['admin', 'leader', 'mkt'] as Role[]).map((role) => (
-            <button
-              key={role}
-              onClick={() => onRoleChange(role)}
-              className={`p-[5px_2px] border-0 rounded-[5px] cursor-pointer font-[var(--f)] text-[10px] font-bold tracking-[0.5px] text-center transition-all duration-150 ${
-                currentRole === role 
-                  ? 'bg-[var(--accent)] text-[#fff]' 
-                  : 'text-[var(--text3)] bg-transparent hover:bg-[var(--bg3)] hover:text-[var(--text)]'
-              }`}
-            >
-              {role.charAt(0).toUpperCase() + role.slice(1)}
-            </button>
-          ))}
-        </div>
+        {roleTabs.length > 0 && (
+          <div className={`grid ${gridCols} gap-[3px] bg-[var(--bg2)] rounded-[7px] p-[3px]`}>
+            {roleTabs.map((role) => (
+              <button
+                key={role}
+                type="button"
+                onClick={() => onRoleChange(role)}
+                className={`p-[5px_2px] border-0 rounded-[5px] cursor-pointer font-[var(--f)] text-[10px] font-bold tracking-[0.5px] text-center transition-all duration-150 ${
+                  currentRole === role
+                    ? 'bg-[var(--accent)] text-[#fff]'
+                    : 'text-[var(--text3)] bg-transparent hover:bg-[var(--bg3)] hover:text-[var(--text)]'
+                }`}
+              >
+                {role.charAt(0).toUpperCase() + role.slice(1)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto p-[10px_8px] custom-scrollbar dash-scrollbar">

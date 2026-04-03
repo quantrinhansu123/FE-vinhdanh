@@ -13,6 +13,7 @@ export const ADMIN_NAV: NavGroup[] = [
     label: 'Quản lý',
     items: [
       { id: 'projects', label: 'Dự án (Module 1)', icon: '📁' },
+      { id: 'project-qc-excel', label: 'Dữ liệu QC Excel', icon: '📊' },
       { id: 'teams', label: 'Team (Module 2)', icon: '👥' },
       { id: 'staff', label: 'Nhân sự (Module 3)', icon: '👤' },
       { id: 'ad-accounts', label: 'TK Ads (Module 4)', icon: '🎯' },
@@ -50,6 +51,7 @@ export const LEADER_NAV: NavGroup[] = [
     label: 'Quản lý',
     items: [
       { id: 'leader-mkt', label: 'Marketing', icon: '👤' },
+      { id: 'leader-tkqc', label: 'Quản lý TKQC', icon: '📣' },
       { id: 'leader-budget', label: 'Xin ngân sách', icon: '💰' },
       { id: 'kpi-target', label: 'KPI Mục tiêu', icon: '🎯' },
     ]
@@ -79,6 +81,7 @@ export const VIEW_TITLES: Record<string, string> = {
   'burn-detect': 'Phát hiện Đốt tiền',
   'alerts': 'Cảnh báo Hệ thống',
   'projects': 'Dự án (Module 1)',
+  'project-qc-excel': 'Dữ liệu QC Excel (dự án)',
   'teams': 'Team (Module 2)',
   'staff': 'Nhân sự (Module 3)',
   'ad-accounts': 'Tài khoản Ads (Module 4)',
@@ -93,6 +96,7 @@ export const VIEW_TITLES: Record<string, string> = {
   'leader-rank': 'Xếp hạng Marketing',
   'heatmap': 'Heatmap Ads/DT',
   'leader-mkt': 'Danh sách Marketing',
+  'leader-tkqc': 'Quản lý TKQC',
   'leader-budget': 'Xin Ngân sách',
   'kpi-target': 'KPI Mục tiêu',
   'mkt-dash': 'Dashboard Cá nhân',

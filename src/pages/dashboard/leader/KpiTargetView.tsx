@@ -627,7 +627,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                       <th className="p-[8px_10px] text-right">Lead mục tiêu</th>
                       <th className="p-[8px_10px] text-right">Đơn chốt mục tiêu</th>
                       <th className="p-[8px_10px] text-left">Cập nhật</th>
-                      <th className="p-[8px_10px] text-center">Chọn</th>
+                      <th className="p-[8px_10px] text-center">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody className="text-[11px] text-[var(--text2)]">
@@ -671,20 +671,32 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                               {r.updated_at ? new Date(r.updated_at).toLocaleString('vi-VN') : '—'}
                             </td>
                             <td className="p-[8px_10px] text-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setYm(r.nam_thang);
-                                  setFormOpen(true);
-                                }}
-                                className={`px-[8px] py-[4px] rounded-[6px] text-[10px] font-bold border ${
-                                  selected
-                                    ? 'bg-[rgba(61,142,240,0.2)] border-[rgba(61,142,240,0.45)] text-[#8fc6ff]'
-                                    : 'bg-[var(--bg3)] border-[var(--border)] text-[var(--text2)] hover:bg-[var(--bg4)]'
-                                }`}
-                              >
-                                {selected ? 'Đang chọn' : 'Chọn tháng'}
-                              </button>
+                              <div className="inline-flex items-center gap-[6px]">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setYm(r.nam_thang);
+                                    setFormOpen(true);
+                                  }}
+                                  className={`px-[8px] py-[4px] rounded-[6px] text-[10px] font-bold border ${
+                                    selected
+                                      ? 'bg-[rgba(61,142,240,0.2)] border-[rgba(61,142,240,0.45)] text-[#8fc6ff]'
+                                      : 'bg-[var(--bg3)] border-[var(--border)] text-[var(--text2)] hover:bg-[var(--bg4)]'
+                                  }`}
+                                >
+                                  {selected ? 'Đang chọn' : 'Chọn'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setYm(r.nam_thang);
+                                    setFormOpen(true);
+                                  }}
+                                  className="px-[8px] py-[4px] rounded-[6px] text-[10px] font-bold border border-[rgba(61,142,240,0.35)] bg-[rgba(61,142,240,0.14)] text-[#8fc6ff] hover:bg-[rgba(61,142,240,0.2)]"
+                                >
+                                  Sửa
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );

@@ -11,6 +11,7 @@ import { AdminDashboardView } from './admin/AdminDashboardView';
 import { BurnDetectionView } from './admin/BurnDetectionView';
 import { AlertsView } from './admin/AlertsView';
 import { ProjectsView } from './admin/ProjectsView';
+import { ProjectQcExcelView } from './admin/ProjectQcExcelView';
 import { TeamsView } from './admin/TeamsView';
 import { StaffView } from './admin/StaffView';
 import { AdAccountsView } from './admin/AdAccountsView';
@@ -55,6 +56,7 @@ const DashboardPage: React.FC = () => {
       case 'burn-detect': return <BurnDetectionView />;
       case 'alerts': return <AlertsView />;
       case 'projects': return <ProjectsView />;
+      case 'project-qc-excel': return <ProjectQcExcelView />;
       case 'teams': return <TeamsView />;
       case 'staff': return <StaffView />;
       case 'ad-accounts': return <AdAccountsView />;
@@ -84,9 +86,10 @@ const DashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="dash-theme flex h-screen w-full overflow-hidden">
-      <Sidebar 
-        currentRole={currentRole} 
+    <div className="dash-theme flex h-screen w-full overflow-hidden font-sans antialiased">
+      <Sidebar
+        allowedRoles={['admin', 'leader', 'mkt']}
+        currentRole={currentRole}
         onRoleChange={handleRoleChange}
         currentView={currentView}
         onViewChange={setCurrentView}

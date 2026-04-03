@@ -48,7 +48,7 @@ export function LeaderboardPage({
     'px-3 py-2 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-xl transition-all border border-white/10 backdrop-blur-md text-xs font-semibold flex items-center gap-1';
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center p-0 font-sans overflow-hidden relative">
+    <div className="min-h-screen w-full flex flex-col items-center p-0 font-sans antialiased overflow-hidden relative">
       <div
         className="absolute inset-0 -z-10"
         style={{

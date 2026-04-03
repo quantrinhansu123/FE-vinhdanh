@@ -15,6 +15,14 @@ const TRANG_THAI_OPTIONS = [
   { value: 'dot_tien', label: 'Đốt tiền' },
 ] as const;
 
+/** Vị trí cố định (dropdown) */
+const VI_TRI_OPTIONS = [
+  { value: 'Admin', label: 'Admin' },
+  { value: 'Quản lý dự án', label: 'Quản lý dự án' },
+  { value: 'Leader', label: 'Leader' },
+  { value: 'Nhân viên MKT', label: 'Nhân viên MKT' },
+] as const;
+
 const FIELD_CLASS =
   'w-full min-h-[38px] rounded-[6px] border border-[var(--border2)] bg-[var(--bg2)] text-[var(--text)] placeholder:text-[var(--text3)] text-[12px] px-3 py-2 outline-none transition-[border-color,box-shadow] focus:border-[var(--accent)] focus:shadow-[0_0_0_1px_rgba(61,142,240,0.28)] [color-scheme:dark]';
 
@@ -127,6 +135,11 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
     if (!t) return true;
     return crmTeams.some((row) => (row.ten_team || '').trim() === t);
   }, [team, crmTeams]);
+
+  const viTriInPreset = useMemo(
+    () => VI_TRI_OPTIONS.some((o) => o.value === viTri.trim()),
+    [viTri]
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -326,12 +339,25 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
 
             <label className="block space-y-1.5">
               <span className={LABEL_CLASS}>Vị trí</span>
-              <input
-                value={viTri}
-                onChange={(e) => setViTri(e.target.value)}
+              <select
+                value={viTriInPreset ? viTri.trim() : viTri.trim() ? `__legacy__:${viTri.trim()}` : ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.startsWith('__legacy__:')) setViTri(v.slice('__legacy__:'.length));
+                  else setViTri(v);
+                }}
                 className={FIELD_CLASS}
-                placeholder="VD: MKT, Leader, Designer"
-              />
+              >
+                <option value="">— Chọn vị trí —</option>
+                {!viTriInPreset && viTri.trim() ? (
+                  <option value={`__legacy__:${viTri.trim()}`}>{viTri.trim()} (giữ giá trị cũ)</option>
+                ) : null}
+                {VI_TRI_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <div className="flex items-start gap-[12px] sm:gap-[14px]">

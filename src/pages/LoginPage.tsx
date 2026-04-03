@@ -29,7 +29,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen w-full relative flex items-center justify-center px-4">
+    <div className="min-h-screen w-full relative flex items-center justify-center px-4 font-sans antialiased">
       <div
         className="absolute inset-0"
         style={{

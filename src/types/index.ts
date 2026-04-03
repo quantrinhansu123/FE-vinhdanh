@@ -74,6 +74,8 @@ export interface AuthUser {
   name: string;
   team: string;
   avatar_url: string | null;
+  /** Vị trí nhân sự (employees.vi_tri) — dùng cho rule báo cáo MKT */
+  vi_tri?: string | null;
 }
 
 export type TkqcAccountRow = {
@@ -175,6 +177,26 @@ export type MarketingChannelDetailRow = {
   ghi_chu: string | null;
 };
 
+/** Import Excel QC (Meta) — bảng public.du_an_qc_excel_rows */
+export type DuAnQcExcelRow = {
+  id: string;
+  du_an_id: string | null;
+  ten_tai_khoan: string | null;
+  ten_quang_cao: string | null;
+  ngay: string | null;
+  don_vi_tien_te: string | null;
+  so_tien_chi_tieu_vnd: number | null;
+  chi_phi_mua: number | null;
+  cpm: number | null;
+  ctr_tat_ca: string | null;
+  luot_tro_chuyen_tin_nhan: number | null;
+  cpc: number | null;
+  bao_cao_tu: string | null;
+  bao_cao_den: string | null;
+  source_file: string | null;
+  created_at: string | null;
+};
+
 export type DuAnRow = {
   id: string;
   ma_du_an: string | null;
@@ -263,6 +285,8 @@ export type TkqcRow = {
   id_du_an: string;
   ma_tkqc: string;
   ten_tkqc: string | null;
+  /** Tên quảng cáo (ad name) — cột ten_quang_cao */
+  ten_quang_cao?: string | null;
   ten_pae: string | null;
   nen_tang: string | null;
   ngan_sach_phan_bo: number | null;

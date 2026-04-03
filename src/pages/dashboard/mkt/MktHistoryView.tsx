@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, Download, Upload } from 'lucide-react';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import type { AuthUser, ReportRow } from '../../../types';
@@ -11,6 +11,7 @@ import {
   formatReportDateVi,
   formatCompactVnd,
 } from './mktDetailReportShared';
+import { downloadMktReportExcelTemplate, parseMktReportExcelFile } from './mktHistoryExcel';
 
 const PRODUCTS_TABLE = import.meta.env.VITE_SUPABASE_PRODUCTS_TABLE?.trim() || 'crm_products';
 const MARKETS_TABLE = import.meta.env.VITE_SUPABASE_MARKETS_TABLE?.trim() || 'crm_markets';
@@ -64,6 +65,9 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
   const [error, setError] = useState<string | null>(null);
   const [productOptions, setProductOptions] = useState<string[]>([]);
   const [marketOptions, setMarketOptions] = useState<string[]>([]);
+  const [excelBusy, setExcelBusy] = useState(false);
+  const [excelMsg, setExcelMsg] = useState<string | null>(null);
+  const excelInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,6 +197,71 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
     navigate(`${crmAdminPathForView('mkt-report')}?${q.toString()}`);
   };
 
+  const handleDownloadExcelTemplate = () => {
+    setExcelMsg(null);
+    downloadMktReportExcelTemplate();
+    setExcelMsg('Đã tải file mẫu. Xóa dòng ví dụ (dòng 2) rồi điền dữ liệu từ dòng 2 trở đi, giữ nguyên thứ tự cột A–L.');
+  };
+
+  const handleExcelFile = async (file: File | null) => {
+    setExcelMsg(null);
+    if (!file?.name) return;
+    if (!reportUser?.email?.trim()) {
+      window.alert('Cần đăng nhập để nhập Excel.');
+      return;
+    }
+    setExcelBusy(true);
+    try {
+      const { rows, errors } = await parseMktReportExcelFile(file);
+      if (errors.length) {
+        const head = errors
+          .slice(0, 12)
+          .map((e) => `Dòng ${e.row}: ${e.msg}`)
+          .join('\n');
+        window.alert(`Lỗi đọc file:\n${head}${errors.length > 12 ? `\n… +${errors.length - 12} lỗi` : ''}`);
+        return;
+      }
+      if (rows.length === 0) {
+        window.alert('Không có dòng dữ liệu để nhập.');
+        return;
+      }
+      if (!window.confirm(`Nhập ${rows.length} dòng báo cáo vào hệ thống với email ${reportUser.email}?`)) return;
+
+      const email = reportUser.email.trim().toLowerCase();
+      const name = (reportUser.name || email).trim() || email;
+      const team = reportUser.team?.trim() || null;
+
+      const payloads = rows.map((r) => ({
+        ...r,
+        name,
+        email,
+        team,
+      }));
+
+      const chunk = 80;
+      let inserted = 0;
+      for (let i = 0; i < payloads.length; i += chunk) {
+        const part = payloads.slice(i, i + chunk);
+        const { error: insErr } = await supabase.from(REPORTS_TABLE).insert(part);
+        if (insErr) {
+          console.error('mkt-history excel insert:', insErr);
+          window.alert(
+            `Lỗi khi ghi DB (đã nhập ${inserted}/${rows.length} dòng): ${insErr.message || 'Unknown'}`
+          );
+          await load();
+          return;
+        }
+        inserted += part.length;
+      }
+
+      setExcelMsg(`Đã nhập ${inserted} dòng từ Excel.`);
+      await load();
+    } finally {
+      setExcelBusy(false);
+      if (excelInputRef.current) excelInputRef.current.value = '';
+    }
+  };
+
   const summary = useMemo(() => {
     let n = rows.length;
     return n === 0 ? 'Chưa có dòng' : `${n} dòng trong khoảng đã lọc`;
@@ -267,7 +336,42 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
             >
               Nhập báo cáo
             </button>
+            <button
+              type="button"
+              onClick={() => handleDownloadExcelTemplate()}
+              disabled={excelBusy}
+              className="inline-flex items-center gap-1.5 rounded-[8px] border border-[var(--border)] bg-[var(--bg2)] text-[var(--text2)] px-3 py-2 text-[11px] font-bold hover:bg-[var(--bg4)] disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Tải mẫu Excel
+            </button>
+            <input
+              ref={excelInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={(e) => void handleExcelFile(e.target.files?.[0] ?? null)}
+            />
+            <button
+              type="button"
+              onClick={() => excelInputRef.current?.click()}
+              disabled={excelBusy || !reportUser?.email}
+              className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#10b981] text-[#34d399] px-3 py-2 text-[11px] font-bold hover:bg-[rgba(16,185,129,0.12)] disabled:opacity-50"
+            >
+              {excelBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              Tải lên Excel
+            </button>
           </div>
+          {excelMsg && (
+            <div className="text-[11px] text-[var(--G)] font-bold bg-[rgba(16,185,129,0.08)] border border-[rgba(16,185,129,0.25)] rounded-[8px] px-3 py-2">
+              {excelMsg}
+            </div>
+          )}
+          <p className="text-[10px] text-[var(--text3)] leading-relaxed max-w-[920px]">
+            Excel: cột A = ngày (yyyy-mm-dd), B = SP, C = TT, D = Page, E = TKQC, F = Mã TK, G–L = Chi phí, Mess, Data,
+            Doanh số, Đơn, Lead (số). Giữ đúng thứ tự như file mẫu. Khi tải lên, các dòng ghi với{' '}
+            <span className="text-[var(--text2)] font-bold">email đang đăng nhập</span>.
+          </p>
           {error && <div className="text-[11px] font-bold text-[var(--R)]">{error}</div>}
           {!reportUser?.email && (
             <div className="text-[10px] text-[var(--text3)]">Đăng nhập để xem lịch sử theo email nhân sự.</div>

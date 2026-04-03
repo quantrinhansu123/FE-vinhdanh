@@ -86,7 +86,7 @@ function AppRoutes() {
     const normalizedEmail = email.trim().toLowerCase();
     const { data, error } = await supabase
       .from(EMPLOYEES_TABLE)
-      .select('id, name, email, pass, team, avatar_url')
+      .select('id, name, email, pass, team, avatar_url, vi_tri')
       .ilike('email', normalizedEmail)
       .eq('pass', password)
       .limit(1);
@@ -95,7 +95,14 @@ function AppRoutes() {
       throw new Error(error.message || 'Không thể đăng nhập');
     }
 
-    const user = (data || [])[0] as { id?: string; email?: string; name?: string; team?: string; avatar_url?: string | null } | undefined;
+    const user = (data || [])[0] as {
+      id?: string;
+      email?: string;
+      name?: string;
+      team?: string;
+      avatar_url?: string | null;
+      vi_tri?: string | null;
+    } | undefined;
     if (!user?.email) {
       throw new Error('Sai email hoặc mật khẩu');
     }
@@ -107,6 +114,7 @@ function AppRoutes() {
       name: String(user.name || ''),
       team: String(user.team || ''),
       avatar_url: user.avatar_url || null,
+      vi_tri: user.vi_tri?.trim() ? user.vi_tri.trim() : null,
     };
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextUser));
     setAuthUser(nextUser);
@@ -121,7 +129,7 @@ function AppRoutes() {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-black text-white">
+      <div className="min-h-screen w-full flex items-center justify-center bg-black text-white font-sans antialiased">
         <Loader2 className="animate-spin" size={28} />
       </div>
     );

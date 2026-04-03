@@ -7,6 +7,7 @@ import type { AuthUser, Employee } from '../../../types';
 import { formatCompactVnd, formatKpiMoney, REPORTS_TABLE, toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
 const KPI_TEAM_TABLE =
   import.meta.env.VITE_SUPABASE_KPI_TEAM_MONTHLY_TARGETS_TABLE?.trim() || 'kpi_team_monthly_targets';
 const KPI_STAFF_TABLE =
@@ -51,6 +52,10 @@ function monthRangeLocal(ym: string): { start: string; end: string } {
 
 function isActiveStaff(tt: string | null | undefined): boolean {
   return tt === 'dang_lam' || tt === 'tam_nghi' || tt === 'dot_tien';
+}
+
+function safeTrim(v: unknown): string {
+  return String(v ?? '').trim();
 }
 
 function adsDtPct(ads: number, rev: number): number | null {
@@ -106,9 +111,11 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
   const [staffTargets, setStaffTargets] = useState<Map<string, number>>(() => new Map());
 
   const load = useCallback(async () => {
-    const teamRaw = viewer?.team?.trim() || '';
-    setTeamName(teamRaw);
+    const fallbackTeam = viewer?.team?.trim() || '';
+    const viewerName = viewer?.name?.trim() || '';
+
     if (!viewer?.email) {
+      setTeamName('');
       setError(null);
       setMembers([]);
       setByEmail(new Map());
@@ -121,6 +128,23 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     setLoading(true);
     setError(null);
 
+    let teamKeys: string[] = [];
+    if (viewerName) {
+      const teamRes = await supabase.from(TEAMS_TABLE).select('ten_team, leader').eq('leader', viewerName);
+      if (!teamRes.error) {
+        teamKeys = (teamRes.data || [])
+          .map((r) => safeTrim((r as { ten_team?: string }).ten_team))
+          .filter(Boolean);
+      } else {
+        console.warn('leader-dash crm_teams:', teamRes.error);
+      }
+    }
+    if (!teamKeys.length && fallbackTeam) teamKeys = [fallbackTeam];
+    teamKeys = [...new Set(teamKeys.map((x) => x.trim()).filter(Boolean))];
+
+    const teamLabel = teamKeys.length ? teamKeys.join(' · ') : fallbackTeam;
+    setTeamName(teamLabel);
+
     const empRes = await supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true });
     if (empRes.error) {
       console.error('leader-dash employees:', empRes.error);
@@ -130,8 +154,8 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     }
 
     const all = (empRes.data || []) as Employee[];
-    const teamList = teamRaw
-      ? all.filter((e) => e.team?.trim() === teamRaw && isActiveStaff(e.trang_thai))
+    const teamList = teamKeys.length
+      ? all.filter((e) => teamKeys.includes(safeTrim(e.team)) && isActiveStaff(e.trang_thai))
       : [];
 
     const emails = [
@@ -144,15 +168,17 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
 
     const idList = teamList.map((e) => e.id);
 
-    const [teamKpiRes, staffKpiRes, repRes] = await Promise.all([
-      teamRaw
+    const teamKpiPromise =
+      teamKeys.length > 0
         ? supabase
             .from(KPI_TEAM_TABLE)
-            .select('muc_tieu_doanh_thu_team')
+            .select('muc_tieu_doanh_thu_team, team_key')
             .eq('nam_thang', ym)
-            .eq('team_key', teamRaw)
-            .maybeSingle()
-        : Promise.resolve({ data: null as { muc_tieu_doanh_thu_team?: number } | null, error: null }),
+            .in('team_key', teamKeys)
+        : Promise.resolve({ data: [] as { muc_tieu_doanh_thu_team?: number; team_key?: string }[], error: null });
+
+    const [teamKpiRes, staffKpiRes, repRes] = await Promise.all([
+      teamKpiPromise,
       idList.length
         ? supabase.from(KPI_STAFF_TABLE).select('employee_id, muc_tieu_vnd').eq('nam_thang', ym).in('employee_id', idList)
         : Promise.resolve({ data: [] as { employee_id: string; muc_tieu_vnd: number }[], error: null }),
@@ -169,8 +195,12 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     if (teamKpiRes.error) {
       console.warn('leader-dash team kpi:', teamKpiRes.error);
     }
-    const tv = teamKpiRes.data?.muc_tieu_doanh_thu_team;
-    setTeamTargetVnd(tv != null && Number.isFinite(Number(tv)) ? Number(tv) : null);
+    let tvSum = 0;
+    for (const row of teamKpiRes.data || []) {
+      const v = Number((row as { muc_tieu_doanh_thu_team?: number }).muc_tieu_doanh_thu_team);
+      if (Number.isFinite(v) && v > 0) tvSum += v;
+    }
+    setTeamTargetVnd(tvSum > 0 ? tvSum : null);
 
     const stMap = new Map<string, number>();
     if (staffKpiRes.error) {
@@ -218,7 +248,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     setMembers(teamList);
     setByEmail(next);
     setLoading(false);
-  }, [viewer?.email, viewer?.team, start, end, ym]);
+  }, [viewer?.email, viewer?.team, viewer?.name, start, end, ym]);
 
   useEffect(() => {
     void load();
@@ -239,15 +269,23 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
   const tableRows = useMemo(() => {
     const rows = members.map((m) => {
       const a = aggForMember(m);
-      const pct = adsDtPct(a.ads, a.rev);
-      const lc = leadCount(a);
-      const chot = tyLeChot(a.tongData, a.tongLead, a.orders);
-      const aov = a.orders > 0 ? a.rev / a.orders : 0;
+      /** CP/DT = Chi phí / Doanh số */
+      const cpdt = adsDtPct(a.ads, a.rev);
+      /** Mess, Lead, Đơn, Chi phí, Doanh số từ detail_reports (CRM báo cáo / Ads) */
+      const mess = a.mess;
+      const lead = a.tongLead;
+      /** CPA = CP / Mess */
+      const cpa = mess > 0 ? a.ads / mess : 0;
+      /** CPL = CP / Lead */
+      const cpl = lead > 0 ? a.ads / lead : 0;
+      /** CPO = CP / Đơn */
       const cpo = a.orders > 0 ? a.ads / a.orders : 0;
-      const cpl = lc > 0 ? a.ads / lc : 0;
-      const cpa = a.tongData > 0 ? a.ads / a.tongData : 0;
+      /** %CR = Đơn / Lead */
+      const crPct = lead > 0 ? (a.orders / lead) * 100 : null;
+      /** AOV = DT / Đơn */
+      const aov = a.orders > 0 ? a.rev / a.orders : 0;
       const acctLine = [...a.accounts].slice(0, 6).join(', ') || '—';
-      return { m, a, pct, lc, chot, aov, cpo, cpl, cpa, acctLine };
+      return { m, a, cpdt, mess, lead, cpa, cpl, cpo, crPct, aov, acctLine };
     });
     rows.sort((x, y) => y.a.rev - x.a.rev);
     return rows;
@@ -279,7 +317,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
   );
 
   const needsAttention = useMemo(() => {
-    const hi = tableRows.filter((r) => r.pct != null && r.pct > 35);
+    const hi = tableRows.filter((r) => r.cpdt != null && r.cpdt > 35);
     return hi;
   }, [tableRows]);
 
@@ -307,8 +345,9 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
 
       {!teamName ? (
         <div className="mb-3 text-[11px] text-[var(--Y)] font-bold border border-[var(--Y)]/30 rounded-[8px] px-3 py-2 bg-[var(--Yd)]/15">
-          Tài khoản chưa có <code className="text-[10px]">team</code> — cập nhật tại{' '}
-          <code className="text-[10px]">/crm-admin/staff</code> hoặc đăng nhập nhân sự gán team.
+          Không xác định được team: cần <code className="text-[10px]">tên Leader</code> khớp cột leader trong{' '}
+          <code className="text-[10px]">crm_teams</code>, hoặc gán <code className="text-[10px]">team</code> trên nhân sự tại{' '}
+          <code className="text-[10px]">/crm-admin/staff</code>.
         </div>
       ) : null}
 
@@ -324,10 +363,10 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
         </button>
       </div>
 
-      {loading && members.length === 0 && !teamName ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-[var(--text3)]">
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-16 text-[var(--text3)] text-[13px] font-bold">
           <Loader2 className="animate-spin" size={22} />
-          Đang tải…
+          Đang tải dashboard…
         </div>
       ) : (
         <>
@@ -399,40 +438,42 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-[14px]">
-            <div className="lg:col-span-2">
-              <SectionCard
-                title={`📊 Hiệu suất Marketing — ${teamName || 'Team'}`}
-                subtitle={`Tháng ${monthLabel} · ${members.length} thành viên · ${REPORTS_TABLE}`}
-                bodyPadding={false}
-              >
-                <div className="overflow-x-auto">
-                  {tableRows.length === 0 ? (
-                    <div className="p-10 text-center text-[var(--text3)] text-[12px] font-bold">
-                      {teamName ? 'Không có nhân sự hoạt động trong team.' : 'Thiếu team trên tài khoản.'}
-                    </div>
-                  ) : (
-                    <table className="w-full border-collapse min-w-[1000px]">
+          <div className="flex flex-col gap-[14px]">
+            <SectionCard
+              title={`📊 Hiệu suất Marketing — ${teamName || 'Team'}`}
+              subtitle={`Tháng ${monthLabel} · ${members.length} thành viên · ${REPORTS_TABLE}`}
+              bodyPadding={false}
+            >
+              <div className="overflow-x-auto w-full">
+                {tableRows.length === 0 ? (
+                  <div className="p-10 text-center text-[var(--text3)] text-[12px] font-bold">
+                    {teamName
+                      ? 'Không có nhân sự hoạt động trong các team phụ trách (hoặc chưa có báo cáo tháng).'
+                      : 'Chưa gán team / leader — xem cảnh báo phía trên.'}
+                  </div>
+                ) : (
+                  <table className="w-full border-collapse min-w-[1120px]">
                       <thead>
                         <tr className="border-b border-[var(--border)] text-[9px] font-bold tracking-[1px] uppercase text-[var(--text3)] text-left">
                           <th className="p-[7px_12px] text-center">#</th>
                           <th className="p-[7px_12px]">Marketing</th>
                           <th className="p-[7px_12px] text-right">Doanh số</th>
-                          <th className="p-[7px_12px] text-right">Ads</th>
-                          <th className="p-[7px_12px] text-right">Ads/DT</th>
+                          <th className="p-[7px_12px] text-right">Chi Phí</th>
+                          <th className="p-[7px_12px] text-right">CP/DT</th>
+                          <th className="p-[7px_12px] text-right">Mess</th>
+                          <th className="p-[7px_12px] text-right">CPA</th>
                           <th className="p-[7px_12px] text-right">Lead</th>
-                          <th className="p-[7px_12px] text-right">Đơn</th>
-                          <th className="p-[7px_12px] text-right">Chốt%</th>
-                          <th className="p-[7px_12px] text-right">AOV</th>
-                          <th className="p-[7px_12px] text-right">CPO</th>
                           <th className="p-[7px_12px] text-right">CPL</th>
-                          <th className="p-[7px_12px] text-right">$/Data</th>
+                          <th className="p-[7px_12px] text-right">Đơn</th>
+                          <th className="p-[7px_12px] text-right">CPO</th>
+                          <th className="p-[7px_12px] text-right">%CR</th>
+                          <th className="p-[7px_12px] text-right">AOV</th>
                         </tr>
                       </thead>
                       <tbody className="text-[11.5px] text-[var(--text2)]">
                         {tableRows.map((row, idx) => {
-                          const { m, a, pct, lc, chot, aov, cpo, cpl, cpa, acctLine } = row;
-                          const critical = pct != null && pct > 45;
+                          const { m, a, cpdt, mess, lead, cpa, cpl, cpo, crPct, aov, acctLine } = row;
+                          const critical = cpdt != null && cpdt > 45;
                           const rankDisplay =
                             idx === 0 && a.rev > 0 ? (
                               <span className="font-[var(--mono)] text-[var(--gold)] font-bold">1</span>
@@ -441,7 +482,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                             ) : (
                               <span className="font-[var(--mono)] text-[var(--text3)] font-bold">{idx + 1}</span>
                             );
-                          const heat = pct != null ? heatBadgeClass(pct) : null;
+                          const heat = cpdt != null ? heatBadgeClass(cpdt) : null;
                           const trCls = critical
                             ? 'bg-[rgba(224,61,61,0.05)] border-b border-[rgba(224,61,61,0.1)] hover:bg-[rgba(224,61,61,0.08)]'
                             : 'border-b border-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.02)]';
@@ -463,26 +504,26 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                                   '—'
                                 )}
                               </td>
-                              <td className="p-[9px_12px] text-right">{lc > 0 ? lc.toLocaleString('vi-VN') : '—'}</td>
-                              <td className="p-[9px_12px] text-right">{a.orders > 0 ? a.orders.toLocaleString('vi-VN') : '—'}</td>
-                              <td className={`p-[9px_12px] text-right ${chot != null && chot >= 20 ? 'text-[var(--G)]' : ''}`}>
-                                {chot != null ? `${chot.toFixed(1)}%` : '—'}
-                              </td>
-                              <td className="p-[9px_12px] text-right">{aov > 0 ? formatKpiMoney(aov) : '—'}</td>
-                              <td className="p-[9px_12px] text-right">{cpo > 0 ? formatCompactVnd(cpo) : '—'}</td>
-                              <td className="p-[9px_12px] text-right">{cpl > 0 ? formatCompactVnd(cpl) : '—'}</td>
+                              <td className="p-[9px_12px] text-right">{mess > 0 ? Math.round(mess).toLocaleString('vi-VN') : '—'}</td>
                               <td className="p-[9px_12px] text-right">{cpa > 0 ? formatCompactVnd(cpa) : '—'}</td>
+                              <td className="p-[9px_12px] text-right">{lead > 0 ? Math.round(lead).toLocaleString('vi-VN') : '—'}</td>
+                              <td className="p-[9px_12px] text-right">{cpl > 0 ? formatCompactVnd(cpl) : '—'}</td>
+                              <td className="p-[9px_12px] text-right">{a.orders > 0 ? a.orders.toLocaleString('vi-VN') : '—'}</td>
+                              <td className="p-[9px_12px] text-right">{cpo > 0 ? formatCompactVnd(cpo) : '—'}</td>
+                              <td className={`p-[9px_12px] text-right ${crPct != null && crPct >= 20 ? 'text-[var(--G)]' : ''}`}>
+                                {crPct != null ? `${crPct.toFixed(1)}%` : '—'}
+                              </td>
+                              <td className="p-[9px_12px] text-right">{aov > 0 ? formatCompactVnd(aov) : '—'}</td>
                             </tr>
                           );
                         })}
                       </tbody>
-                    </table>
-                  )}
-                </div>
-              </SectionCard>
-            </div>
-            <div>
-              <SectionCard title="🎯 Tiến độ KPI tháng" subtitle={`${KPI_STAFF_TABLE} · ${ym}`}>
+                  </table>
+                )}
+              </div>
+            </SectionCard>
+
+            <SectionCard title="🎯 Tiến độ KPI tháng" subtitle={`${KPI_STAFF_TABLE} · ${ym}`}>
                 {tableRows.length === 0 ? (
                   <div className="text-[11px] text-[var(--text3)] py-4">Chưa có nhân sự để hiển thị KPI.</div>
                 ) : (
@@ -503,8 +544,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                     );
                   })
                 )}
-              </SectionCard>
-            </div>
+            </SectionCard>
           </div>
         </>
       )}

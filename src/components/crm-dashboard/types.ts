@@ -1,9 +1,9 @@
 export type Role = 'admin' | 'leader' | 'mkt';
 
 export type ViewId = 
-  | 'admin-dash' | 'burn-detect' | 'alerts' | 'projects' | 'teams' | 'staff' 
+  | 'admin-dash' | 'burn-detect' | 'alerts' | 'projects' | 'project-qc-excel' | 'teams' | 'staff' 
   | 'ad-accounts' | 'agencies' | 'products' | 'markets' | 'budget' | 'reconcile' | 'admin-ranking' | 'compare'
-  | 'leader-dash' | 'leader-rank' | 'heatmap' | 'leader-mkt' | 'leader-budget' | 'kpi-target'
+  | 'leader-dash' | 'leader-rank' | 'heatmap' | 'leader-mkt' | 'leader-tkqc' | 'leader-budget' | 'kpi-target'
   | 'mkt-dash' | 'mkt-report' | 'mkt-bill' | 'mkt-history' | 'mkt-accounts';
 
 export interface NavItem {

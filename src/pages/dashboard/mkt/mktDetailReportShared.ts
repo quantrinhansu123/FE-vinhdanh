@@ -9,6 +9,12 @@ export function toLocalYyyyMmDd(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Ngày hôm qua theo lịch local (yyyy-mm-dd) */
+export function localYesterdayYyyyMmDd(now: Date = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  return toLocalYyyyMmDd(d);
+}
+
 /** dd/mm/yyyy từ chuỗi yyyy-mm-dd */
 export function formatReportDateVi(isoDate: string): string {
   const s = isoDate?.slice(0, 10);
