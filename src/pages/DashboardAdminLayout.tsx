@@ -156,7 +156,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'mkt-dash': return <MktDashboardView reportUser={reportUser ?? null} />;
       case 'mkt-report': return <MktReportView reportUser={reportUser} />;
       case 'mkt-bill': return <MktBillView />;
-      case 'mkt-history': return <MktHistoryView reportUser={reportUser} />;
+      case 'mkt-history': return <MktHistoryView reportUser={reportUser} employees={employees} />;
       case 'mkt-accounts': return <MktAccountsView reportUser={reportUser} />;
 
       default:

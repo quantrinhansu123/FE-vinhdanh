@@ -86,7 +86,7 @@ function AppRoutes() {
     const normalizedEmail = email.trim().toLowerCase();
     const { data, error } = await supabase
       .from(EMPLOYEES_TABLE)
-      .select('id, name, email, pass, team, avatar_url, vi_tri')
+      .select('id, name, email, pass, team, avatar_url, vi_tri, ma_ns')
       .ilike('email', normalizedEmail)
       .eq('pass', password)
       .limit(1);
@@ -102,6 +102,7 @@ function AppRoutes() {
       team?: string;
       avatar_url?: string | null;
       vi_tri?: string | null;
+      ma_ns?: string | null;
     } | undefined;
     if (!user?.email) {
       throw new Error('Sai email hoặc mật khẩu');
@@ -115,6 +116,7 @@ function AppRoutes() {
       team: String(user.team || ''),
       avatar_url: user.avatar_url || null,
       vi_tri: user.vi_tri?.trim() ? user.vi_tri.trim() : null,
+      ma_ns: user.ma_ns?.trim() ? user.ma_ns.trim() : null,
     };
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextUser));
     setAuthUser(nextUser);

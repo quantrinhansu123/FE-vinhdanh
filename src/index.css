@@ -144,6 +144,21 @@ optgroup {
   color: var(--text);
 }
 
+/* Module 3 — /crm-admin/staff: Roboto rõ ràng (bảng / control kế thừa) */
+.crm-staff-module {
+  font-family: "Roboto", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.crm-staff-module table,
+.crm-staff-module th,
+.crm-staff-module td,
+.crm-staff-module button,
+.crm-staff-module input,
+.crm-staff-module select {
+  font-family: inherit;
+}
+
 /* Modal Thêm/Sửa dự án (portal ra body): thanh cuộn + option select khớp nền tối */
 .project-form-modal-scroll {
   scrollbar-width: thin;
@@ -291,4 +306,303 @@ optgroup {
   .dash-fade-up {
     animation: dash-fadeUp 0.3s ease both;
   }
+}
+
+/* Leader dashboard (/crm-admin/leader-dash) — Obsidian / Material palette từ mock HTML */
+.leader-dash-obsidian {
+  font-family: "Inter", "Roboto", sans-serif;
+  --ld-background: #070d1f;
+  --ld-surface-container-low: #0c1326;
+  --ld-surface-container: #11192e;
+  --ld-surface-container-high: #171f36;
+  --ld-surface-container-highest: #1c253e;
+  --ld-surface-bright: #222b47;
+  --ld-on-surface: #dfe4fe;
+  --ld-on-surface-variant: #a5aac2;
+  --ld-primary: #3bbffa;
+  --ld-primary-container: #22b1ec;
+  --ld-secondary: #69f6b8;
+  --ld-tertiary: #ffb148;
+  --ld-error: #ff716c;
+  --ld-outline-variant: #41475b;
+  --ld-secondary-container: #006c49;
+  --ld-tertiary-container: #f8a010;
+  --ld-error-container: #9f0519;
+  --ld-on-primary-container: #002b3d;
+  --ld-on-primary: #00374d;
+  --ld-primary-dim: #05a9e3;
+  --ld-on-error-container: #ffa8a3;
+}
+
+.leader-dash-obsidian .leader-dash-label {
+  font-family: "Manrope", "Inter", sans-serif;
+}
+
+.leader-dash-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.leader-dash-no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Leader budget / Obsidian — viền & thanh cuộn khớp mock Quản lý Ngân sách */
+.leader-dash-obsidian .ld-ghost-border {
+  outline: 1px solid rgba(65, 71, 91, 0.2);
+}
+
+.leader-dash-obsidian .ld-glass-chip {
+  background: rgba(34, 43, 71, 0.4);
+  backdrop-filter: blur(20px);
+}
+
+.leader-obsidian-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.leader-obsidian-scrollbar::-webkit-scrollbar-track {
+  background: var(--ld-background);
+}
+
+.leader-obsidian-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--ld-surface-container-highest);
+  border-radius: 10px;
+}
+
+.leader-obsidian-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ld-surface-container-highest) var(--ld-background);
+}
+
+/* Heatmap Ads/DT — ô bảng hover giống mock Obsidian */
+.leader-dash-obsidian.heatmap-obsidian .heatmap-cell {
+  transition: transform 0.2s ease;
+}
+.leader-dash-obsidian.heatmap-obsidian .heatmap-cell:hover {
+  transform: scale(1.05);
+  z-index: 10;
+  position: relative;
+}
+
+/* /crm-admin/ad-accounts — Agency Control Center (Curator cyan glass UI) */
+.acc-cc {
+  --acc-bg: #10141a;
+  --acc-surface-low: #181c22;
+  --acc-on-surface: #dfe2eb;
+  --acc-on-variant: #bac9cc;
+  --acc-primary-container: #00e5ff;
+  --acc-error: #ffb4ab;
+}
+
+.acc-cc .acc-cc-glass {
+  background: rgba(16, 20, 26, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.acc-cc .acc-cc-glow-cyan {
+  box-shadow: 0 0 20px -5px rgba(0, 229, 255, 0.15);
+}
+
+.acc-cc-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.acc-cc-scroll::-webkit-scrollbar-track {
+  background: #10141a;
+}
+
+.acc-cc-scroll::-webkit-scrollbar-thumb {
+  background: #31353c;
+  border-radius: 10px;
+}
+
+.acc-cc-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #31353c #10141a;
+}
+
+/* /crm-admin/products — Product Management (obsidian / sky accent) */
+.prod-mgmt-cc {
+  --pm-bg: #070d1f;
+  --pm-surface: #11192e;
+  --pm-low: #0c1326;
+  --pm-high: #171f36;
+  --pm-highest: #1c253e;
+}
+
+.prod-mgmt-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.prod-mgmt-scroll::-webkit-scrollbar-track {
+  background: #070d1f;
+}
+
+.prod-mgmt-scroll::-webkit-scrollbar-thumb {
+  background: #1c253e;
+  border-radius: 10px;
+}
+
+.prod-mgmt-scroll::-webkit-scrollbar-thumb:hover {
+  background: #3bbffa;
+}
+
+.prod-mgmt-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #1c253e #070d1f;
+}
+
+/* /crm-admin/staff — Curator CRM Team Overview (mock cyan / slate) */
+.staff-curator-crm {
+  font-family: "Inter", "Roboto", sans-serif;
+  --cs-bg: #10141a;
+  --cs-surface: #1c2026;
+  --cs-surface-low: #181c22;
+  --cs-surface-high: #262a31;
+  --cs-surface-highest: #31353c;
+  --cs-on-surface: #dfe2eb;
+  --cs-on-variant: #bac9cc;
+  --cs-primary: #c3f5ff;
+  --cs-primary-container: #00e5ff;
+  --cs-on-primary: #00363d;
+  --cs-cyan: #22d3ee;
+  --cs-error: #ffb4ab;
+  --cs-outline: rgba(255, 255, 255, 0.05);
+}
+
+.staff-curator-crm .staff-curator-headline {
+  font-family: "Manrope", "Inter", sans-serif;
+}
+
+.staff-curator-crm .staff-signature-gradient {
+  background: linear-gradient(135deg, #c3f5ff 0%, #00e5ff 100%);
+}
+
+.staff-curator-crm-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.staff-curator-crm-scroll::-webkit-scrollbar-track {
+  background: var(--cs-bg);
+}
+
+.staff-curator-crm-scroll::-webkit-scrollbar-thumb {
+  background: var(--cs-surface-highest);
+  border-radius: 10px;
+}
+
+.staff-curator-crm-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--cs-surface-highest) var(--cs-bg);
+}
+
+/* /crm-admin/staff — Obsidian Flux HRM (Module 3) */
+.staff-hrm-flux {
+  font-family: "Inter", "Roboto", sans-serif;
+  --hrm-bg: #10141a;
+  --hrm-surface: #1c2026;
+  --hrm-surface-low: #181c22;
+  --hrm-surface-lowest: #0a0e14;
+  --hrm-surface-high: #262a31;
+  --hrm-surface-highest: #31353c;
+  --hrm-surface-variant: #31353c;
+  --hrm-on-surface: #dfe2eb;
+  --hrm-on-variant: #bac9cc;
+  --hrm-primary: #c3f5ff;
+  --hrm-primary-container: #00e5ff;
+  --hrm-on-primary: #00363d;
+  --hrm-on-primary-container: #00626e;
+  --hrm-primary-dim: #00daf3;
+  --hrm-tertiary-container: #abd5ff;
+  --hrm-on-tertiary-container: #005d92;
+  --hrm-error: #ffb4ab;
+  --hrm-outline-variant: #3b494c;
+}
+
+.staff-hrm-flux .staff-hrm-headline {
+  font-family: "Manrope", "Inter", sans-serif;
+}
+
+.staff-hrm-flux-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.staff-hrm-flux-scroll::-webkit-scrollbar-track {
+  background: var(--hrm-bg);
+}
+
+.staff-hrm-flux-scroll::-webkit-scrollbar-thumb {
+  background: var(--hrm-outline-variant);
+  border-radius: 10px;
+}
+
+.staff-hrm-flux-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hrm-outline-variant) var(--hrm-bg);
+}
+
+/* /crm-admin/markets — Obsidian Flux Market Management */
+.flux-market-cc {
+  --fm-bg: #10141a;
+  --fm-low: #181c22;
+  --fm-container: #1c2026;
+  --fm-high: #262a31;
+  --fm-highest: #31353c;
+  --fm-on: #dfe2eb;
+  --fm-on-variant: #bac9cc;
+  --fm-primary: #c3f5ff;
+  --fm-primary-dim: #00daf3;
+  --fm-primary-container: #00e5ff;
+  --fm-on-primary: #00363d;
+  --fm-on-primary-container: #00626e;
+}
+
+.flux-market-cc .flux-market-glass {
+  background: rgba(38, 42, 49, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.flux-market-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.flux-market-scroll::-webkit-scrollbar-track {
+  background: #10141a;
+}
+
+.flux-market-scroll::-webkit-scrollbar-thumb {
+  background: #31353c;
+  border-radius: 10px;
+}
+
+.flux-market-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #31353c #10141a;
+}
+
+/* /crm-admin/agencies — Obsidian Prism Agency Management */
+.ag-prism-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ag-prism-scroll::-webkit-scrollbar-track {
+  background: #070d1f;
+}
+
+.ag-prism-scroll::-webkit-scrollbar-thumb {
+  background: #1c253e;
+  border-radius: 10px;
+}
+
+.ag-prism-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #1c253e #070d1f;
 }

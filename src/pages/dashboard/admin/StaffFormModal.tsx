@@ -241,7 +241,7 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
   if (!open) return null;
 
   return createPortal(
-    <div className="dash-theme project-form-modal-root fixed inset-0 z-[10050] !bg-transparent font-[family-name:var(--f)]">
+    <div className="dash-theme crm-staff-module project-form-modal-root fixed inset-0 z-[10050] !bg-transparent font-[family-name:var(--f)]">
       <div className="absolute inset-0 z-0 bg-black/60 backdrop-blur-[3px]" aria-hidden onMouseDown={onClose} />
       <div className="pointer-events-none relative z-[1] flex min-h-[100dvh] w-full items-center justify-center p-4 sm:p-6">
         <div
@@ -274,7 +274,7 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-[10px]">
               <label className="block space-y-1.5">
-                <span className={LABEL_CLASS}>Mã NS</span>
+                <span className={LABEL_CLASS}>Mã NS (= Mã TK Ads báo cáo MKT)</span>
                 <input value={maNs} onChange={(e) => setMaNs(e.target.value)} className={FIELD_CLASS} placeholder="VD: MK-001" />
               </label>
               <label className="block space-y-1.5">

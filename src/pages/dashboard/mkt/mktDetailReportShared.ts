@@ -77,3 +77,40 @@ export function formatCompactVnd(n: number | null | undefined): string {
   if (abs >= 1_000) return `${Math.round(x / 1_000)}k`;
   return `${Math.round(x)}`;
 }
+
+/**
+ * Từ Page / tên quảng cáo dạng "[HaiLe] [X9000] - 28/03 - Pur - …" → "HaiLe" (nội dung trong [...] đầu tiên).
+ */
+export function extractMaNvFromBracketPage(text: string | null | undefined): string | null {
+  const t = (text || '').trim();
+  if (!t) return null;
+  const m = t.match(/\[([^\]]+)\]/);
+  if (!m) return null;
+  const inner = m[1].trim();
+  return inner || null;
+}
+
+/** Nhân viên khớp khi so sánh nội dung […] với employees.ma_ns (không phân biệt hoa thường). */
+export type MaNsLookupMatch = { id: string; name: string; ma_ns: string };
+
+export function buildMaNsLookup(
+  rows: { id: string; name?: string; ma_ns?: string | null }[]
+): Map<string, MaNsLookupMatch> {
+  const m = new Map<string, MaNsLookupMatch>();
+  for (const r of rows) {
+    const raw = r.ma_ns?.trim();
+    if (!raw) continue;
+    m.set(raw.toLowerCase(), { id: r.id, name: (r.name || '').trim() || '—', ma_ns: raw });
+  }
+  return m;
+}
+
+/** Khớp chuỗi trong ngoặc (vd. từ Page) với map ma_ns. */
+export function matchEmployeeByBracketTag(
+  tag: string | null | undefined,
+  lookup: Map<string, MaNsLookupMatch>
+): MaNsLookupMatch | null {
+  const t = tag?.trim();
+  if (!t) return null;
+  return lookup.get(t.toLowerCase()) ?? null;
+}

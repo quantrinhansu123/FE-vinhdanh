@@ -76,6 +76,8 @@ export interface AuthUser {
   avatar_url: string | null;
   /** Vị trí nhân sự (employees.vi_tri) — dùng cho rule báo cáo MKT */
   vi_tri?: string | null;
+  /** Mã NS (employees.ma_ns) — dùng làm Mã TK Ads trên form báo cáo MKT */
+  ma_ns?: string | null;
 }
 
 export type TkqcAccountRow = {
@@ -104,6 +106,17 @@ export type BudgetRequestRow = {
   tkqc_id?: string | null;
   created_at?: string;
   updated_at?: string;
+  /** Form mở rộng — alter_budget_requests_extended_form.sql */
+  id_du_an?: string | null;
+  agency_id?: string | null;
+  ngan_hang?: string | null;
+  so_tai_khoan?: string | null;
+  chu_tai_khoan?: string | null;
+  loai_tien?: string | null;
+  hang_muc_chi_phi?: string | null;
+  noi_dung_chuyen_khoan?: string | null;
+  muc_dich_chi_tiet?: string | null;
+  chung_tu_urls?: string[] | null;
   tkqc_accounts?: {
     id: string;
     don_vi: string | null;
@@ -117,6 +130,8 @@ export type BudgetRequestRow = {
     ten_pae: string | null;
     du_an?: { ten_du_an: string; don_vi: string | null } | null;
   } | null;
+  du_an?: { id: string; ten_du_an: string; ma_du_an: string | null; don_vi: string | null } | null;
+  crm_agencies?: { id: string; ten_agency: string } | null;
 };
 
 /** Leader KPI mục tiêu tháng — bảng kpi_team_monthly_targets */

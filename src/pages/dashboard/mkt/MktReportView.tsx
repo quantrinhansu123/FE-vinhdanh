@@ -100,9 +100,16 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
   /** Tick mỗi phút để khi qua 10h vẫn khóa nhập ngày hôm qua */
   const [timeTick, setTimeTick] = useState(0);
   const [fetchedViTri, setFetchedViTri] = useState<string | null>(null);
+  const [fetchedMaNs, setFetchedMaNs] = useState<string | null>(null);
 
   const viTriEffective =
     reportUser?.vi_tri?.trim() || (fetchedViTri?.trim() ? fetchedViTri.trim() : null);
+
+  /** Mã TK Ads = Mã NS (employees.ma_ns) */
+  const defaultAdAccountFromProfile = useMemo(
+    () => (reportUser?.ma_ns?.trim() || fetchedMaNs?.trim() || '').trim(),
+    [reportUser?.ma_ns, fetchedMaNs]
+  );
 
   useEffect(() => {
     if (!saveMsg) return;
@@ -111,23 +118,46 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
   }, [saveMsg]);
 
   useEffect(() => {
+    setFetchedViTri(null);
+    setFetchedMaNs(null);
+  }, [reportUser?.id]);
+
+  useEffect(() => {
     if (!reportUser?.id?.trim()) return;
-    if (reportUser.vi_tri != null && String(reportUser.vi_tri).trim() !== '') return;
+    const needViTri = reportUser.vi_tri == null || String(reportUser.vi_tri).trim() === '';
+    const needMaNs = !String(reportUser.ma_ns ?? '').trim();
+    if (!needViTri && !needMaNs) return;
     let cancelled = false;
     void (async () => {
       const { data, error } = await supabase
         .from(EMPLOYEES_TABLE)
-        .select('vi_tri')
+        .select('vi_tri, ma_ns')
         .eq('id', reportUser.id.trim())
         .maybeSingle();
       if (cancelled || error) return;
-      const vt = (data as { vi_tri?: string | null } | null)?.vi_tri;
-      setFetchedViTri(vt?.trim() ? vt.trim() : null);
+      const row = data as { vi_tri?: string | null; ma_ns?: string | null } | null;
+      if (needViTri) {
+        const vt = row?.vi_tri;
+        setFetchedViTri(vt?.trim() ? vt.trim() : null);
+      }
+      if (needMaNs) {
+        const mn = row?.ma_ns;
+        setFetchedMaNs(mn?.trim() ? mn.trim() : null);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [reportUser?.id, reportUser?.vi_tri]);
+  }, [reportUser?.id, reportUser?.vi_tri, reportUser?.ma_ns]);
+
+  /** Khi có Mã NS sau fetch, điền Mã TK Ads (dòng mới) nếu ô đang trống */
+  useEffect(() => {
+    if (draftLineId) return;
+    if (reportId) return;
+    const d = defaultAdAccountFromProfile.trim();
+    if (!d) return;
+    setAdAccount((prev) => (prev.trim() ? prev : d));
+  }, [draftLineId, reportId, defaultAdAccountFromProfile]);
 
   useEffect(() => {
     if (!reportUser?.email || reportUser.role === 'admin' || !isNhanVienMktLineRole(viTriEffective)) return;
@@ -214,11 +244,12 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
     return opts;
   }, [catalogMarkets, market]);
 
-  const applyRow = useCallback((row: ReportRow | null) => {
+  const applyRow = useCallback(
+    (row: ReportRow | null) => {
     if (!row) {
       setReportId(null);
       setUpdatedAt(null);
-      setAdAccount('');
+      setAdAccount(defaultAdAccountFromProfile);
       setMaTkqcStr('');
       setPageStr('');
       setProduct('');
@@ -242,7 +273,9 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
     setTongDataStr(formatIntVi(row.tong_data_nhan));
     setRevenueStr(formatIntVi(row.revenue));
     setOrderStr(formatIntVi(row.order_count));
-  }, []);
+  },
+    [defaultAdAccountFromProfile]
+  );
 
   useLayoutEffect(() => {
     const d = searchParams.get('date')?.trim();
@@ -649,11 +682,11 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[9px] text-[var(--text3)] uppercase font-bold">Mã TK Ads</span>
+              <span className="text-[9px] text-[var(--text3)] uppercase font-bold">Mã TK Ads (= Mã NS)</span>
               <input
                 value={adAccount}
                 onChange={(e) => setAdAccount(e.target.value)}
-                placeholder="VD: TK-001"
+                placeholder="Theo Mã NS nhân sự"
                 className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--text)] font-[var(--mono)] text-[12px] p-2 outline-none focus:border-[var(--accent)]"
               />
             </label>

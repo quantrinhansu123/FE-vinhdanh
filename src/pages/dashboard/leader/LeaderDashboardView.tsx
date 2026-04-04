@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
-import { KpiCard } from '../../../components/crm-dashboard/atoms/KpiCard';
-import { SectionCard, ProgressRow } from '../../../components/crm-dashboard/atoms/SharedAtoms';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../api/supabase';
 import type { AuthUser, Employee } from '../../../types';
+import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { formatCompactVnd, formatKpiMoney, REPORTS_TABLE, toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
@@ -13,7 +13,10 @@ const KPI_TEAM_TABLE =
 const KPI_STAFF_TABLE =
   import.meta.env.VITE_SUPABASE_KPI_STAFF_MONTHLY_TARGETS_TABLE?.trim() || 'kpi_staff_monthly_targets';
 
-const STAFF_SELECT = 'id, name, email, team, ma_ns, vi_tri, trang_thai';
+/** CPA (VND) coi là vượt ngưỡng so với mock “90k” (90M VND khi quy đổi báo cáo nội bộ) */
+const CPA_ALERT_THRESHOLD_VND = 90_000_000;
+
+const STAFF_SELECT = 'id, name, email, team, ma_ns, vi_tri, trang_thai, avatar_url';
 
 export type LeaderDashboardViewProps = {
   viewer?: AuthUser | null;
@@ -63,12 +66,6 @@ function adsDtPct(ads: number, rev: number): number | null {
   return (ads / rev) * 100;
 }
 
-function heatBadgeClass(pct: number): { cls: string; label: string } {
-  if (pct < 30) return { cls: 'bg-[var(--Gd)] text-[var(--G)]', label: `${pct.toFixed(1)}%` };
-  if (pct <= 45) return { cls: 'bg-[var(--Yd)] text-[var(--Y)]', label: `${pct.toFixed(1)}%` };
-  return { cls: 'bg-[var(--Rd)] text-[var(--R)]', label: `${pct.toFixed(1)}%` };
-}
-
 function tyLeChot(data: number, leads: number, orders: number): number | null {
   if (Number.isFinite(data) && data > 0 && Number.isFinite(orders)) return (orders / data) * 100;
   if (Number.isFinite(leads) && leads > 0 && Number.isFinite(orders)) return (orders / leads) * 100;
@@ -94,7 +91,80 @@ function leadCount(a: Agg): number {
   return 0;
 }
 
+function cpdtPillClass(pct: number): string {
+  if (pct < 30) return 'bg-[color-mix(in_srgb,var(--ld-secondary-container)_10%,transparent)] text-[var(--ld-secondary)]';
+  if (pct <= 45) return 'bg-[color-mix(in_srgb,var(--ld-tertiary-container)_10%,transparent)] text-[var(--ld-tertiary)]';
+  return 'bg-[color-mix(in_srgb,var(--ld-error-container)_10%,transparent)] text-[var(--ld-error)]';
+}
+
+function escapeCsvCell(v: string): string {
+  if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+  return v;
+}
+
+const StaffAvatar: React.FC<{ member: Employee }> = ({ member }) => {
+  const [imgErr, setImgErr] = useState(false);
+  const url = member.avatar_url?.trim();
+  if (!url || imgErr) {
+    return (
+      <div className="w-8 h-8 rounded-full border border-[var(--ld-primary)]/20 bg-[var(--ld-surface-container-highest)] flex items-center justify-center text-[11px] font-bold text-[var(--ld-on-surface)]">
+        {(member.name || '?').charAt(0).toUpperCase()}
+      </div>
+    );
+  }
+  return (
+    <img
+      alt=""
+      src={url}
+      className="w-8 h-8 rounded-full border border-[var(--ld-primary)]/20 object-cover"
+      onError={() => setImgErr(true)}
+    />
+  );
+};
+
+type DeltaKind = 'up' | 'down' | 'stable' | 'high' | 'neutral';
+
+const ObsidianKpiCard: React.FC<{
+  label: string;
+  value: string;
+  deltaKind: DeltaKind;
+  deltaText: string;
+  icon: string;
+  valueEmphasis?: 'error';
+}> = ({ label, value, deltaKind, deltaText, icon, valueEmphasis }) => {
+  const deltaRing: Record<DeltaKind, string> = {
+    up: 'text-[var(--ld-secondary)] bg-[color-mix(in_srgb,var(--ld-secondary)_10%,transparent)]',
+    down: 'text-[var(--ld-error)] bg-[color-mix(in_srgb,var(--ld-error)_10%,transparent)]',
+    stable: 'text-[var(--ld-tertiary)] bg-[color-mix(in_srgb,var(--ld-tertiary)_10%,transparent)]',
+    high: 'text-[var(--ld-error)] bg-[color-mix(in_srgb,var(--ld-error)_10%,transparent)]',
+    neutral: 'text-[var(--ld-on-surface-variant)] bg-[color-mix(in_srgb,var(--ld-on-surface-variant)_8%,transparent)]',
+  };
+  return (
+    <div className="bg-[var(--ld-surface-container-low)] p-4 rounded-xl transition-all hover:bg-[var(--ld-surface-container-high)] border border-[var(--ld-outline-variant)]/10">
+      <p className="leader-dash-label text-[10px] uppercase tracking-widest text-[var(--ld-on-surface-variant)] mb-1">
+        {label}
+      </p>
+      <div className="flex items-end justify-between gap-2">
+        <p
+          className={`text-2xl font-bold ${valueEmphasis === 'error' ? 'text-[var(--ld-error)]' : 'text-[var(--ld-on-surface)]'}`}
+        >
+          {value}
+        </p>
+        <span
+          className={`text-[10px] font-bold shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${deltaRing[deltaKind]}`}
+        >
+          {deltaText}
+          <span className="material-symbols-outlined text-[10px] leading-none" style={{ fontSize: '10px' }}>
+            {icon}
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+};
+
 export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer = null }) => {
+  const navigate = useNavigate();
   const ym = ymNow();
   const { start, end } = monthRangeLocal(ym);
   const monthLabel = useMemo(() => {
@@ -109,6 +179,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
   const [byEmail, setByEmail] = useState<Map<string, Agg>>(() => new Map());
   const [teamTargetVnd, setTeamTargetVnd] = useState<number | null>(null);
   const [staffTargets, setStaffTargets] = useState<Map<string, number>>(() => new Map());
+  const [filterHighCpdt, setFilterHighCpdt] = useState(false);
 
   const load = useCallback(async () => {
     const fallbackTeam = viewer?.team?.trim() || '';
@@ -269,20 +340,13 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
   const tableRows = useMemo(() => {
     const rows = members.map((m) => {
       const a = aggForMember(m);
-      /** CP/DT = Chi phí / Doanh số */
       const cpdt = adsDtPct(a.ads, a.rev);
-      /** Mess, Lead, Đơn, Chi phí, Doanh số từ detail_reports (CRM báo cáo / Ads) */
       const mess = a.mess;
       const lead = a.tongLead;
-      /** CPA = CP / Mess */
       const cpa = mess > 0 ? a.ads / mess : 0;
-      /** CPL = CP / Lead */
       const cpl = lead > 0 ? a.ads / lead : 0;
-      /** CPO = CP / Đơn */
       const cpo = a.orders > 0 ? a.ads / a.orders : 0;
-      /** %CR = Đơn / Lead */
       const crPct = lead > 0 ? (a.orders / lead) * 100 : null;
-      /** AOV = DT / Đơn */
       const aov = a.orders > 0 ? a.rev / a.orders : 0;
       const acctLine = [...a.accounts].slice(0, 6).join(', ') || '—';
       return { m, a, cpdt, mess, lead, cpa, cpl, cpo, crPct, aov, acctLine };
@@ -317,46 +381,107 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
   );
 
   const needsAttention = useMemo(() => {
-    const hi = tableRows.filter((r) => r.cpdt != null && r.cpdt > 35);
-    return hi;
+    return tableRows.filter((r) => r.cpdt != null && r.cpdt > 35);
   }, [tableRows]);
-
-  const firstAlertName = needsAttention[0]?.m.name || '—';
 
   const kpiLeadDen = teamTotals.leads > 0 ? teamTotals.leads : teamTotals.data;
   const cplTeam = kpiLeadDen > 0 ? teamTotals.ads / kpiLeadDen : 0;
   const chotTeam = tyLeChot(teamTotals.data, teamTotals.leads, teamTotals.orders);
 
+  const displayRows = useMemo(() => {
+    if (!filterHighCpdt) return tableRows;
+    return tableRows.filter((r) => r.cpdt != null && r.cpdt > 35);
+  }, [tableRows, filterHighCpdt]);
+
+  const cpaAlertRow = useMemo(
+    () => tableRows.find((r) => r.mess > 0 && r.cpa >= CPA_ALERT_THRESHOLD_VND),
+    [tableRows]
+  );
+
+  const unassignedKpiCount = useMemo(
+    () => tableRows.filter(({ m }) => !staffTargets.get(m.id)).length,
+    [tableRows, staffTargets]
+  );
+
+  const exportCsv = useCallback(() => {
+    const headers = [
+      'STT',
+      'Marketing',
+      'Doanh số',
+      'Chi phí',
+      'CP/DT %',
+      'Mess',
+      'CPA',
+      'Lead',
+      'CPL',
+      'Đơn',
+      'CPO',
+      '%CR',
+      'AOV',
+    ];
+    const lines = [
+      headers.map(escapeCsvCell).join(','),
+      ...displayRows.map((row, idx) => {
+        const { m, a, cpdt, mess, lead, cpa, cpl, cpo, crPct, aov } = row;
+        const cells = [
+          String(idx + 1),
+          m.name,
+          String(a.rev),
+          String(a.ads),
+          cpdt != null ? cpdt.toFixed(2) : '',
+          String(Math.round(mess)),
+          String(Math.round(cpa)),
+          String(Math.round(lead)),
+          String(Math.round(cpl)),
+          String(a.orders),
+          String(Math.round(cpo)),
+          crPct != null ? crPct.toFixed(2) : '',
+          String(Math.round(aov)),
+        ];
+        return cells.map(escapeCsvCell).join(',');
+      }),
+    ];
+    const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `leader-dash-${teamName.replace(/\s+/g, '_') || 'team'}-${ym}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, [displayRows, teamName, ym]);
+
   if (!viewer?.email) {
     return (
-      <div className="dash-fade-up p-6 text-[12px] text-[var(--text3)] font-bold">
+      <div className="leader-dash-obsidian dash-fade-up p-6 text-[12px] text-[var(--ld-on-surface-variant)] font-semibold">
         Đăng nhập CRM để xem dashboard leader (theo team trên tài khoản).
       </div>
     );
   }
 
+  const revStr = formatCompactVnd(teamTotals.rev) === '—' ? '0' : formatCompactVnd(teamTotals.rev);
+  const adsStr = formatCompactVnd(teamTotals.ads) === '—' ? '0' : formatCompactVnd(teamTotals.ads);
+
   return (
-    <div className="dash-fade-up">
+    <div className="leader-dash-obsidian dash-fade-up text-[var(--ld-on-surface)] relative pb-20">
       {error && (
-        <div className="mb-3 text-[11px] font-bold text-[var(--R)] border border-[rgba(224,61,61,0.25)] rounded-[8px] px-3 py-2 bg-[var(--Rd)]/20">
+        <div className="mb-3 text-[11px] font-semibold text-[var(--ld-error)] border border-[var(--ld-error)]/25 rounded-lg px-3 py-2 bg-[color-mix(in_srgb,var(--ld-error)_12%,transparent)]">
           {error}
         </div>
       )}
 
       {!teamName ? (
-        <div className="mb-3 text-[11px] text-[var(--Y)] font-bold border border-[var(--Y)]/30 rounded-[8px] px-3 py-2 bg-[var(--Yd)]/15">
+        <div className="mb-3 text-[11px] text-[var(--ld-tertiary)] font-semibold border border-[var(--ld-tertiary)]/30 rounded-lg px-3 py-2 bg-[color-mix(in_srgb,var(--ld-tertiary)_10%,transparent)]">
           Không xác định được team: cần <code className="text-[10px]">tên Leader</code> khớp cột leader trong{' '}
           <code className="text-[10px]">crm_teams</code>, hoặc gán <code className="text-[10px]">team</code> trên nhân sự tại{' '}
           <code className="text-[10px]">/crm-admin/staff</code>.
         </div>
       ) : null}
 
-      <div className="flex items-center justify-end mb-[10px]">
+      <div className="flex items-center justify-end mb-3">
         <button
           type="button"
           onClick={() => void load()}
           disabled={loading}
-          className="flex items-center gap-[6px] bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.1)] text-[var(--text2)] py-[6px] px-[10px] rounded-[6px] text-[11px] font-bold border border-[rgba(255,255,255,0.08)] disabled:opacity-50"
+          className="flex items-center gap-1.5 bg-[var(--ld-surface-container-highest)] hover:bg-[var(--ld-surface-bright)] text-[var(--ld-on-surface-variant)] py-1.5 px-2.5 rounded-lg text-[11px] font-semibold border border-[var(--ld-outline-variant)]/40 disabled:opacity-50 transition-colors"
         >
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           Làm mới
@@ -364,187 +489,309 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-[var(--text3)] text-[13px] font-bold">
+        <div className="flex items-center justify-center gap-2 py-16 text-[var(--ld-on-surface-variant)] text-[13px] font-semibold">
           <Loader2 className="animate-spin" size={22} />
           Đang tải dashboard…
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-[10px] mb-[14px]">
-            <KpiCard
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            <ObsidianKpiCard
               label={`DT ${teamName || 'Team'}`}
-              value={formatCompactVnd(teamTotals.rev) === '—' ? '0' : formatCompactVnd(teamTotals.rev)}
-              sub={
-                teamTargetVnd != null && teamTargetVnd > 0
-                  ? `Mục tiêu: ${formatKpiMoney(teamTargetVnd)}`
-                  : 'Chưa gán KPI team'
+              value={revStr}
+              deltaKind={
+                kpiPctTeam == null ? 'neutral' : kpiPctTeam >= 85 ? 'up' : kpiPctTeam >= 50 ? 'stable' : 'down'
               }
-              delta={kpiPctTeam != null ? `${kpiPctTeam.toFixed(0)}% KPI` : '—'}
-              deltaType={kpiPctTeam != null && kpiPctTeam >= 85 ? 'up' : kpiPctTeam != null && kpiPctTeam >= 50 ? 'nt' : 'dn'}
-              barColor="var(--G)"
-              animationDelay={0.03}
-              valueSize="xl"
+              deltaText={kpiPctTeam != null ? `${kpiPctTeam.toFixed(0)}% KPI` : '—'}
+              icon={kpiPctTeam != null && kpiPctTeam >= 85 ? 'trending_up' : kpiPctTeam != null && kpiPctTeam < 50 ? 'trending_down' : 'horizontal_rule'}
             />
-            <KpiCard
-              label="CHI PHÍ ADS"
-              value={formatCompactVnd(teamTotals.ads) === '—' ? '0' : formatCompactVnd(teamTotals.ads)}
-              sub={adsTeamPct != null ? `Ads/DT: ${adsTeamPct.toFixed(1)}%` : '—'}
-              delta={adsTeamPct != null && adsTeamPct < 35 ? 'An toàn' : 'Theo dõi'}
-              deltaType="nt"
-              barColor="var(--accent)"
-              animationDelay={0.05}
-              valueSize="xl"
+            <ObsidianKpiCard
+              label="Chi phí ADS"
+              value={adsStr}
+              deltaKind={adsTeamPct != null && adsTeamPct > 40 ? 'down' : adsTeamPct != null ? 'up' : 'neutral'}
+              deltaText={adsTeamPct != null ? `${adsTeamPct.toFixed(1)}% CP/DT` : '—'}
+              icon={adsTeamPct != null && adsTeamPct > 40 ? 'trending_down' : 'trending_up'}
             />
-            <KpiCard
-              label="TỔNG LEAD"
+            <ObsidianKpiCard
+              label="Tổng Lead"
               value={kpiLeadDen > 0 ? `${Math.round(kpiLeadDen).toLocaleString('vi-VN')}` : '0'}
-              sub={cplTeam > 0 ? `CPL: ${formatKpiMoney(cplTeam)}` : '—'}
-              delta="Tháng này"
-              deltaType="up"
-              barColor="var(--P)"
-              animationDelay={0.07}
-              valueSize="xl"
+              deltaKind={cplTeam > 0 ? 'up' : 'neutral'}
+              deltaText={cplTeam > 0 ? `CPL ${formatKpiMoney(cplTeam)}` : '—'}
+              icon="trending_up"
             />
-            <KpiCard
-              label="ĐƠN CHỐT"
+            <ObsidianKpiCard
+              label="Đơn chốt"
               value={teamTotals.orders > 0 ? `${teamTotals.orders.toLocaleString('vi-VN')}` : '0'}
-              sub={chotTeam != null ? `Tỷ lệ: ${chotTeam.toFixed(1)}%` : '—'}
-              delta={teamTotals.orders > 0 ? `AOV: ${formatKpiMoney(teamTotals.rev / teamTotals.orders)}` : '—'}
-              deltaType="up"
-              barColor="var(--Y)"
-              animationDelay={0.09}
-              valueSize="xl"
+              deltaKind={chotTeam != null && chotTeam >= 12 ? 'up' : chotTeam != null ? 'stable' : 'neutral'}
+              deltaText={chotTeam != null ? `${chotTeam.toFixed(1)}% CR` : '—'}
+              icon="trending_up"
             />
-            <KpiCard
-              label="MKT HOẠT ĐỘNG"
-              value={`${mktActive}`}
-              sub={teamName || 'Team'}
-              delta="Có dữ liệu tháng"
-              deltaType="nt"
-              barColor="var(--G)"
-              animationDelay={0.11}
-              valueSize="xl"
+            <ObsidianKpiCard
+              label="MKT hoạt động"
+              value={`${mktActive}/${Math.max(members.length, 1)}`}
+              deltaKind="stable"
+              deltaText="Tháng này"
+              icon="horizontal_rule"
             />
-            <KpiCard
-              label="CẦN XỬ LÝ"
+            <ObsidianKpiCard
+              label="Cần xử lý"
               value={`${needsAttention.length}`}
-              sub="Ads/DT > 35%"
-              delta={firstAlertName}
-              deltaType={needsAttention.length ? 'dn' : 'nt'}
-              barColor="var(--R)"
-              animationDelay={0.13}
-              valueSize="xl"
-              valueColor={needsAttention.length ? 'var(--R)' : undefined}
+              deltaKind={needsAttention.length ? 'high' : 'neutral'}
+              deltaText={needsAttention.length ? 'Cao' : 'Ổn'}
+              icon={needsAttention.length ? 'priority_high' : 'horizontal_rule'}
+              valueEmphasis={needsAttention.length ? 'error' : undefined}
             />
           </div>
 
-          <div className="flex flex-col gap-[14px]">
-            <SectionCard
-              title={`📊 Hiệu suất Marketing — ${teamName || 'Team'}`}
-              subtitle={`Tháng ${monthLabel} · ${members.length} thành viên · ${REPORTS_TABLE}`}
-              bodyPadding={false}
-            >
-              <div className="overflow-x-auto w-full">
-                {tableRows.length === 0 ? (
-                  <div className="p-10 text-center text-[var(--text3)] text-[12px] font-bold">
-                    {teamName
-                      ? 'Không có nhân sự hoạt động trong các team phụ trách (hoặc chưa có báo cáo tháng).'
-                      : 'Chưa gán team / leader — xem cảnh báo phía trên.'}
-                  </div>
-                ) : (
-                  <table className="w-full border-collapse min-w-[1120px]">
-                      <thead>
-                        <tr className="border-b border-[var(--border)] text-[9px] font-bold tracking-[1px] uppercase text-[var(--text3)] text-left">
-                          <th className="p-[7px_12px] text-center">#</th>
-                          <th className="p-[7px_12px]">Marketing</th>
-                          <th className="p-[7px_12px] text-right">Doanh số</th>
-                          <th className="p-[7px_12px] text-right">Chi Phí</th>
-                          <th className="p-[7px_12px] text-right">CP/DT</th>
-                          <th className="p-[7px_12px] text-right">Mess</th>
-                          <th className="p-[7px_12px] text-right">CPA</th>
-                          <th className="p-[7px_12px] text-right">Lead</th>
-                          <th className="p-[7px_12px] text-right">CPL</th>
-                          <th className="p-[7px_12px] text-right">Đơn</th>
-                          <th className="p-[7px_12px] text-right">CPO</th>
-                          <th className="p-[7px_12px] text-right">%CR</th>
-                          <th className="p-[7px_12px] text-right">AOV</th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-[11.5px] text-[var(--text2)]">
-                        {tableRows.map((row, idx) => {
-                          const { m, a, cpdt, mess, lead, cpa, cpl, cpo, crPct, aov, acctLine } = row;
-                          const critical = cpdt != null && cpdt > 45;
-                          const rankDisplay =
-                            idx === 0 && a.rev > 0 ? (
-                              <span className="font-[var(--mono)] text-[var(--gold)] font-bold">1</span>
-                            ) : critical ? (
-                              <span className="font-[var(--mono)] text-[var(--R)] font-bold">!</span>
-                            ) : (
-                              <span className="font-[var(--mono)] text-[var(--text3)] font-bold">{idx + 1}</span>
-                            );
-                          const heat = cpdt != null ? heatBadgeClass(cpdt) : null;
-                          const trCls = critical
-                            ? 'bg-[rgba(224,61,61,0.05)] border-b border-[rgba(224,61,61,0.1)] hover:bg-[rgba(224,61,61,0.08)]'
-                            : 'border-b border-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.02)]';
-                          return (
-                            <tr key={m.id} className={`${trCls} transition-colors`}>
-                              <td className="p-[9px_12px] text-center">{rankDisplay}</td>
-                              <td className="p-[9px_12px]">
-                                <div className={`font-bold ${critical ? 'text-[var(--Y)]' : 'text-[var(--text)]'}`}>{m.name}</div>
-                                <div className="text-[10px] text-[var(--text3)] truncate max-w-[200px]" title={acctLine}>
-                                  {acctLine}
-                                </div>
-                              </td>
-                              <td className="p-[9px_12px] text-right text-[var(--G)] font-bold">{formatCompactVnd(a.rev)}</td>
-                              <td className="p-[9px_12px] text-right">{formatCompactVnd(a.ads)}</td>
-                              <td className="p-[9px_12px] text-right">
-                                {heat ? (
-                                  <span className={`p-[2px_7px] rounded-[4px] text-[9.5px] font-bold ${heat.cls}`}>{heat.label}</span>
-                                ) : (
-                                  '—'
-                                )}
-                              </td>
-                              <td className="p-[9px_12px] text-right">{mess > 0 ? Math.round(mess).toLocaleString('vi-VN') : '—'}</td>
-                              <td className="p-[9px_12px] text-right">{cpa > 0 ? formatCompactVnd(cpa) : '—'}</td>
-                              <td className="p-[9px_12px] text-right">{lead > 0 ? Math.round(lead).toLocaleString('vi-VN') : '—'}</td>
-                              <td className="p-[9px_12px] text-right">{cpl > 0 ? formatCompactVnd(cpl) : '—'}</td>
-                              <td className="p-[9px_12px] text-right">{a.orders > 0 ? a.orders.toLocaleString('vi-VN') : '—'}</td>
-                              <td className="p-[9px_12px] text-right">{cpo > 0 ? formatCompactVnd(cpo) : '—'}</td>
-                              <td className={`p-[9px_12px] text-right ${crPct != null && crPct >= 20 ? 'text-[var(--G)]' : ''}`}>
-                                {crPct != null ? `${crPct.toFixed(1)}%` : '—'}
-                              </td>
-                              <td className="p-[9px_12px] text-right">{aov > 0 ? formatCompactVnd(aov) : '—'}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                  </table>
-                )}
+          <section className="bg-[var(--ld-surface-container)] rounded-2xl overflow-hidden border border-[var(--ld-outline-variant)]/10 mb-8">
+            <div className="px-6 py-5 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 bg-[color-mix(in_srgb,var(--ld-surface-container-high)_50%,transparent)]">
+              <div>
+                <h2 className="text-lg font-bold text-[var(--ld-on-surface)]">
+                  Hiệu suất Marketing — {teamName || 'Team'}
+                </h2>
+                <p className="text-xs text-[var(--ld-on-surface-variant)] leader-dash-label mt-0.5">
+                  Tháng {monthLabel} · Chi tiết {REPORTS_TABLE}
+                </p>
               </div>
-            </SectionCard>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  disabled={!displayRows.length}
+                  className="bg-[var(--ld-surface-container-highest)] px-4 py-2 rounded-lg text-xs font-semibold text-[var(--ld-on-surface)] hover:bg-[var(--ld-surface-bright)] transition-colors disabled:opacity-40"
+                >
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterHighCpdt((v) => !v)}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                    filterHighCpdt
+                      ? 'bg-[var(--ld-primary-container)] text-[var(--ld-on-primary-container)]'
+                      : 'bg-[var(--ld-primary)] text-[var(--ld-on-primary-container)] hover:brightness-110'
+                  }`}
+                >
+                  {filterHighCpdt ? 'Xem tất cả' : 'Lọc CP/DT &gt; 35%'}
+                </button>
+              </div>
+            </div>
+            <div className="overflow-x-auto leader-dash-no-scrollbar px-2 sm:px-4 pb-4">
+              {displayRows.length === 0 ? (
+                <div className="p-10 text-center text-[var(--ld-on-surface-variant)] text-[12px] font-semibold">
+                  {teamName
+                    ? filterHighCpdt
+                      ? 'Không có MKT nào vượt ngưỡng CP/DT 35%.'
+                      : 'Không có nhân sự hoạt động trong các team phụ trách (hoặc chưa có báo cáo tháng).'
+                    : 'Chưa gán team / leader — xem cảnh báo phía trên.'}
+                </div>
+              ) : (
+                <table className="w-full text-left border-separate border-spacing-y-2 min-w-[1120px]">
+                  <thead>
+                    <tr className="text-[10px] leader-dash-label uppercase tracking-widest text-[var(--ld-on-surface-variant)]">
+                      <th className="pb-2 pl-4 font-medium">#</th>
+                      <th className="pb-2 font-medium">Marketing</th>
+                      <th className="pb-2 font-medium">Doanh số</th>
+                      <th className="pb-2 font-medium">Chi phí</th>
+                      <th className="pb-2 font-medium">CP/DT</th>
+                      <th className="pb-2 font-medium">Mess</th>
+                      <th className="pb-2 font-medium">CPA</th>
+                      <th className="pb-2 font-medium">Lead</th>
+                      <th className="pb-2 font-medium">CPL</th>
+                      <th className="pb-2 font-medium">Đơn</th>
+                      <th className="pb-2 font-medium">CPO</th>
+                      <th className="pb-2 font-medium">%CR</th>
+                      <th className="pb-2 pr-4 text-right font-medium">AOV</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm">
+                    {displayRows.map((row, idx) => {
+                      const { m, a, cpdt, mess, lead, cpa, cpl, cpo, crPct, aov, acctLine } = row;
+                      const critical = cpdt != null && cpdt > 45;
+                      const rank = String(idx + 1).padStart(2, '0');
+                      return (
+                        <tr
+                          key={m.id}
+                          className="bg-[color-mix(in_srgb,var(--ld-surface-container-low)_50%,transparent)] hover:bg-[color-mix(in_srgb,var(--ld-surface-container-highest)_60%,transparent)] transition-colors"
+                        >
+                          <td className="py-3.5 pl-4 rounded-l-xl font-bold text-[var(--ld-primary)] align-top">{rank}</td>
+                          <td className="py-3.5 align-top">
+                            <div className={`font-semibold ${critical ? 'text-[var(--ld-tertiary)]' : 'text-[var(--ld-on-surface)]'}`}>
+                              {m.name}
+                            </div>
+                            <div
+                              className="text-[10px] text-[var(--ld-on-surface-variant)] truncate max-w-[200px]"
+                              title={acctLine}
+                            >
+                              {acctLine}
+                            </div>
+                          </td>
+                          <td className="py-3.5 font-mono text-xs text-[var(--ld-secondary)] font-semibold align-top">
+                            {formatCompactVnd(a.rev)}
+                          </td>
+                          <td className="py-3.5 font-mono text-xs align-top">{formatCompactVnd(a.ads)}</td>
+                          <td className="py-3.5 align-top">
+                            {cpdt != null ? (
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${cpdtPillClass(cpdt)}`}>
+                                {cpdt.toFixed(1)}%
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="py-3.5 align-top">{mess > 0 ? Math.round(mess).toLocaleString('vi-VN') : '—'}</td>
+                          <td className="py-3.5 font-mono text-xs align-top">{cpa > 0 ? formatCompactVnd(cpa) : '—'}</td>
+                          <td className="py-3.5 align-top">{lead > 0 ? Math.round(lead).toLocaleString('vi-VN') : '—'}</td>
+                          <td className="py-3.5 font-mono text-xs align-top">{cpl > 0 ? formatCompactVnd(cpl) : '—'}</td>
+                          <td className="py-3.5 font-bold text-[var(--ld-on-surface)] align-top">
+                            {a.orders > 0 ? a.orders.toLocaleString('vi-VN') : '—'}
+                          </td>
+                          <td className="py-3.5 font-mono text-xs align-top">{cpo > 0 ? formatCompactVnd(cpo) : '—'}</td>
+                          <td
+                            className={`py-3.5 align-top ${crPct != null && crPct < 15 ? 'text-[var(--ld-error)]' : ''}`}
+                          >
+                            {crPct != null ? `${crPct.toFixed(1)}%` : '—'}
+                          </td>
+                          <td className="py-3.5 pr-4 text-right rounded-r-xl font-mono text-xs align-top">
+                            {aov > 0 ? formatCompactVnd(aov) : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </section>
 
-            <SectionCard title="🎯 Tiến độ KPI tháng" subtitle={`${KPI_STAFF_TABLE} · ${ym}`}>
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-[var(--ld-surface-container)] rounded-2xl p-6 border border-[var(--ld-outline-variant)]/10">
+              <h3 className="text-sm font-bold mb-6 flex items-center gap-2 text-[var(--ld-on-surface)]">
+                <span className="material-symbols-outlined text-[var(--ld-primary)] text-lg">analytics</span>
+                Tiến độ KPI tháng
+              </h3>
+              <div className="space-y-6">
                 {tableRows.length === 0 ? (
-                  <div className="text-[11px] text-[var(--text3)] py-4">Chưa có nhân sự để hiển thị KPI.</div>
+                  <div className="text-[11px] text-[var(--ld-on-surface-variant)]">Chưa có nhân sự để hiển thị KPI.</div>
                 ) : (
                   tableRows.map(({ m, a }) => {
                     const tgt = staffTargets.get(m.id);
                     const pct = tgt != null && tgt > 0 ? Math.min(100, (a.rev / tgt) * 100) : 0;
                     const hasT = tgt != null && tgt > 0;
-                    const valueText = `${formatCompactVnd(a.rev) === '—' ? '0' : formatCompactVnd(a.rev)} / ${hasT ? formatKpiMoney(tgt) : 'chưa gán'}`;
+                    const barColor = !hasT
+                      ? 'var(--ld-outline-variant)'
+                      : pct >= 85
+                        ? 'var(--ld-secondary)'
+                        : pct >= 50
+                          ? 'var(--ld-tertiary)'
+                          : 'var(--ld-error)';
+                    const scoreText = hasT ? `${Math.round(pct)}/100` : '0/chưa gán';
+                    const subRole = safeTrim(m.vi_tri) || 'Marketing';
                     return (
-                      <ProgressRow
-                        key={m.id}
-                        label={`${m.name}${m.trang_thai === 'dot_tien' ? ' ⚠' : ''}`}
-                        valueText={valueText}
-                        percent={hasT ? pct : 0}
-                        color={!hasT ? 'var(--text3)' : pct >= 85 ? 'var(--G)' : pct >= 50 ? 'var(--accent)' : 'var(--R)'}
-                        subLabel={hasT ? `${pct.toFixed(1)}%` : '—'}
-                      />
+                      <div key={m.id} className="space-y-2">
+                        <div className="flex justify-between items-center gap-2">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <StaffAvatar member={m} />
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-[var(--ld-on-surface)] truncate">{m.name}</p>
+                              <p className="text-[10px] text-[var(--ld-on-surface-variant)] truncate">{subRole}</p>
+                            </div>
+                          </div>
+                          <p className="text-xs font-bold shrink-0" style={{ color: barColor }}>
+                            {scoreText}{' '}
+                            {hasT ? (
+                              <span className="text-[10px] text-[var(--ld-on-surface-variant)] font-normal">
+                                ({pct.toFixed(0)}%)
+                              </span>
+                            ) : null}
+                          </p>
+                        </div>
+                        <div className="w-full bg-[var(--ld-surface-container-highest)] h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{ width: `${hasT ? pct : 0}%`, background: barColor }}
+                          />
+                        </div>
+                      </div>
                     );
                   })
                 )}
-            </SectionCard>
+              </div>
+            </div>
+
+            <div className="bg-[var(--ld-surface-container)] rounded-2xl p-6 border border-[var(--ld-outline-variant)]/10">
+              <h3 className="text-sm font-bold mb-6 flex items-center gap-2 text-[var(--ld-on-surface)]">
+                <span className="material-symbols-outlined text-[var(--ld-error)] text-lg">warning</span>
+                Cảnh báo hiệu suất
+              </h3>
+              <div className="space-y-4">
+                {needsAttention[0] ? (
+                  <div className="bg-[color-mix(in_srgb,var(--ld-error-container)_10%,transparent)] p-3 rounded-xl border border-[var(--ld-error)]/10 flex gap-3">
+                    <span className="material-symbols-outlined text-[var(--ld-error)] shrink-0">ads_click</span>
+                    <div>
+                      <p className="text-xs font-bold text-[var(--ld-error)]">CP/DT vượt ngưỡng</p>
+                      <p className="text-[10px] text-[var(--ld-on-surface-variant)]">
+                        {needsAttention[0].m.name}: CP/DT {needsAttention[0].cpdt?.toFixed(1)}% (Ngưỡng theo dõi: 35%)
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-[color-mix(in_srgb,var(--ld-secondary-container)_10%,transparent)] p-3 rounded-xl border border-[var(--ld-secondary)]/10 flex gap-3">
+                    <span className="material-symbols-outlined text-[var(--ld-secondary)] shrink-0">check_circle</span>
+                    <div>
+                      <p className="text-xs font-bold text-[var(--ld-secondary)]">CP/DT ổn định</p>
+                      <p className="text-[10px] text-[var(--ld-on-surface-variant)]">Không có MKT nào vượt ngưỡng CP/DT 35%.</p>
+                    </div>
+                  </div>
+                )}
+
+                {cpaAlertRow ? (
+                  <div className="bg-[color-mix(in_srgb,var(--ld-error-container)_10%,transparent)] p-3 rounded-xl border border-[var(--ld-error)]/10 flex gap-3">
+                    <span className="material-symbols-outlined text-[var(--ld-error)] shrink-0">ads_click</span>
+                    <div>
+                      <p className="text-xs font-bold text-[var(--ld-error)]">CPA vượt ngưỡng</p>
+                      <p className="text-[10px] text-[var(--ld-on-surface-variant)]">
+                        {cpaAlertRow.m.name}: CPA {formatCompactVnd(cpaAlertRow.cpa)} (Ngưỡng: {formatCompactVnd(CPA_ALERT_THRESHOLD_VND)})
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {unassignedKpiCount > 0 ? (
+                  <div className="bg-[color-mix(in_srgb,var(--ld-tertiary-container)_10%,transparent)] p-3 rounded-xl border border-[var(--ld-tertiary)]/10 flex gap-3">
+                    <span className="material-symbols-outlined text-[var(--ld-tertiary)] shrink-0">hourglass_empty</span>
+                    <div>
+                      <p className="text-xs font-bold text-[var(--ld-tertiary)]">KPI chưa gán</p>
+                      <p className="text-[10px] text-[var(--ld-on-surface-variant)]">
+                        Có {unassignedKpiCount} thành viên chưa có mục tiêu KPI tháng trong {KPI_STAFF_TABLE}.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {kpiPctTeam != null && kpiPctTeam >= 100 ? (
+                  <div className="bg-[color-mix(in_srgb,var(--ld-secondary-container)_10%,transparent)] p-3 rounded-xl border border-[var(--ld-secondary)]/10 flex gap-3">
+                    <span className="material-symbols-outlined text-[var(--ld-secondary)] shrink-0">trending_up</span>
+                    <div>
+                      <p className="text-xs font-bold text-[var(--ld-secondary)]">Đạt KPI team</p>
+                      <p className="text-[10px] text-[var(--ld-on-surface-variant)]">
+                        Doanh thu team đạt {kpiPctTeam.toFixed(0)}% mục tiêu tháng {monthLabel}.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+          <div className="fixed bottom-8 right-8 z-30">
+            <button
+              type="button"
+              title="Gán KPI tháng"
+              onClick={() => navigate(crmAdminPathForView('kpi-target'))}
+              className="w-14 h-14 rounded-full bg-[var(--ld-primary)] flex items-center justify-center text-[var(--ld-on-primary-container)] shadow-2xl hover:scale-105 active:scale-95 transition-all group border border-[var(--ld-primary-container)]/30"
+            >
+              <span className="material-symbols-outlined group-hover:rotate-90 transition-transform text-2xl">add</span>
+            </button>
           </div>
         </>
       )}
