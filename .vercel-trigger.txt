@@ -1,0 +1,5 @@
+Redeploy trigger: 2026-04-05T00:00:00Z
+
+This file exists only to trigger Vercel to rebuild the app when committed.
+You can safely delete it later.
+
