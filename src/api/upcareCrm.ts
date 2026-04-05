@@ -294,8 +294,10 @@ export async function fetchUpcareMktEmployees(params: {
     res = await doFetch();
   }
 
+  const ctype = res.headers.get('content-type') || '';
+  const rawText = await res.text().catch(() => '');
   if (!res.ok) {
-    const text = await res.text().catch(() => '');
+    const text = rawText;
     const snippet = text.replace(/\s+/g, ' ').slice(0, 280);
     if (res.status === 401) {
       const oauthHint = oauthRefreshConfigured()
@@ -320,7 +322,25 @@ export async function fetchUpcareMktEmployees(params: {
     throw new Error(`Upcare API ${res.status}: ${snippet || res.statusText}`);
   }
 
-  const data: unknown = await res.json();
+  // Một số môi trường (sai proxy/rewrite) trả về HTML 200 OK → phát hiện sớm
+  if (/^\s*</.test(rawText) && /<!doctype html|<html/i.test(rawText)) {
+    throw new Error(
+      'Upcare API trả về HTML thay vì JSON — khả năng cao do cấu hình proxy/rewrite. ' +
+        'Production phải đặt VITE_UPCARE_CRM_USE_PROXY=false và VITE_UPCARE_CRM_API_BASE=https://crm.upcare.asia. ' +
+        'Chi tiết: ' +
+        rawText.replace(/\s+/g, ' ').slice(0, 160)
+    );
+  }
+  let data: unknown;
+  try {
+    data = ctype.includes('application/json') ? JSON.parse(rawText) : JSON.parse(rawText);
+  } catch {
+    throw new Error(
+      'Không parse được JSON từ Upcare API. Có thể backend trả HTML (rewrite) hoặc text khác. ' +
+        'Kiểm tra VITE_UPCARE_CRM_USE_PROXY và base URL. ' +
+        `Độ dài phản hồi: ${rawText.length} — snippet: ${rawText.replace(/\s+/g, ' ').slice(0, 160)}`
+    );
+  }
   if (!Array.isArray(data)) {
     throw new Error('API không trả về mảng JSON');
   }
