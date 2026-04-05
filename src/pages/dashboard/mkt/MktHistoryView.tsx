@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import type { AuthUser, Employee, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
+import { fetchUpcareMktEmployees, isUpcareMktConfigured } from '../../../api/upcareCrm';
 import {
   REPORTS_TABLE,
   toLocalYyyyMmDd,
@@ -12,6 +13,8 @@ import {
   extractMaNvFromBracketPage,
   buildMaNsLookup,
   matchEmployeeByBracketTag,
+  buildUpcareAmountLookup,
+  resolveUpcareAmountForReportRow,
 } from './mktDetailReportShared';
 import { downloadMktReportExcelTemplate, parseMktReportExcelFile } from './mktHistoryExcel';
 
@@ -129,6 +132,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
   const [marketOptions, setMarketOptions] = useState<string[]>([]);
   const [excelBusy, setExcelBusy] = useState(false);
   const [excelMsg, setExcelMsg] = useState<string | null>(null);
+  const [upcareSyncBusy, setUpcareSyncBusy] = useState(false);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -348,6 +352,107 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
     setExcelMsg('Đã tải file mẫu. Xóa dòng ví dụ (dòng 2) rồi điền dữ liệu từ dòng 2 trở đi, giữ nguyên thứ tự cột A–L.');
   };
 
+  const handleSyncRevenueFromUpcare = async () => {
+    setExcelMsg(null);
+    if (!reportUser?.email?.trim()) {
+      window.alert('Cần đăng nhập để đồng bộ.');
+      return;
+    }
+    if (!isUpcareMktConfigured()) {
+      window.alert('Chưa cấu hình Upcare (VITE_UPCARE_CRM_BEARER_TOKEN trong .env.local).');
+      return;
+    }
+    if (rows.length === 0) {
+      window.alert('Không có dòng nào trong danh sách đã lọc.');
+      return;
+    }
+
+    const email = reportUser.email.trim().toLowerCase();
+    const multiDay = applied.from !== applied.to;
+    const warnMulti =
+      multiDay &&
+      !window.confirm(
+        `Khoảng ngày ${applied.from} → ${applied.to}: API Upcare trả một mức doanh số / nhân viên cho cả khoảng.\n` +
+          `Mọi dòng khớp Mã NV sẽ nhận cùng số đó (có thể trùng nếu nhiều dòng cùng NV).\n\nTiếp tục?`
+      );
+    if (warnMulti) return;
+
+    setUpcareSyncBusy(true);
+    try {
+      const mktRows = await fetchUpcareMktEmployees({
+        dateFrom: applied.from,
+        dateTo: applied.to,
+      });
+      const lookup = buildUpcareAmountLookup(mktRows);
+
+      const updates: { id: string; revenue: number }[] = [];
+      let skippedNoTag = 0;
+      let skippedNoMatch = 0;
+      for (const row of rows) {
+        const id = row.id?.trim();
+        if (!id) continue;
+        if (!extractMaNvFromBracketPage(row.page)) {
+          skippedNoTag++;
+          continue;
+        }
+        const revenue = resolveUpcareAmountForReportRow(row, lookup, maNsLookup);
+        if (revenue == null) {
+          skippedNoMatch++;
+          continue;
+        }
+        updates.push({ id, revenue });
+      }
+
+      if (updates.length === 0) {
+        window.alert(
+          `Không có dòng nào khớp.\n` +
+            `- Không có […] trong Page: ${skippedNoTag} dòng\n` +
+            `- Có […] nhưng không khớp API (ID / tên): ${skippedNoMatch} dòng\n` +
+            `Gợi ý: trong Page dùng [ID_Upcare] (số) hoặc [mã_ns] trùng bảng nhân sự + tên trùng Upcare.`
+        );
+        return;
+      }
+
+      if (
+        !window.confirm(
+          `Cập nhật doanh số (revenue) cho ${updates.length} dòng báo cáo theo Upcare CRM?\n` +
+            `Khoảng API: ${applied.from} … ${applied.to}\n` +
+            `Bỏ qua: không [Mã NV] trong Page ${skippedNoTag}, không khớp API ${skippedNoMatch}.`
+        )
+      ) {
+        return;
+      }
+
+      const chunk = 12;
+      let ok = 0;
+      for (let i = 0; i < updates.length; i += chunk) {
+        const part = updates.slice(i, i + chunk);
+        const results = await Promise.all(
+          part.map((u) =>
+            supabase.from(REPORTS_TABLE).update({ revenue: u.revenue }).eq('id', u.id).ilike('email', email)
+          )
+        );
+        for (const res of results) {
+          if (res.error) {
+            console.error('mkt-history upcare sync:', res.error);
+            window.alert(`Lỗi khi cập nhật (đã ghi ${ok}/${updates.length}): ${res.error.message || 'Unknown'}`);
+            await load();
+            return;
+          }
+          ok++;
+        }
+      }
+
+      setExcelMsg(`Đồng bộ Upcare: đã cập nhật doanh số cho ${ok} dòng (${applied.from} … ${applied.to}).`);
+      await load();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Lỗi không xác định';
+      window.alert(`Đồng bộ Upcare thất bại: ${msg}`);
+    } finally {
+      setUpcareSyncBusy(false);
+    }
+  };
+
   const handleExcelFile = async (file: File | null) => {
     setExcelMsg(null);
     if (!file?.name) return;
@@ -565,6 +670,24 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
             {deleteBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span className="material-symbols-outlined text-sm">delete</span>}
             Xóa đã chọn ({selectedIds.size})
           </button>
+          <button
+            type="button"
+            onClick={() => void handleSyncRevenueFromUpcare()}
+            disabled={upcareSyncBusy || excelBusy || !reportUser?.email || rows.length === 0 || !isUpcareMktConfigured()}
+            title={
+              !isUpcareMktConfigured()
+                ? 'Cần VITE_UPCARE_CRM_BEARER_TOKEN'
+                : 'Gọi API Upcare /employee/mkt theo khoảng ngày đang lọc; khớp cột Mã NV với ID hoặc tên nhân viên'
+            }
+            className="flex items-center gap-2 px-4 py-2 bg-[color-mix(in_srgb,var(--ld-primary)_12%,transparent)] text-[var(--ld-primary)] rounded-lg border border-[color-mix(in_srgb,var(--ld-primary)_35%,transparent)] text-xs leader-dash-label font-bold hover:bg-[color-mix(in_srgb,var(--ld-primary)_18%,transparent)] transition-all disabled:opacity-40"
+          >
+            {upcareSyncBusy ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <span className="material-symbols-outlined text-sm">cloud_sync</span>
+            )}
+            Đồng bộ doanh số (Upcare)
+          </button>
         </div>
 
         {excelMsg && (
@@ -573,6 +696,13 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
           </div>
         )}
         <p className="mt-4 text-[10px] text-[var(--ld-on-surface-variant)] leading-relaxed max-w-[920px]">
+          <span className="text-[var(--ld-on-surface)] font-bold">Đồng bộ doanh số (Upcare):</span> dùng khoảng ngày ở trên, gọi API cùng tham số; điền{' '}
+          <span className="text-[var(--ld-on-surface)] font-bold">Doanh số</span> khi{' '}
+          <span className="text-[var(--ld-on-surface)] font-bold">Mã NV</span> khớp —{' '}
+          <span className="text-[var(--ld-on-surface)] font-bold">[số]</span> trong Page = ID nhân viên trên Upcare, hoặc{' '}
+          <span className="text-[var(--ld-on-surface)] font-bold">[mã_ns]</span> khớp nhân sự CRM + tên khớp Upcare. Nhiều ngày: API là tổng khoảng; xác nhận trước khi ghi.
+        </p>
+        <p className="mt-2 text-[10px] text-[var(--ld-on-surface-variant)] leading-relaxed max-w-[920px]">
           Hai kiểu file: (1) Mẫu CRM — nút Tải mẫu Excel, cột ngày A–C. (2) Export Ads: chỉ nhập dòng có{' '}
           <span className="text-[var(--ld-on-surface)] font-bold">Bắt đầu báo cáo = Kết thúc báo cáo</span> (cùng một ngày); cột{' '}
           <span className="text-[var(--ld-on-surface)] font-bold">Tên quảng cáo</span> → trường Page khi file có tiêu đề cột đó.

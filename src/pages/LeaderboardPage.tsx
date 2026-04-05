@@ -22,6 +22,8 @@ import type { Employee } from '../types';
 
 interface LeaderboardPageProps {
   employees: Employee[];
+  /** Nguồn dữ liệu BXH: Upcare /api/employee/mkt hoặc Supabase employees */
+  boardSource?: 'upcare' | 'supabase';
   loading: boolean;
   showMenuBar: boolean;
   setShowMenuBar: (v: boolean) => void;
@@ -30,6 +32,7 @@ interface LeaderboardPageProps {
 
 export function LeaderboardPage({
   employees,
+  boardSource = 'supabase',
   loading,
   showMenuBar,
   setShowMenuBar,
@@ -105,6 +108,12 @@ export function LeaderboardPage({
             <div className="w-full flex flex-col items-center justify-center bg-transparent p-4 relative overflow-hidden flex-1">
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-b from-yellow-500/5 to-transparent pointer-events-none" />
 
+              {boardSource === 'upcare' ? (
+                <p className="relative z-10 text-center text-[10px] text-cyan-200/70 uppercase tracking-widest mb-1 lg:mb-0 lg:absolute lg:top-2">
+                  Doanh số MKT — Upcare (7 ngày gần nhất)
+                </p>
+              ) : null}
+
               <div className="flex items-end justify-center gap-20 lg:gap-32 w-full h-full pb-12 lg:pb-32 relative z-10 transform translate-y-[90px] -translate-x-[120px]">
                 {podiumOrder.map((winner) => (
                   <div
@@ -126,11 +135,18 @@ export function LeaderboardPage({
             <div className="hidden lg:flex absolute right-4 top-4 bottom-4 w-[280px] xl:w-[320px] flex-col z-30">
               <div className="w-full bg-black/50 backdrop-blur-md rounded-2xl border border-white/15 overflow-hidden shadow-2xl flex flex-col h-full">
                 <div className="px-3 py-2 border-b border-white/10 bg-white/5 flex items-center justify-between shrink-0">
-                  <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                    <Trophy size={14} className="text-yellow-400" />
-                    Bảng Xếp Hạng
-                  </h2>
-                  <div className="text-white/40 text-[9px] font-mono">TOP 4 - {employees.length}</div>
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <Trophy size={14} className="text-yellow-400" />
+                      Bảng Xếp Hạng
+                    </h2>
+                    {boardSource === 'upcare' ? (
+                      <p className="text-[8px] text-cyan-300/80 font-normal normal-case tracking-normal mt-0.5 truncate" title="Doanh số theo khoảng 7 ngày gần nhất từ crm.upcare.asia">
+                        Upcare MKT · 7 ngày
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="text-white/40 text-[9px] font-mono shrink-0">TOP 4 - {employees.length}</div>
                 </div>
 
                 <div className="grid grid-cols-12 gap-1 px-2.5 py-2 bg-black/20 text-yellow-400/80 font-bold uppercase tracking-wider text-[11px] sticky top-0 z-10 backdrop-blur-sm shrink-0">

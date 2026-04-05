@@ -32,6 +32,8 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     label: 'Báo cáo',
     items: [
+      { id: 'upcare-mkt', label: 'MKT Upcare (API)', icon: '🌐' },
+      { id: 'reports-raw', label: 'Bảng detail_reports', icon: '🧾' },
       { id: 'admin-ranking', label: 'Bảng xếp hạng', icon: '🏆' },
       { id: 'compare', label: 'So sánh tuần/tháng', icon: '📈' },
     ]
@@ -90,6 +92,7 @@ export const VIEW_TITLES: Record<string, string> = {
   'markets': 'Thị trường',
   'budget': 'Ngân sách (Module 6)',
   'reconcile': 'Đối chiếu 3 Lớp',
+  'upcare-mkt': 'MKT Upcare (API)',
   'admin-ranking': 'Bảng xếp hạng',
   'compare': 'So sánh tuần/tháng',
   'leader-dash': 'Dashboard Team A',

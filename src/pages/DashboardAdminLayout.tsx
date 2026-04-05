@@ -20,8 +20,10 @@ import { ProductsView } from './dashboard/admin/ProductsView';
 import { MarketsView } from './dashboard/admin/MarketsView';
 import { BudgetView } from './dashboard/admin/BudgetView';
 import { ReconcileView } from './dashboard/admin/ReconcileView';
+import { UpcareMktEmployeesView } from './dashboard/admin/UpcareMktEmployeesView';
 import { AdminRankingView } from './dashboard/admin/AdminRankingView';
 import { CompareView } from './dashboard/admin/CompareView';
+import { ReportsRawView } from './dashboard/admin/ReportsRawView';
 
 // Leader Views
 import { LeaderDashboardView } from './dashboard/leader/LeaderDashboardView';
@@ -131,6 +133,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'alerts': return <AlertsView />;
       case 'projects': return <ProjectsView />;
       case 'project-qc-excel': return <ProjectQcExcelView />;
+      case 'reports-raw': return <ReportsRawView />;
       case 'teams': return <TeamsView />;
       case 'staff':
         return <StaffView onEmployeesRefresh={onEmployeesRefresh} />;
@@ -140,6 +143,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'markets': return <MarketsView />;
       case 'budget': return <BudgetView />;
       case 'reconcile': return <ReconcileView />;
+      case 'upcare-mkt': return <UpcareMktEmployeesView />;
       case 'admin-ranking': return <AdminRankingView />;
       case 'compare': return <CompareView />;
 

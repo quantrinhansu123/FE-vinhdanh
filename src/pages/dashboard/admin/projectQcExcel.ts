@@ -221,7 +221,8 @@ export async function parseQcExcelFile(
     const tenQc = lastTenQc;
 
     const ngayRaw = r[2];
-    const summaryNgay = isSummaryNgayCell(ngayRaw);
+    const ngayTxt = cellStr(ngayRaw);
+    const summaryNgay = isSummaryNgayCell(ngayRaw) || ngayTxt === '';
     const ngay = summaryNgay ? null : parseNgayCell(ngayRaw);
 
     const donVi = cellStr(r[4]);
@@ -245,12 +246,15 @@ export async function parseQcExcelFile(
     if (!tenTk && !tenQc && !hasMetrics) continue;
 
     if (!summaryNgay && !ngay) {
-      errors.push({
-        row: sheetRow,
-        msg:
-          'Cột C (Ngày): cần ngày hợp lệ (yyyy-mm-dd, dd/mm/yyyy…) hoặc «All»/«Tất cả» cho dòng tổng hợp.',
-      });
-      continue;
+      // Nếu ô ngày có nội dung nhưng không parse được → báo lỗi; nếu rỗng thì coi là tổng hợp (All)
+      if (ngayTxt !== '') {
+        errors.push({
+          row: sheetRow,
+          msg:
+            'Cột C (Ngày): cần ngày hợp lệ (yyyy-mm-dd, dd/mm/yyyy…) hoặc «All»/«Tất cả» cho dòng tổng hợp.',
+        });
+        continue;
+      }
     }
 
     rows.push({

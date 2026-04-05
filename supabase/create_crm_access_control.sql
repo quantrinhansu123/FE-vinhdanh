@@ -140,6 +140,7 @@ from (
     ('admin', 'markets'),
     ('admin', 'budget'),
     ('admin', 'reconcile'),
+    ('admin', 'upcare-mkt'),
     ('admin', 'admin-ranking'),
     ('admin', 'compare'),
     ('leader', 'leader-dash'),

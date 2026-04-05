@@ -16,8 +16,10 @@ const ADMIN_VIEWS = new Set<ViewId>([
   'markets',
   'budget',
   'reconcile',
+  'upcare-mkt',
   'admin-ranking',
   'compare',
+  'reports-raw',
 ]);
 
 const LEADER_VIEWS = new Set<ViewId>([

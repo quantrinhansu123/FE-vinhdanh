@@ -18,6 +18,7 @@ import { AdAccountsView } from './admin/AdAccountsView';
 import { AgenciesView } from './admin/AgenciesView';
 import { BudgetView } from './admin/BudgetView';
 import { ReconcileView } from './admin/ReconcileView';
+import { UpcareMktEmployeesView } from './admin/UpcareMktEmployeesView';
 import { AdminRankingView } from './admin/AdminRankingView';
 import { CompareView } from './admin/CompareView';
 
@@ -63,6 +64,7 @@ const DashboardPage: React.FC = () => {
       case 'agencies': return <AgenciesView />;
       case 'budget': return <BudgetView />;
       case 'reconcile': return <ReconcileView />;
+      case 'upcare-mkt': return <UpcareMktEmployeesView />;
       case 'admin-ranking': return <AdminRankingView />;
       case 'compare': return <CompareView />;
 

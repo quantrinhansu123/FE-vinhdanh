@@ -22,6 +22,14 @@ export default defineConfig(({mode}) => {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
+      /** Tránh CORS khi gọi crm.upcare.asia từ localhost — bật VITE_UPCARE_CRM_USE_PROXY=true */
+      proxy: {
+        '/upcare-crm': {
+          target: 'https://crm.upcare.asia',
+          changeOrigin: true,
+          rewrite: (p) => p.replace(/^\/upcare-crm/, ''),
+        },
+      },
     },
   };
 });

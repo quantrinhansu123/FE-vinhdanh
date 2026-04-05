@@ -114,3 +114,56 @@ export function matchEmployeeByBracketTag(
   if (!t) return null;
   return lookup.get(t.toLowerCase()) ?? null;
 }
+
+/** Chuẩn hoá tên để khớp lỏng (API Upcare vs employees). */
+export function normalizePersonNameKey(raw: string | null | undefined): string {
+  const s = (raw || '').trim().toLowerCase().normalize('NFKC').replace(/\s+/g, ' ');
+  return s;
+}
+
+/**
+ * Map amount theo id Upcare (số) và theo tên (đã chuẩn hoá).
+ * Dùng cho đồng bộ doanh số từ /api/employee/mkt.
+ */
+export function buildUpcareAmountLookup(
+  rows: { id: number; name: string; amount: number | string }[]
+): { byId: Map<number, number>; byNameNorm: Map<string, number> } {
+  const byId = new Map<number, number>();
+  const byNameNorm = new Map<string, number>();
+  for (const r of rows) {
+    const amt = Number(r.amount);
+    if (!Number.isFinite(amt)) continue;
+    byId.set(r.id, amt);
+    const k = normalizePersonNameKey(r.name);
+    if (k) byNameNorm.set(k, amt);
+  }
+  return { byId, byNameNorm };
+}
+
+/**
+ * Gán amount từ lookup Upcare cho một dòng báo cáo:
+ * 1) [số] trong Page → id nhân viên Upcare
+ * 2) [mã_ns] khớp bảng employees → khớp tên với Upcare
+ * 3) [text] là tên (hoặc tag) → khớp tên Upcare đã chuẩn hoá
+ */
+export function resolveUpcareAmountForReportRow(
+  row: { page?: string | null },
+  lookup: { byId: Map<number, number>; byNameNorm: Map<string, number> },
+  maNsLookup: Map<string, MaNsLookupMatch>
+): number | null {
+  const tag = extractMaNvFromBracketPage(row.page);
+  if (!tag) return null;
+  const t = tag.trim();
+  if (/^\d+$/.test(t)) {
+    const id = Number(t);
+    if (lookup.byId.has(id)) return lookup.byId.get(id)!;
+  }
+  const ma = matchEmployeeByBracketTag(t, maNsLookup);
+  if (ma) {
+    const nk = normalizePersonNameKey(ma.name);
+    if (lookup.byNameNorm.has(nk)) return lookup.byNameNorm.get(nk)!;
+  }
+  const nkTag = normalizePersonNameKey(t);
+  if (nkTag && lookup.byNameNorm.has(nkTag)) return lookup.byNameNorm.get(nkTag)!;
+  return null;
+}

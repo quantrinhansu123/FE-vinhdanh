@@ -7,6 +7,12 @@ import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from './api/supabase';
+import {
+  defaultUpcareMktDateRange,
+  fetchUpcareMktEmployees,
+  isUpcareLeaderboardEnabled,
+  mapUpcareMktRowsToLeaderboardEmployees,
+} from './api/upcareCrm';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardAdminLayout } from './pages/DashboardAdminLayout';
 import { LeaderboardPage } from './pages/LeaderboardPage';
@@ -38,6 +44,9 @@ function logSupabaseError(action: string, error: { code?: string; message?: stri
 function AppRoutes() {
   const navigate = useNavigate();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  /** BXH trang chủ: Upcare MKT API nếu bật, không thì cùng nguồn Supabase employees */
+  const [boardEmployees, setBoardEmployees] = useState<Employee[]>([]);
+  const [boardSource, setBoardSource] = useState<'upcare' | 'supabase'>('supabase');
   const [loading, setLoading] = useState(true);
   const [showMenuBar, setShowMenuBar] = useState(true);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -70,15 +79,34 @@ function AppRoutes() {
     setLoading(true);
     const { data, error } = await supabase.from(EMPLOYEES_TABLE).select('*').order('score', { ascending: false });
 
+    let rankedData: Employee[] = [];
     if (error) {
       logSupabaseError('fetching employees', error);
     } else {
-      const rankedData = (data || []).map((emp, index) => ({
+      rankedData = (data || []).map((emp, index) => ({
         ...emp,
         rank: index + 1,
       }));
       setEmployees(rankedData);
     }
+
+    let board = rankedData;
+    let source: 'upcare' | 'supabase' = 'supabase';
+    if (isUpcareLeaderboardEnabled()) {
+      try {
+        const { dateFrom, dateTo } = defaultUpcareMktDateRange();
+        const mktRows = await fetchUpcareMktEmployees({ dateFrom, dateTo });
+        board = mapUpcareMktRowsToLeaderboardEmployees(mktRows);
+        source = 'upcare';
+      } catch (e) {
+        console.warn('[BXH] Upcare employee/mkt:', e);
+        board = rankedData;
+        source = 'supabase';
+      }
+    }
+    setBoardEmployees(board);
+    setBoardSource(source);
+
     setLoading(false);
   };
 
@@ -149,7 +177,8 @@ function AppRoutes() {
         element={
           authUser ? (
             <LeaderboardPage
-              employees={employees}
+              employees={boardEmployees}
+              boardSource={boardSource}
               loading={loading}
               showMenuBar={showMenuBar}
               setShowMenuBar={setShowMenuBar}

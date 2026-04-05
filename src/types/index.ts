@@ -5,6 +5,8 @@
 export interface Employee {
   id: string;
   name: string;
+  /** Mã/biệt danh nội bộ, ví dụ FBC.DucNT (từ API Upcare) */
+  code?: string;
   team: string;
   score: number;
   avatar_url: string | null;
