@@ -50,6 +50,7 @@ export const TeamsView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CrmTeamRow | null>(null);
+  const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,38 +95,62 @@ export const TeamsView: React.FC = () => {
     };
   }, [duAnById]);
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => {
+      const hay = [r.ma_team, r.ten_team, r.leader, projectLabel(r.du_an_ids)]
+        .map((x) => (x || '').toString().toLowerCase())
+        .join(' ');
+      return hay.includes(q);
+    });
+  }, [rows, search, projectLabel]);
+
   return (
     <div className="dash-fade-up">
-      <SectionCard
-        title="👥 Module 2 — Quản lý Team"
-        actions={
-          <div className="flex items-center gap-[8px]">
-            <button
-              type="button"
-              onClick={() => void load()}
-              disabled={loading}
-              className="flex items-center gap-[6px] bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.1)] text-[var(--text2)] py-[6px] px-[10px] rounded-[6px] text-[11px] font-bold transition-all border border-[rgba(255,255,255,0.08)] disabled:opacity-50"
-            >
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-              Làm mới
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(null);
-                setFormOpen(true);
-              }}
-              className="bg-[#3d8ef0] hover:bg-[#2e7dd1] text-white py-[6px] px-[13px] rounded-[6px] text-[11px] font-bold transition-all shadow-[0_4px_12px_rgba(61,142,240,0.25)]"
-            >
-              + Thêm team
-            </button>
-          </div>
-        }
-        bodyPadding={false}
-      >
-        {error && (
-          <div className="p-[14px_16px] text-[11px] text-[var(--R)] border-b border-[var(--border)]">{error}</div>
-        )}
+      {/* Page header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
+        <div className="space-y-1">
+          <p className="text-[var(--ld-primary)] font-bold text-[11px] uppercase tracking-widest">Enterprise Tier</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--ld-on-surface)] tracking-tight">Module 2 — Quản lý Team</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            className="flex items-center gap-2 bg-[var(--ld-surface-container)] px-3 py-2 rounded-xl text-[var(--ld-on-surface-variant)] border border-[var(--ld-outline-variant)]/20 hover:text-[var(--ld-on-surface)] disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <span className="material-symbols-outlined text-sm">refresh</span>}
+            Làm mới
+          </button>
+          <button
+            className="bg-[var(--ld-primary)] text-[var(--ld-on-primary)] px-4 py-2 rounded-xl font-bold hover:brightness-110 active:scale-95"
+            onClick={() => { setEditing(null); setFormOpen(true); }}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-sm align-[-3px] mr-1">add_circle</span>
+            Thêm team
+          </button>
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="bg-[var(--ld-surface-container-low)] rounded-xl p-3 mb-4 flex flex-col sm:flex-row gap-3 items-center">
+        <div className="relative flex-1 w-full">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ld-outline)]">search</span>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm kiếm theo tên team, leader hoặc dự án…"
+            className="w-full bg-[var(--ld-surface-container-highest)] border-none rounded-xl pl-10 pr-4 py-2.5 text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)]"
+            type="text"
+          />
+        </div>
+      </div>
+
+      <SectionCard bodyPadding={false}>
+        {error && <div className="p-[14px_16px] text-[11px] text-[var(--R)] border-b border-[var(--border)]">{error}</div>}
         {loading && !rows.length ? (
           <div className="flex items-center justify-center gap-2 py-16 text-[var(--text3)] text-[12px]">
             <Loader2 className="animate-spin" size={20} />
@@ -135,39 +160,26 @@ export const TeamsView: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="border-b border-[var(--border)] text-[9px] font-bold tracking-[1px] uppercase text-[var(--text3)] text-left">
-                  <th className="p-[12px_16px]">MÃ TEAM</th>
-                  <th className="p-[12px_16px]">TÊN TEAM</th>
-                  <th className="p-[12px_16px]">LEADER</th>
-                  <th className="p-[12px_16px] text-center">SỐ THÀNH VIÊN</th>
-                  <th className="p-[12px_16px]">DỰ ÁN PHỤ TRÁCH</th>
-                  <th className="p-[12px_16px] text-right">DOANH SỐ THÁNG</th>
-                  <th className="p-[12px_16px]">TRẠNG THÁI</th>
-                  <th className="p-[12px_16px]"></th>
+                <tr className="border-b border-[var(--border)] text-[10px] font-bold tracking-widest uppercase text-[var(--text3)] text-left">
+                  <th className="p-[12px_16px]">Mã Team</th>
+                  <th className="p-[12px_16px]">Tên Team</th>
+                  <th className="p-[12px_16px]">Leader</th>
+                  <th className="p-[12px_16px] text-center">Số thành viên</th>
+                  <th className="p-[12px_16px]">Dự án phụ trách</th>
+                  <th className="p-[12px_16px] text-right">Doanh số tháng</th>
+                  <th className="p-[12px_16px]">Trạng thái</th>
+                  <th className="p-[12px_16px] text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="text-[11.5px] text-[var(--text2)]">
-                {rows.length === 0 && !loading ? (
+              <tbody className="text-[12px] text-[var(--text2)]">
+                {filtered.length === 0 && !loading ? (
                   <tr>
                     <td colSpan={8} className="p-[24px_16px] text-center text-[var(--text3)] space-y-3">
-                      <div>
-                        Chưa có team. Chạy SQL <code className="text-[var(--text2)]">supabase/create_crm_teams.sql</code> hoặc
-                        thêm bảng <code className="text-[var(--text2)]">{TEAMS_TABLE}</code>.
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditing(null);
-                          setFormOpen(true);
-                        }}
-                        className="inline-flex bg-[#3d8ef0] hover:bg-[#2e7dd1] text-white py-[8px] px-[16px] rounded-[6px] text-[11px] font-bold"
-                      >
-                        + Thêm team đầu tiên
-                      </button>
+                      Không tìm thấy team phù hợp.
                     </td>
                   </tr>
                 ) : (
-                  rows.map((row) => {
+                  filtered.map((row) => {
                     const st = teamBadge(row.trang_thai);
                     const memCount =
                       row.so_thanh_vien != null
@@ -176,12 +188,17 @@ export const TeamsView: React.FC = () => {
                     return (
                       <tr
                         key={row.id}
-                        className="border-b border-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.015)] transition-colors"
+                        className="border-b border-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.02)] transition-colors"
                       >
-                        <td className="p-[12px_16px] font-bold text-[#3d8ef0]">{row.ma_team || '—'}</td>
-                        <td className="p-[12px_16px] font-extrabold text-[#fff] tracking-[0.2px]">{row.ten_team}</td>
-                        <td className="p-[12px_16px] max-w-[130px] truncate" title={row.leader || ''}>
-                          {row.leader || '—'}
+                        <td className="p-[12px_16px] font-bold text-[var(--ld-primary)]">{row.ma_team || '—'}</td>
+                        <td className="p-[12px_16px] font-extrabold text-[var(--ld-on-surface)] tracking-[0.2px]">{row.ten_team}</td>
+                        <td className="p-[12px_16px] max-w-[180px] truncate" title={row.leader || ''}>
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-[var(--ld-primary-container)] flex items-center justify-center text-[10px] font-bold text-[var(--ld-on-primary-container)]">
+                              {(row.leader || '—').trim().slice(0, 1).toUpperCase()}
+                            </div>
+                            <span>{row.leader || '—'}</span>
+                          </div>
                         </td>
                         <td className="p-[12px_16px] text-center font-medium tabular-nums">{memCount}</td>
                         <td
@@ -190,7 +207,7 @@ export const TeamsView: React.FC = () => {
                         >
                           {projectLabel(row.du_an_ids)}
                         </td>
-                        <td className="p-[12px_16px] text-right font-bold text-[#0fa86d] tabular-nums">
+                        <td className="p-[12px_16px] text-right font-bold text-[var(--ld-secondary)] tabular-nums">
                           {formatCompactVnd(row.doanh_so_thang)}
                         </td>
                         <td className="p-[12px_16px]">
@@ -203,8 +220,9 @@ export const TeamsView: React.FC = () => {
                               setEditing(row);
                               setFormOpen(true);
                             }}
-                            className="bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] text-[10px] p-[4px_10px] rounded-[4px] border border-[rgba(255,255,255,0.08)] transition-all"
+                            className="text-[var(--ld-primary)] hover:bg-[color-mix(in_srgb,var(--ld-primary)_10%,transparent)] p-[6px_10px] rounded-lg border border-[var(--ld-outline-variant)]/20 text-[11px] font-bold"
                           >
+                            <span className="material-symbols-outlined text-sm align-[-3px] mr-1">edit</span>
                             Sửa
                           </button>
                         </td>

@@ -375,7 +375,7 @@ export const ReportsRawView: React.FC = () => {
                 <th className="p-2">Code</th>
                 <th className="p-2">TK</th>
                 <th className="p-2 text-right">Ads chi</th>
-                <th className="p-2 text-right">Revenue</th>
+                <th className="p-2 text-right">Doanh thu (VNĐ)</th>
                 <th className="p-2 text-right">Mess</th>
                 <th className="p-2 text-right">Đơn</th>
                 <th className="p-2 text-right">Lead</th>
@@ -402,7 +402,7 @@ export const ReportsRawView: React.FC = () => {
                   <td className="p-2">{(r as any).code || '—'}</td>
                   <td className="p-2 max-w-[220px] truncate" title={r.ad_account || ''}>{r.ad_account || '—'}</td>
                   <td className="p-2 text-right">{Number(r.ad_cost || 0).toLocaleString('vi-VN')}</td>
-                  <td className="p-2 text-right">{Number(r.revenue || 0).toLocaleString('vi-VN')}</td>
+                  <td className="p-2 text-right">{Number(r.tien_viet || 0).toLocaleString('vi-VN')}</td>
                   <td className="p-2 text-right">{r.mess_comment_count ?? '—'}</td>
                   <td className="p-2 text-right">{r.order_count ?? '—'}</td>
                   <td className="p-2 text-right">{r.tong_lead ?? r.tong_data_nhan ?? '—'}</td>

@@ -250,7 +250,8 @@ export const AdminDashboardView: React.FC = () => {
           orders: 0,
           tongData: 0,
         } satisfies MarketerAgg);
-      cur.revenue += safeNum(r.revenue);
+      // Doanh thu VNĐ: ưu tiên tien_viet; nếu thiếu, quy đổi từ revenue * 25,000
+      cur.revenue += r.tien_viet != null ? safeNum(r.tien_viet) : Math.round(safeNum(r.revenue) * 25000);
       cur.adCost += safeNum(r.ad_cost);
       cur.tongLead += safeNum(r.tong_lead);
       cur.orders += safeNum(r.order_count);

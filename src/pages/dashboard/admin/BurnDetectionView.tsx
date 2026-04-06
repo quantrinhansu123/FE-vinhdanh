@@ -3,7 +3,7 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import type { ReportRow } from '../../../types';
 
-const REPORTS_TABLE = 'detail_reports';
+const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
 const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_TABLE?.trim() || 'tkqc';
 
@@ -54,6 +54,7 @@ function formatCompactK(n: number): string {
 type Agg = {
   key: string;
   displayName: string;
+  fullName: string | null;
   team: string | null;
   adCost: number;
   revenue: number;
@@ -118,32 +119,24 @@ export const BurnDetectionView: React.FC = () => {
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [ym, setYm] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  });
+  // Bộ lọc thời gian: from/to, mặc định là tháng hiện tại
+  const today = useMemo(() => new Date(), []);
+  const thisMonthStart = useMemo(() => startOfMonth(today.getFullYear(), today.getMonth()), [today]);
+  const thisMonthEnd = useMemo(() => endOfMonth(today.getFullYear(), today.getMonth()), [today]);
+  const [fromDate, setFromDate] = useState<string>(() => toLocalYyyyMmDd(thisMonthStart));
+  const [toDate, setToDate] = useState<string>(() => toLocalYyyyMmDd(thisMonthEnd));
   const [idDuAn, setIdDuAn] = useState('');
   const [duAnList, setDuAnList] = useState<DuAnOpt[]>([]);
   const [tkqcList, setTkqcList] = useState<TkqcOpt[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'crit' | 'normal'>('all');
   const [search, setSearch] = useState('');
+  const [allDates, setAllDates] = useState(false);
 
   const bounds = useMemo(() => {
-    const [ys, ms] = ym.split('-');
-    const y = Number(ys);
-    const m0 = Number(ms) - 1;
-    if (!Number.isFinite(y) || !Number.isFinite(m0)) {
-      const t = new Date();
-      return {
-        start: toLocalYyyyMmDd(startOfMonth(t.getFullYear(), t.getMonth())),
-        end: toLocalYyyyMmDd(endOfMonth(t.getFullYear(), t.getMonth())),
-      };
-    }
-    return {
-      start: toLocalYyyyMmDd(startOfMonth(y, m0)),
-      end: toLocalYyyyMmDd(endOfMonth(y, m0)),
-    };
-  }, [ym]);
+    const start = fromDate && /^\d{4}-\d{2}-\d{2}$/.test(fromDate) ? fromDate : toLocalYyyyMmDd(thisMonthStart);
+    const end = toDate && /^\d{4}-\d{2}-\d{2}$/.test(toDate) ? toDate : toLocalYyyyMmDd(thisMonthEnd);
+    return { start, end };
+  }, [fromDate, toDate, thisMonthStart, thisMonthEnd]);
 
   const loadRefs = useCallback(async () => {
     const dRes = await supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true });
@@ -168,14 +161,16 @@ export const BurnDetectionView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: qErr } = await supabase
+  let q = supabase
       .from(REPORTS_TABLE)
       .select(
-        'name, email, team, ad_cost, revenue, mess_comment_count, tong_lead, order_count, tong_data_nhan, report_date, ma_tkqc'
+        'name, email, code, team, ad_cost, revenue, tien_viet, mess_comment_count, tong_lead, order_count, tong_data_nhan, report_date, ma_tkqc'
       )
-      .gte('report_date', bounds.start)
-      .lte('report_date', bounds.end)
-      .limit(12000);
+      .limit(120000);
+    if (!allDates) {
+      q = q.gte('report_date', bounds.start).lte('report_date', bounds.end);
+    }
+    const { data, error: qErr } = await q;
 
     if (qErr) {
       console.error('burn-detect:', qErr);
@@ -215,15 +210,18 @@ export const BurnDetectionView: React.FC = () => {
   const byMarketer = useMemo(() => {
     const map = new Map<string, Agg>();
     for (const r of scopedRows) {
+      const code = r.code?.trim();
       const email = r.email?.trim().toLowerCase() || '';
       const nm = (r.name || '').trim();
-      const key = email || nm || `anon-${map.size}`;
-      const displayName = nm || email || '—';
+      // Ưu tiên gom theo code; nếu thiếu thì theo email, cuối cùng mới theo name
+      const key = (code || email || nm || `anon-${map.size}`).toLowerCase();
+      const displayName = code || nm || email || '—';
       const cur =
         map.get(key) ||
         ({
           key,
           displayName,
+          fullName: nm || null,
           team: r.team?.trim() || null,
           adCost: 0,
           revenue: 0,
@@ -233,16 +231,19 @@ export const BurnDetectionView: React.FC = () => {
           tongData: 0,
         } satisfies Agg);
       cur.adCost += safeNum(r.ad_cost);
-      cur.revenue += safeNum(r.revenue);
+      // Dùng tiền Việt: ưu tiên tien_viet, fallback revenue*25k
+      cur.revenue += r.tien_viet != null ? safeNum(r.tien_viet) : Math.round(safeNum(r.revenue) * 25000);
       cur.mess += safeNum(r.mess_comment_count);
       cur.tongLead += safeNum(r.tong_lead);
       cur.orders += safeNum(r.order_count);
       cur.tongData += safeNum(r.tong_data_nhan);
       if (!cur.team && r.team?.trim()) cur.team = r.team.trim();
-      if (cur.displayName === '—' && nm) cur.displayName = displayName;
+      if (cur.displayName === '—' && (code || nm || email)) cur.displayName = displayName;
+      if (!cur.fullName && nm) cur.fullName = nm;
       map.set(key, cur);
     }
-    return Array.from(map.values()).filter((m) => m.adCost > 0 || m.revenue > 0);
+    // Trả về toàn bộ marketer trong bảng, kể cả khi adCost/revenue = 0
+    return Array.from(map.values());
   }, [scopedRows]);
 
   const scored = useMemo(() => {
@@ -328,6 +329,33 @@ export const BurnDetectionView: React.FC = () => {
           </p>
         </div>
         <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-primary)] leader-dash-label">Từ ngày</label>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)] py-2 px-4"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-primary)] leader-dash-label">Đến ngày</label>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)] py-2 px-4 min-w-[160px] outline-none"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-[12px] text-[var(--ld-on-surface-variant)]">
+              <input
+                type="checkbox"
+                checked={allDates}
+                onChange={(e) => setAllDates(e.target.checked)}
+                className="accent-[var(--ld-primary)]"
+              />
+              Bỏ lọc ngày (lấy tất cả)
+            </label>
           <div className="flex flex-col gap-1">
             <label className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-primary)] leader-dash-label">Dự án</label>
             <select
@@ -339,20 +367,6 @@ export const BurnDetectionView: React.FC = () => {
               {duAnList.map((d) => (
                 <option key={d.id} value={d.id}>
                   {[d.ma_du_an, d.ten_du_an].filter(Boolean).join(' · ') || d.ten_du_an}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-primary)] leader-dash-label">Tháng</label>
-            <select
-              value={ym}
-              onChange={(e) => setYm(e.target.value)}
-              className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)] py-2 px-4 min-w-[180px] outline-none"
-            >
-              {monthOptions().map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
                 </option>
               ))}
             </select>
@@ -466,6 +480,7 @@ export const BurnDetectionView: React.FC = () => {
               <thead>
                 <tr className="bg-[var(--ld-surface-container-high)]">
                   <th className="px-6 py-4 leader-dash-label text-[10px] uppercase tracking-widest text-[var(--ld-primary)]">Marketer</th>
+                  <th className="px-4 py-4 leader-dash-label text-[10px] uppercase tracking-widest text-[var(--ld-on-surface-variant)]">Tên</th>
                   <th className="px-4 py-4 leader-dash-label text-[10px] uppercase tracking-widest text-[var(--ld-on-surface-variant)]">Ads chi</th>
                   <th className="px-4 py-4 leader-dash-label text-[10px] uppercase tracking-widest text-[var(--ld-on-surface-variant)]">Revenue</th>
                   <th className="px-4 py-4 leader-dash-label text-[10px] uppercase tracking-widest text-[var(--ld-on-surface-variant)] text-center">
@@ -536,6 +551,7 @@ export const BurnDetectionView: React.FC = () => {
                           </div>
                         </div>
                       </td>
+                    <td className="px-4 py-4 text-sm text-[var(--ld-on-surface-variant)]">{s.fullName || '—'}</td>
                       <td className="px-4 py-4 text-sm font-medium text-[var(--ld-on-surface)] tabular-nums">{formatVndDots(s.adCost)}</td>
                       <td className="px-4 py-4 text-sm font-medium text-[var(--ld-on-surface)] tabular-nums">{formatVndDots(s.revenue)}</td>
                       <td className="px-4 py-4">

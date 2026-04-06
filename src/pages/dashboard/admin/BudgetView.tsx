@@ -329,6 +329,21 @@ export const BudgetView: React.FC = () => {
     void setStatus(id, 'tu_choi', ly);
   };
 
+  const onDelete = async (id: string) => {
+    if (!window.confirm(`Xóa yêu cầu ${displayMa(id)}? Hành động không thể hoàn tác.`)) return;
+    setActionId(id);
+    try {
+      const { error: delErr } = await supabase.from(BUDGET_TABLE).delete().eq('id', id);
+      if (delErr) throw delErr;
+      await load();
+    } catch (e) {
+      console.error('budget delete:', e);
+      window.alert(e instanceof Error ? e.message : 'Xóa thất bại.');
+    } finally {
+      setActionId(null);
+    }
+  };
+
   const scrollToPending = () => pendingPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const showErrorBanner = Boolean(error) && !bannerDismissed;
@@ -530,7 +545,7 @@ export const BudgetView: React.FC = () => {
                 </div>
               </div>
               <div className="overflow-x-auto leader-obsidian-scrollbar">
-                <table className="w-full text-left border-separate border-spacing-y-2 px-4 min-w-[720px]">
+                <table className="w-full text-left border-separate border-spacing-y-2 px-4 min-w-[780px]">
                   <thead>
                     <tr className="text-[10px] leader-dash-label font-black text-[var(--ld-on-surface-variant)] uppercase tracking-widest">
                       <th className="px-4 py-3">Mã YC</th>
@@ -539,6 +554,7 @@ export const BudgetView: React.FC = () => {
                       <th className="px-4 py-3 text-right">Số tiền</th>
                       <th className="px-4 py-3">Cập nhật</th>
                       <th className="px-4 py-3">TT</th>
+                      <th className="px-4 py-3 text-right">Xóa</th>
                     </tr>
                   </thead>
                   <tbody className="text-sm">
@@ -585,6 +601,16 @@ export const BudgetView: React.FC = () => {
                                   Rejected
                                 </span>
                               )}
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              <button
+                                type="button"
+                                title="Xóa yêu cầu"
+                                onClick={() => void onDelete(r.id)}
+                                className="bg-[var(--ld-surface-container-highest)] p-1.5 rounded text-[var(--ld-error)] hover:brightness-110 border border-[var(--ld-outline-variant)]/20"
+                              >
+                                <span className="material-symbols-outlined text-sm">delete</span>
+                              </button>
                             </td>
                           </tr>
                         );
@@ -662,6 +688,15 @@ export const BudgetView: React.FC = () => {
                               className="flex-1 py-2 rounded-lg bg-[color-mix(in_srgb,var(--ld-error)_10%,transparent)] text-[var(--ld-error)] text-[10px] font-bold leader-dash-label border border-[color-mix(in_srgb,var(--ld-error)_20%,transparent)] hover:brightness-110 disabled:opacity-50"
                             >
                               Từ chối
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void onDelete(r.id)}
+                              className="p-2 rounded-lg bg-[var(--ld-surface-container-highest)] text-[var(--ld-error)] text-[10px] font-bold leader-dash-label border border-[var(--ld-outline-variant)]/20 hover:brightness-110 disabled:opacity-50"
+                              title="Xóa yêu cầu"
+                            >
+                              <span className="material-symbols-outlined text-sm">delete</span>
                             </button>
                           </div>
                           <button
