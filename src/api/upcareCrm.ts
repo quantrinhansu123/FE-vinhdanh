@@ -27,16 +27,14 @@ export function defaultUpcareMktDateRange(): { dateFrom: string; dateTo: string 
   return { dateFrom: iso(from), dateTo: iso(to) };
 }
 
-/** Map API /api/employee/mkt → Employee (score = amount, team cố định). */
+/** Map API /api/employee/mkt → Employee (score = amount). Team sẽ được gán từ bảng employees. */
 export function mapUpcareMktRowsToLeaderboardEmployees(rows: UpcareMktEmployeeRow[]): Employee[] {
-  const team =
-    import.meta.env.VITE_UPCARE_CRM_LEADERBOARD_TEAM?.trim() || 'MKT Upcare';
   const sorted = [...rows].sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0));
   return sorted.map((r, index) => ({
     id: `upcare-mkt-${r.id}`,
     name: r.name,
     code: r.code != null ? String(r.code) : undefined,
-    team,
+    team: null,
     score: Number(r.amount) || 0,
     avatar_url: r.avatar,
     rank: index + 1,
@@ -45,7 +43,9 @@ export function mapUpcareMktRowsToLeaderboardEmployees(rows: UpcareMktEmployeeRo
 
 function upcareApiRoot(): string {
   const useProxy = import.meta.env.VITE_UPCARE_CRM_USE_PROXY === 'true';
-  if (useProxy) return '/upcare-crm';
+  // Dev: dùng Vite proxy /upcare-crm → crm.upcare.asia
+  // Prod (Vercel): dùng serverless function /api/upcare-crm để tránh CORS
+  if (useProxy) return import.meta.env.DEV ? '/upcare-crm' : '/api/upcare-crm';
   return (import.meta.env.VITE_UPCARE_CRM_API_BASE?.trim() || 'https://crm.upcare.asia').replace(/\/$/, '');
 }
 
@@ -237,7 +237,7 @@ export function isUpcareOauthRefreshConfigured(): boolean {
 }
 
 /** Mặc định — ghi đè bằng VITE_UPCARE_CRM_PROJECT_UUID; tắt scope: env = none */
-export const UPCARE_DEFAULT_PROJECT_UUID = '8fcc90bc-a051-4396-9220-4326211bd1e5';
+export const UPCARE_DEFAULT_PROJECT_UUID = '';
 
 function appendProjectScope(qs: URLSearchParams): void {
   const raw = import.meta.env.VITE_UPCARE_CRM_PROJECT_UUID?.trim();
@@ -254,12 +254,14 @@ function appendProjectScope(qs: URLSearchParams): void {
 
 export function getUpcareProjectScopeForUi(): { param: string; uuid: string | null } {
   const raw = import.meta.env.VITE_UPCARE_CRM_PROJECT_UUID?.trim();
-  const uuid =
-    raw === undefined || raw === ''
-      ? UPCARE_DEFAULT_PROJECT_UUID
-      : raw.toLowerCase() === 'none'
-        ? null
-        : raw;
+  let uuid: string | null;
+  if (raw === undefined || raw === '') {
+    uuid = UPCARE_DEFAULT_PROJECT_UUID || null;
+  } else if (raw.toLowerCase() === 'none') {
+    uuid = null;
+  } else {
+    uuid = raw;
+  }
   const param = import.meta.env.VITE_UPCARE_CRM_PROJECT_PARAM?.trim() || 'project_id';
   return { param, uuid };
 }

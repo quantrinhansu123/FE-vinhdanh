@@ -11,6 +11,10 @@ const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_TABLE?.trim() || 'tkqc';
 const AGENCIES_TABLE = import.meta.env.VITE_SUPABASE_AGENCIES_TABLE?.trim() || 'crm_agencies';
 const BUDGET_ATTACHMENTS_BUCKET =
   import.meta.env.VITE_SUPABASE_BUDGET_ATTACHMENTS_BUCKET?.trim() || 'budget-attachments';
+const FIN_AUDIT_TABLE =
+  import.meta.env.VITE_SUPABASE_FINANCE_AUDIT_TABLE?.trim() || 'finance_audit_logs';
+const FIN_ACCOUNTS_TABLE =
+  import.meta.env.VITE_SUPABASE_FINANCE_ACCOUNTS_TABLE?.trim() || 'finance_accounts';
 
 const EXPENSE_CATEGORIES = [
   'Nạp quỹ ADS ZENO AGENCY',
@@ -25,6 +29,12 @@ type TkqcOpt = {
   id: string;
   ma_tkqc: string;
   ten_pae: string | null;
+};
+type FinanceAccount = {
+  id: string;
+  account_number: string | null;
+  bank_name: string | null;
+  account_name: string | null;
 };
 
 const FIELD_CLASS =
@@ -57,6 +67,7 @@ export const BudgetRequestFormModal: React.FC<Props> = ({ open, onClose, onSubmi
   const [duAnList, setDuAnList] = useState<DuAnOpt[]>([]);
   const [tkqcList, setTkqcList] = useState<TkqcOpt[]>([]);
   const [agencies, setAgencies] = useState<CrmAgencyRow[]>([]);
+  const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([]);
 
   const [idDuAn, setIdDuAn] = useState('');
   const [agencyId, setAgencyId] = useState('');
@@ -77,9 +88,13 @@ export const BudgetRequestFormModal: React.FC<Props> = ({ open, onClose, onSubmi
   const [attempted, setAttempted] = useState(false);
 
   const loadRefs = useCallback(async () => {
-    const [dRes, aRes] = await Promise.all([
+    const [dRes, aRes, fRes] = await Promise.all([
       supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true }),
       supabase.from(AGENCIES_TABLE).select('id, ma_agency, ten_agency').order('ten_agency', { ascending: true }),
+      supabase
+        .from(FIN_ACCOUNTS_TABLE)
+        .select('id, account_number, bank_name, account_name')
+        .order('account_name', { ascending: true }),
     ]);
     if (dRes.error) console.error('BudgetRequestFormModal du_an:', dRes.error);
     else setDuAnList((dRes.data || []) as DuAnOpt[]);
@@ -88,6 +103,12 @@ export const BudgetRequestFormModal: React.FC<Props> = ({ open, onClose, onSubmi
       setAgencies([]);
     } else {
       setAgencies((aRes.data || []) as CrmAgencyRow[]);
+    }
+    if (fRes.error) {
+      console.warn('BudgetRequestFormModal finance_accounts:', fRes.error);
+      setFinanceAccounts([]);
+    } else {
+      setFinanceAccounts((fRes.data || []) as FinanceAccount[]);
     }
   }, []);
 
@@ -247,6 +268,51 @@ export const BudgetRequestFormModal: React.FC<Props> = ({ open, onClose, onSubmi
         }
       }
 
+      // Ghi log tài chính (audit) — hiển thị kết quả rõ ràng
+      try {
+        const userAgent =
+          typeof navigator !== 'undefined' && navigator?.userAgent ? navigator.userAgent : null;
+        const auditRow: Record<string, unknown> = {
+          action: 'create_budget_request',
+          user_id: null, // có thể điền id người gửi yêu cầu nếu có auth
+          target_id: rid,
+          details: {
+            amount_vnd: amount,
+            du_an_id: idDuAn,
+            agency_id: agencyId,
+            tkqc_id: tkqcId || null,
+            category: hangMuc.trim(),
+            content: emptyToNull(noiDungCk),
+            purpose: emptyToNull(mucDich),
+            attachments_count: (urls || []).length,
+            attachments_urls: urls || [],
+          },
+          // Một số schema đặt NOT NULL cho ip → điền 'unknown' nếu không xác định được
+          ip: 'unknown',
+          location: null,
+          user_agent: userAgent,
+          logged_at: new Date().toISOString(),
+        };
+        const { data: logInserted, error: logErr } = await supabase
+          .from(FIN_AUDIT_TABLE)
+          .insert(auditRow)
+          .select('id')
+          .single();
+        if (logErr) {
+          setFormError(`Ghi log tài chính thất bại: ${logErr.message || 'Unknown error'}`);
+          return; // không đóng modal — để người dùng thấy lỗi
+        } else if (!logInserted?.id) {
+          setFormError('Ghi log tài chính thất bại: không nhận được id.');
+          return;
+        } else {
+          window.alert('Đã ghi log tài chính thành công.');
+        }
+      } catch (logEx) {
+        const msg = logEx instanceof Error ? logEx.message : String(logEx);
+        setFormError(`Ghi log tài chính thất bại: ${msg}`);
+        return; // không đóng modal
+      }
+
       resetForm();
       onSubmitted();
       onClose();
@@ -296,6 +362,34 @@ export const BudgetRequestFormModal: React.FC<Props> = ({ open, onClose, onSubmi
           </div>
 
           <form onSubmit={(e) => void handleSubmit(e)} className="p-[18px] space-y-[14px] pb-[20px]">
+            {/* Gợi ý tài khoản mẫu: chọn để tự điền ngân hàng + chủ TK + số TK */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold text-[var(--text2)]">Tài khoản mẫu (tự điền)</span>
+                <select
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) return;
+                    const acc = financeAccounts.find((x) => x.id === val);
+                    if (acc) {
+                      setNganHang(acc.bank_name || '');
+                      setChuTk(acc.account_name || '');
+                      setSoTk(acc.account_number || '');
+                    }
+                  }}
+                  defaultValue=""
+                  className="rounded-[8px] bg-[var(--bg2)] border border-[var(--border2)] p-2 text-[13px] outline-none focus:border-[var(--accent)]"
+                >
+                  <option value="">— Chọn tài khoản mẫu —</option>
+                  {financeAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {[acc.account_name, acc.bank_name, acc.account_number].filter(Boolean).join(' · ')}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
             {formError && (
               <div className="text-[11px] text-[var(--R)] bg-[var(--Rd)]/25 border border-[rgba(224,61,61,0.25)] rounded-[8px] px-3 py-2.5">
                 {formError}

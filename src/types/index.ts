@@ -29,6 +29,8 @@ export type ReportRow = {
   report_date: string;
   name?: string | null;
   email?: string | null;
+  /** Mã/biệt danh nhân sự — đồng bộ từ Upcare hoặc từ file Excel (trích trong [...]) */
+  code?: string | null;
   team?: string | null;
   product?: string | null;
   market?: string | null;

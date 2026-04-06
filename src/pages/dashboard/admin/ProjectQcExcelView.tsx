@@ -352,11 +352,41 @@ export const ProjectQcExcelView: React.FC = () => {
         };
       });
 
-      const { error: upErr } = await supabase.from(REPORTS_TABLE).upsert(payload, { onConflict: 'id' });
-      if (upErr) throw upErr;
+      // Không dựa vào onConflict (có thể chưa có unique index). Tách update và insert.
+      const toUpdate = payload.filter((p) => (p as any).id);
+      const toInsert = payload.filter((p) => !(p as any).id);
 
-      setExcelMsg(`Đã đồng bộ ${payload.length} dòng theo khóa Ngày + Code (cập nhật ad_cost, không ghi revenue).`);
+      // Update theo id
+      if (toUpdate.length > 0) {
+        const chunk = 50;
+        for (let i = 0; i < toUpdate.length; i += chunk) {
+          const part = toUpdate.slice(i, i + chunk);
+          const results = await Promise.all(
+            part.map((r) => supabase.from(REPORTS_TABLE).update(r).eq('id', (r as any).id))
+          );
+          const err = results.find((x) => x.error)?.error;
+          if (err) throw err;
+        }
+      }
+      // Insert phần còn lại
+      if (toInsert.length > 0) {
+        const { error: insErr } = await supabase.from(REPORTS_TABLE).insert(toInsert);
+        if (insErr) throw insErr;
+      }
+
+      {
+        const okMsg = `Đã đồng bộ ${payload.length} dòng theo khóa Ngày + Code (cập nhật ad_cost, không ghi revenue).`;
+        setExcelMsg(okMsg);
+        try { window.alert(okMsg); } catch {}
+      }
       setStagedReportRows([]);
+    } catch (e) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e ? String((e as any).message) : 'Đồng bộ thất bại (preview).';
+      setExcelMsg(`Lỗi: ${msg}`);
+      try {
+        window.alert(`Đồng bộ thất bại: ${msg}`);
+      } catch {}
     } finally {
       setExcelBusy(false);
     }
@@ -442,10 +472,30 @@ export const ProjectQcExcelView: React.FC = () => {
         };
       });
 
-      const { error: upErr } = await supabase.from(REPORTS_TABLE).upsert(payload, { onConflict: 'id' });
-      if (upErr) throw upErr;
+      // Không dựa vào onConflict — tách update/insert như trên
+      const toUpdate = payload.filter((p) => (p as any).id);
+      const toInsert = payload.filter((p) => !(p as any).id);
+      if (toUpdate.length > 0) {
+        const chunk = 50;
+        for (let i = 0; i < toUpdate.length; i += chunk) {
+          const part = toUpdate.slice(i, i + chunk);
+          const results = await Promise.all(
+            part.map((r) => supabase.from(REPORTS_TABLE).update(r).eq('id', (r as any).id))
+          );
+          const err = results.find((x) => x.error)?.error;
+          if (err) throw err;
+        }
+      }
+      if (toInsert.length > 0) {
+        const { error: insErr } = await supabase.from(REPORTS_TABLE).insert(toInsert);
+        if (insErr) throw insErr;
+      }
 
-      setExcelMsg(`Đã đồng bộ ${payload.length} dòng theo khóa Ngày + Code (chỉ cập nhật ad_cost).`);
+      {
+        const okMsg = `Đã đồng bộ ${payload.length} dòng theo khóa Ngày + Code (chỉ cập nhật ad_cost).`;
+        setExcelMsg(okMsg);
+        try { window.alert(okMsg); } catch {}
+      }
       // Hiển thị danh sách đã đồng bộ
       setLastPushed(
         payload.map((p) => ({
@@ -464,6 +514,13 @@ export const ProjectQcExcelView: React.FC = () => {
           code: p.code,
         }))
       );
+    } catch (e) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e ? String((e as any).message) : 'Đồng bộ thất bại.';
+      setExcelMsg(`Lỗi: ${msg}`);
+      try {
+        window.alert(`Đồng bộ thất bại: ${msg}`);
+      } catch {}
     } finally {
       setPushing(false);
     }

@@ -14,36 +14,85 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const upstreamBase = process.env.UPCARE_CRM_API_BASE?.trim() || 'https://crm.upcare.asia';
-    const bearer = (process.env.UPCARE_CRM_BEARER_TOKEN || '').trim();
-    const cookie = (process.env.UPCARE_CRM_COOKIE || '').trim();
+    let bearer = (process.env.UPCARE_CRM_BEARER_TOKEN || '').trim();
+    let cookie = (process.env.UPCARE_CRM_COOKIE || '').trim();
 
     // Build upstream URL by stripping the function base (/api/upcare-crm)
     const originalUrl = req.url || '/';
     const pathAndQuery = originalUrl.replace(/^\/api\/upcare-crm/, '') || '/';
     const upstreamUrl = `${upstreamBase.replace(/\/$/, '')}${pathAndQuery}`;
 
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
-    };
-    if (bearer) {
-      headers.Authorization = `Bearer ${bearer}`;
-    }
-    if (cookie) {
-      headers.Cookie = cookie;
+    async function doProxy(currentBearer: string, currentCookie: string) {
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+      };
+      if (currentBearer) {
+        headers.Authorization = `Bearer ${currentBearer}`;
+      }
+      if (currentCookie) {
+        headers.Cookie = currentCookie;
+      }
+
+      const init: RequestInit = {
+        method: req.method,
+        headers,
+      };
+      if (req.method && req.method !== 'GET' && req.method !== 'HEAD') {
+        init.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {});
+        if (!headers['Content-Type']) {
+          headers['Content-Type'] = 'application/json';
+        }
+      }
+      return fetch(upstreamUrl, init as any);
     }
 
-    const init: RequestInit = {
-      method: req.method,
-      headers,
-    };
-    if (req.method && req.method !== 'GET' && req.method !== 'HEAD') {
-      init.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {});
-      if (!headers['Content-Type']) {
-        headers['Content-Type'] = 'application/json';
+    let upstreamRes = await doProxy(bearer, cookie);
+
+    // On 401, try OAuth refresh if configured
+    if (upstreamRes.status === 401) {
+      const db = (process.env.UPCARE_CRM_OAUTH_DB || '').trim();
+      const login = (process.env.UPCARE_CRM_OAUTH_LOGIN || '').trim();
+      const password = (process.env.UPCARE_CRM_OAUTH_PASSWORD || '').trim();
+      const oauthUrl = `${upstreamBase.replace(/\/$/, '')}/api/oauth/token`;
+      if (db && login && password && cookie) {
+        const form = new FormData();
+        form.append('db', db);
+        form.append('login', login);
+        form.append('password', password);
+        const r = await fetch(oauthUrl, {
+          method: 'POST',
+          headers: { Cookie: cookie, Accept: 'application/json' },
+          body: form as any,
+        });
+        const txt = await r.text().catch(() => '');
+        const jwtMatch =
+          txt.match(/\b(eyJ[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2})\b/) ||
+          (() => {
+            try {
+              const obj = JSON.parse(txt);
+              const k = ['access_token', 'token', 'authorization', 'accessToken'];
+              for (const key of k) {
+                if (typeof obj[key] === 'string' && obj[key].startsWith('eyJ')) return [{ 0: obj[key] } as any];
+              }
+              if (obj?.data && typeof obj.data === 'object') {
+                for (const key of k) {
+                  if (typeof obj.data[key] === 'string' && obj.data[key].startsWith('eyJ')) return [{ 0: obj.data[key] } as any];
+                }
+              }
+            } catch {}
+            return null;
+          })();
+        if (jwtMatch && jwtMatch[0]) {
+          bearer = String(jwtMatch[0]).trim();
+          // Keep same cookie; if bạn muốn đồng bộ authorization=… trong cookie:
+          if (/authorization=/.test(cookie)) {
+            cookie = cookie.replace(/authorization=[^;]*/i, `authorization=${bearer}`);
+          }
+          upstreamRes = await doProxy(bearer, cookie);
+        }
       }
     }
 
-    const upstreamRes = await fetch(upstreamUrl, init as any);
     const text = await upstreamRes.text().catch(() => '');
     // Proxy status and content-type
     const ct = upstreamRes.headers.get('content-type') || 'application/json; charset=utf-8';

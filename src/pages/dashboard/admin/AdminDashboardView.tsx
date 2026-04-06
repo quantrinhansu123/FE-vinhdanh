@@ -37,7 +37,11 @@ function formatVndDots(n: number): string {
 }
 
 function safeNum(v: unknown): number {
-  const n = Number(v);
+  if (v == null) return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  // Chuẩn hóa chuỗi tiền tệ: bỏ $, dấu phẩy, khoảng trắng
+  const s = String(v).trim().replace(/[\$,]/g, '').replace(/\s+/g, '');
+  const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -149,13 +153,13 @@ export const AdminDashboardView: React.FC = () => {
     const [curRes, prevRes] = await Promise.all([
       supabase
         .from(REPORTS_TABLE)
-        .select('report_date, name, email, team, ad_cost, revenue, order_count, tong_lead, tong_data_nhan')
+        .select('report_date, name, email, team, code, ad_cost, revenue, order_count, tong_lead, tong_data_nhan')
         .gte('report_date', monthStart)
         .lte('report_date', monthEnd)
         .limit(8000),
       supabase
         .from(REPORTS_TABLE)
-        .select('report_date, name, email, team, ad_cost, revenue, order_count, tong_lead, tong_data_nhan')
+        .select('report_date, name, email, team, code, ad_cost, revenue, order_count, tong_lead, tong_data_nhan')
         .gte('report_date', prevBounds.start)
         .lte('report_date', prevBounds.end)
         .limit(8000),
@@ -190,14 +194,51 @@ export const AdminDashboardView: React.FC = () => {
   const roiNow = roiPct(totals.revenue, totals.adCost);
   const roiPrev = roiPct(prevTotals.revenue, prevTotals.adCost);
   const roiDelta = roiNow != null && roiPrev != null ? roiNow - roiPrev : null;
+  // Doanh thu đã là USD từ nguồn dữ liệu → chỉ định dạng và đổi nhãn
+  const totalsRevenueUsd = Math.round(totals.revenue || 0);
+  const formatUsd = (n: number) =>
+    n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+  // Bộ lọc ngày cho danh sách code
+  const [codesFrom, setCodesFrom] = useState<string>(() => monthStart);
+  const [codesTo, setCodesTo] = useState<string>(() => monthEnd);
+  const [codesLoading, setCodesLoading] = useState(false);
+  const [codesList, setCodesList] = useState<string[]>([]);
+  const [codesAll, setCodesAll] = useState(false);
+
+  const loadCodes = useCallback(async () => {
+    setCodesLoading(true);
+    try {
+      let q = supabase.from(REPORTS_TABLE).select('code, report_date').not('code', 'is', null);
+      if (!codesAll) {
+        q = q.gte('report_date', codesFrom).lte('report_date', codesTo);
+      }
+      const { data, error } = await q.limit(50000);
+      if (error) {
+        console.error('admin-dash codes:', error);
+        setCodesList([]);
+        return;
+      }
+      const s = new Set<string>();
+      for (const r of (data as { code?: string | null }[]) || []) {
+        const c = r.code?.trim();
+        if (c) s.add(c);
+      }
+      setCodesList([...s].sort((a, b) => a.localeCompare(b)));
+    } finally {
+      setCodesLoading(false);
+    }
+  }, [codesFrom, codesTo]);
 
   const byMarketer = useMemo(() => {
     const map = new Map<string, MarketerAgg>();
     for (const r of rows) {
+      const code = r.code?.trim();
       const email = r.email?.trim().toLowerCase() || '';
       const nm = (r.name || '').trim();
-      const key = email || nm || `anon-${map.size}`;
-      const displayName = nm || email || '—';
+      // Ưu tiên gom theo code; nếu thiếu thì theo email, cuối cùng mới theo name
+      const key = (code || email || nm || `anon-${map.size}`).toLowerCase();
+      const displayName = code || nm || email || '—';
       const cur =
         map.get(key) ||
         ({
@@ -414,7 +455,7 @@ export const AdminDashboardView: React.FC = () => {
           <div>
             <p className="leader-dash-label text-xs text-[var(--ld-on-surface-variant)] uppercase tracking-wider mb-1">Tổng doanh thu</p>
             <h3 className="text-2xl font-extrabold text-[var(--ld-on-surface)]" style={{ fontFamily: '"Inter", sans-serif' }}>
-              {formatVndDots(totals.revenue)} <span className="text-sm font-medium text-[var(--ld-on-surface-variant)]">VND</span>
+              {formatUsd(totalsRevenueUsd)} <span className="text-sm font-medium text-[var(--ld-on-surface-variant)]">USD</span>
             </h3>
           </div>
         </div>
@@ -474,6 +515,68 @@ export const AdminDashboardView: React.FC = () => {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Danh sách toàn bộ code với bộ lọc theo ngày */}
+      <div className="bg-[var(--ld-surface-container-low)] p-4 rounded-xl border border-[var(--ld-outline-variant)]/10 space-y-3">
+        <div className="flex items-end gap-3 flex-wrap">
+          <label className="flex flex-col gap-1">
+            <span className="leader-dash-label text-[10px] uppercase tracking-widest font-bold text-[var(--ld-on-surface-variant)]">
+              Từ ngày
+            </span>
+            <input
+              type="date"
+              value={codesFrom}
+              onChange={(e) => setCodesFrom(e.target.value || monthStart)}
+              className="bg-[var(--ld-surface-container-highest)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] px-3 py-2"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="leader-dash-label text-[10px] uppercase tracking-widest font-bold text-[var(--ld-on-surface-variant)]">
+              Đến ngày
+            </span>
+            <input
+              type="date"
+              value={codesTo}
+              onChange={(e) => setCodesTo(e.target.value || monthEnd)}
+              className="bg-[var(--ld-surface-container-highest)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] px-3 py-2"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void loadCodes()}
+            disabled={codesLoading}
+            className="rounded-lg bg-[var(--ld-primary)] text-[var(--ld-on-primary)] px-4 py-2 text-sm font-bold uppercase tracking-widest"
+          >
+            {codesLoading ? 'Đang tải…' : 'Lấy danh sách'}
+          </button>
+          <label className="flex items-center gap-2 text-[12px] text-[var(--ld-on-surface-variant)]">
+            <input
+              type="checkbox"
+              checked={codesAll}
+              onChange={(e) => setCodesAll(e.target.checked)}
+              className="accent-[var(--ld-primary)]"
+            />
+            Bỏ lọc ngày (lấy tất cả)
+          </label>
+          <p className="leader-dash-label text-xs text-[var(--ld-on-surface-variant)]">
+            Mã nhân sự (code): {codesList.length}
+          </p>
+        </div>
+        {codesList.length === 0 ? (
+          <p className="text-[12px] text-[var(--ld-on-surface-variant)]">Chưa có mã code trong phạm vi lọc.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {codesList.map((c) => (
+              <span
+                key={c}
+                className="text-[12px] font-bold px-2 py-1 rounded bg-[color-mix(in_srgb,var(--ld-surface-container-highest)_40%,transparent)] text-[var(--ld-on-surface)] border border-[var(--ld-outline-variant)]/20"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-12 gap-8 items-start">

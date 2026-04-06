@@ -97,6 +97,60 @@ function AppRoutes() {
         const { dateFrom, dateTo } = defaultUpcareMktDateRange();
         const mktRows = await fetchUpcareMktEmployees({ dateFrom, dateTo });
         board = mapUpcareMktRowsToLeaderboardEmployees(mktRows);
+        // Không dùng avatar từ API Upcare
+        board = board.map((b) => ({ ...b, avatar_url: null }));
+        // Ưu tiên avatar theo code ↔ ma_ns trong bảng employees (dùng rankedData vừa fetch để tránh lệch state)
+        if (rankedData.length > 0) {
+          const normalize = (s: string | null | undefined) => (s ? s.trim().toLowerCase() : '');
+          const codeVariants = (raw: string | null | undefined): string[] => {
+            const k = normalize(raw);
+            if (!k) return [];
+            const variants = new Set<string>();
+            variants.add(k);
+            // Nếu có dạng tiền tố như "fbc.ducnt" → lấy phần sau dấu chấm
+            if (k.includes('.')) {
+              variants.add(k.split('.').pop() || k);
+            }
+            // Bỏ ký tự không phải chữ-số (giữ lại chữ và số)
+            variants.add(k.replace(/[^a-z0-9]/g, ''));
+            return Array.from(variants).filter(Boolean);
+          };
+          const byMaNs = new Map<string, { avatar_url: string | null; team: string | null }>();
+          const byEmail = new Map<string, { avatar_url: string | null; team: string | null }>();
+          for (const e of rankedData) {
+            const k = normalize(e.ma_ns);
+            if (k) {
+              byMaNs.set(k, { avatar_url: e.avatar_url || null, team: e.team || null });
+              byMaNs.set(k.replace(/[^a-z0-9]/g, ''), { avatar_url: e.avatar_url || null, team: e.team || null });
+            }
+            const em = e.email?.trim()?.toLowerCase();
+            if (em) byEmail.set(em, { avatar_url: e.avatar_url || null, team: e.team || null });
+          }
+          board = board.map((b) => {
+            const variants = codeVariants(b.code ? String(b.code) : '');
+            for (const v of variants) {
+              if (byMaNs.has(v)) {
+                const hit = byMaNs.get(v);
+                const av = hit?.avatar_url || null;
+                const team = hit?.team || null;
+                return { ...b, avatar_url: av || b.avatar_url || null, team: team ?? b.team ?? null };
+              }
+            }
+            // Dự phòng: so khớp theo email nếu có
+            const em = b.email?.trim()?.toLowerCase();
+            if (em && byEmail.has(em)) {
+              const hit = byEmail.get(em);
+              const av = hit?.avatar_url || null;
+              const team = hit?.team || null;
+              return { ...b, avatar_url: av || b.avatar_url || null, team: team ?? b.team ?? null };
+            }
+            return b;
+          });
+        }
+        // Đảm bảo thứ tự Top sau khi override dữ liệu
+        board = [...board]
+          .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))
+          .map((e, i) => ({ ...e, rank: i + 1 }));
         source = 'upcare';
       } catch (e) {
         console.warn('[BXH] Upcare employee/mkt:', e);
