@@ -42,10 +42,13 @@ export function mapUpcareMktRowsToLeaderboardEmployees(rows: UpcareMktEmployeeRo
 }
 
 function upcareApiRoot(): string {
+  // Prod (Vercel): luôn dùng serverless function để tránh CORS
+  if (!import.meta.env.DEV) {
+    return '/api/upcare-crm';
+  }
+  // Dev: cho phép bật Vite proxy, mặc định gọi thẳng (ai cần thì set VITE_UPCARE_CRM_USE_PROXY=true)
   const useProxy = import.meta.env.VITE_UPCARE_CRM_USE_PROXY === 'true';
-  // Dev: dùng Vite proxy /upcare-crm → crm.upcare.asia
-  // Prod (Vercel): dùng serverless function /api/upcare-crm để tránh CORS
-  if (useProxy) return import.meta.env.DEV ? '/upcare-crm' : '/api/upcare-crm';
+  if (useProxy) return '/upcare-crm';
   return (import.meta.env.VITE_UPCARE_CRM_API_BASE?.trim() || 'https://crm.upcare.asia').replace(/\/$/, '');
 }
 
