@@ -78,13 +78,15 @@ const ADS_DT_MED = 30;
 const iconFill: React.CSSProperties = { fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" };
 
 function aggregateRows(rows: ReportRow[]) {
+  // Doanh thu quy đổi VND: ưu tiên tien_viet; nếu thiếu, quy đổi từ revenue * 25,000
   let revenue = 0;
   let adCost = 0;
   let tongLead = 0;
   let orders = 0;
   let tongData = 0;
   for (const r of rows) {
-    revenue += safeNum(r.revenue);
+    const vnd = r.tien_viet != null ? safeNum(r.tien_viet) : Math.round(safeNum(r.revenue) * 25000);
+    revenue += vnd;
     adCost += safeNum(r.ad_cost);
     tongLead += safeNum(r.tong_lead);
     orders += safeNum(r.order_count);
@@ -102,7 +104,7 @@ function buildDailySeries(rows: ReportRow[]): { date: string; spend: number; rev
     if (!d) continue;
     const cur = map.get(d) || { spend: 0, rev: 0 };
     cur.spend += safeNum(r.ad_cost);
-    cur.rev += safeNum(r.revenue);
+    cur.rev += r.tien_viet != null ? safeNum(r.tien_viet) : Math.round(safeNum(r.revenue) * 25000);
     map.set(d, cur);
   }
   return [...map.entries()]
@@ -153,13 +155,13 @@ export const AdminDashboardView: React.FC = () => {
     const [curRes, prevRes] = await Promise.all([
       supabase
         .from(REPORTS_TABLE)
-        .select('report_date, name, email, team, code, ad_cost, revenue, order_count, tong_lead, tong_data_nhan')
+        .select('report_date, name, email, team, code, ad_cost, revenue, tien_viet, order_count, tong_lead, tong_data_nhan')
         .gte('report_date', monthStart)
         .lte('report_date', monthEnd)
         .limit(8000),
       supabase
         .from(REPORTS_TABLE)
-        .select('report_date, name, email, team, code, ad_cost, revenue, order_count, tong_lead, tong_data_nhan')
+        .select('report_date, name, email, team, code, ad_cost, revenue, tien_viet, order_count, tong_lead, tong_data_nhan')
         .gte('report_date', prevBounds.start)
         .lte('report_date', prevBounds.end)
         .limit(8000),
@@ -194,10 +196,7 @@ export const AdminDashboardView: React.FC = () => {
   const roiNow = roiPct(totals.revenue, totals.adCost);
   const roiPrev = roiPct(prevTotals.revenue, prevTotals.adCost);
   const roiDelta = roiNow != null && roiPrev != null ? roiNow - roiPrev : null;
-  // Doanh thu đã là USD từ nguồn dữ liệu → chỉ định dạng và đổi nhãn
-  const totalsRevenueUsd = Math.round(totals.revenue || 0);
-  const formatUsd = (n: number) =>
-    n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  // Tổng doanh thu (VND) đã quy đổi
 
   // Bộ lọc ngày cho danh sách code
   const [codesFrom, setCodesFrom] = useState<string>(() => monthStart);
@@ -455,7 +454,7 @@ export const AdminDashboardView: React.FC = () => {
           <div>
             <p className="leader-dash-label text-xs text-[var(--ld-on-surface-variant)] uppercase tracking-wider mb-1">Tổng doanh thu</p>
             <h3 className="text-2xl font-extrabold text-[var(--ld-on-surface)]" style={{ fontFamily: '"Inter", sans-serif' }}>
-              {formatUsd(totalsRevenueUsd)} <span className="text-sm font-medium text-[var(--ld-on-surface-variant)]">USD</span>
+              {formatVndDots(totals.revenue)} <span className="text-sm font-medium text-[var(--ld-on-surface-variant)]">VNĐ</span>
             </h3>
           </div>
         </div>

@@ -6,6 +6,11 @@ import type { ReportRow } from '../../../types';
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 const PAGE_SIZE = 50;
 
+function formatVndDots(n: number): string {
+  if (!Number.isFinite(n)) return '0';
+  return Math.round(n).toLocaleString('vi-VN');
+}
+
 function toYmd(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -31,6 +36,19 @@ export const ReportsRawView: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [deleting, setDeleting] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+
+  const totals = useMemo(() => {
+    let mess = 0;
+    let ads = 0;
+    let vnd = 0;
+    for (const r of rows) {
+      mess += Number(r.mess_comment_count || 0);
+      ads += Number(r.ad_cost || 0);
+      vnd += Number(r.tien_viet || 0);
+    }
+    return { mess, ads, vnd };
+  }, [rows]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,7 +56,7 @@ export const ReportsRawView: React.FC = () => {
     let q = supabase
       .from(REPORTS_TABLE)
       .select(
-        'id, report_date, name, email, team, product, market, page, ma_tkqc, ad_account, ad_cost, revenue, mess_comment_count, order_count, tong_lead, tong_data_nhan, code'
+        'id, report_date, name, email, team, product, market, page, ma_tkqc, ad_account, ad_cost, revenue, tien_viet, mess_comment_count, order_count, tong_lead, tong_data_nhan, code'
       )
       .gte('report_date', applied.from)
       .lte('report_date', applied.to)
@@ -173,6 +191,60 @@ export const ReportsRawView: React.FC = () => {
     }
   };
 
+  const backfillTienViet = async () => {
+    if (!rows.length) return;
+    if (
+      !window.confirm(
+        `Tính và điền cột tien_viet = round(revenue * 25000) cho các dòng (lọc hiện tại) đang NULL?`
+      )
+    )
+      return;
+    setBackfilling(true);
+    try {
+      // Chỉ update những dòng tien_viet IS NULL trong phạm vi lọc
+      let q = supabase
+        .from(REPORTS_TABLE)
+        .update({ tien_viet: supabase.rpc as any }) as any;
+
+      // Supabase không hỗ trợ biểu thức trực tiếp trong update payload.
+      // Thay bằng gọi RPC tạm thời: tạo danh sách id cần cập nhật và gửi theo chunks.
+      const targetIds = rows.filter((r) => r.tien_viet == null).map((r) => r.id).filter(Boolean) as string[];
+      if (targetIds.length === 0) {
+        window.alert('Không có dòng nào có tien_viet trống trong danh sách.');
+        return;
+      }
+      const chunk = 200;
+      let done = 0;
+      for (let i = 0; i < targetIds.length; i += chunk) {
+        const part = targetIds.slice(i, i + chunk);
+        // Lấy lại các row để tính chính xác từ revenue
+        const { data, error: selErr } = await supabase
+          .from(REPORTS_TABLE)
+          .select('id, revenue')
+          .in('id', part);
+        if (selErr) throw selErr;
+        const updates = (data || []).map((r: any) => ({
+          id: r.id,
+          tien_viet: Math.round((Number(r.revenue) || 0) * 25000),
+        }));
+        // Update theo id
+        const results = await Promise.all(
+          updates.map((u) => supabase.from(REPORTS_TABLE).update({ tien_viet: u.tien_viet }).eq('id', u.id))
+        );
+        const err = results.find((x) => x.error)?.error;
+        if (err) throw err;
+        done += updates.length;
+      }
+      window.alert(`Đã cập nhật tien_viet cho ${done} dòng.`);
+      await load();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      window.alert(`Lỗi backfill tien_viet: ${msg}`);
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
   return (
     <div className="dash-fade-up">
       <div className="flex items-end flex-wrap gap-3 mb-4">
@@ -246,6 +318,31 @@ export const ReportsRawView: React.FC = () => {
         >
           {deletingAll ? 'Đang xóa toàn bộ…' : 'Xóa toàn bộ (lọc)'}
         </button>
+        <button
+          type="button"
+          onClick={() => void backfillTienViet()}
+          disabled={loading || backfilling || rows.length === 0}
+          className="rounded-lg border border-[var(--ld-outline-variant)]/25 bg-[var(--ld-surface-container)] text-[var(--ld-on-surface-variant)] px-3 py-2 text-sm font-bold"
+          title="Điền tien_viet = revenue * 25,000 cho các dòng còn trống (lọc hiện tại)"
+        >
+          {backfilling ? 'Đang đồng bộ VND…' : 'Đồng bộ tiền Việt (lọc)'}
+        </button>
+      </div>
+
+      {/* Summary totals */}
+      <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/15 rounded-lg p-3">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-on-surface-variant)]">Tổng Mess</p>
+          <p className="text-xl font-extrabold text-[var(--ld-on-surface)] tabular-nums">{totals.mess.toLocaleString('vi-VN')}</p>
+        </div>
+        <div className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/15 rounded-lg p-3">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-on-surface-variant)]">Tổng Ads chi</p>
+          <p className="text-xl font-extrabold text-[var(--ld-on-surface)] tabular-nums">{formatVndDots(totals.ads)} <span className="text-xs font-medium text-[var(--ld-on-surface-variant)]">VNĐ</span></p>
+        </div>
+        <div className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/15 rounded-lg p-3">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-on-surface-variant)]">Tổng tiền Việt</p>
+          <p className="text-xl font-extrabold text-[var(--ld-on-surface)] tabular-nums">{formatVndDots(totals.vnd)} <span className="text-xs font-medium text-[var(--ld-on-surface-variant)]">VNĐ</span></p>
+        </div>
       </div>
 
       <div className="overflow-x-auto">

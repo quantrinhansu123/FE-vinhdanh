@@ -43,6 +43,8 @@ export type ReportRow = {
   mess_comment_count?: number | null;
   order_count?: number | null;
   revenue?: number | null;
+  /** Doanh thu quy đổi VND (ví dụ USD * 25,000) */
+  tien_viet?: number | null;
   /** Tổng data nhận (form MKT) — cần migration alter_detail_reports_mkt_form.sql */
   tong_data_nhan?: number | null;
   /** Tổng lead (form MKT) */

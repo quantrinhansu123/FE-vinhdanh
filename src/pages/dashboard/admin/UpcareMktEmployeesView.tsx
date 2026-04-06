@@ -147,7 +147,15 @@ export const UpcareMktEmployeesView: React.FC = () => {
       }
 
       // Gộp trùng (report_date, code) trong chính payload — cộng revenue để tránh vi phạm unique
-      type UpItem = { id?: string; report_date: string; name: string; revenue: number; code: string; email: string };
+      type UpItem = {
+        id?: string;
+        report_date: string;
+        name: string;
+        revenue: number;
+        tien_viet: number;
+        code: string;
+        email: string;
+      };
       const merged = new Map<string, UpItem>();
 
       for (const ymd of dayKeys) {
@@ -159,6 +167,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
           const amt = Number(r.amount) || 0;
           if (existingItem) {
             existingItem.revenue += amt;
+            existingItem.tien_viet += Math.round(amt * 25000);
             if (!existingItem.name && r.name) existingItem.name = r.name;
           } else {
             merged.set(k, {
@@ -166,6 +175,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
               report_date: ymd,
               name: r.name,
               revenue: amt,
+              tien_viet: Math.round(amt * 25000),
               code: c,
               email: currentUserEmail,
             });
@@ -175,9 +185,31 @@ export const UpcareMktEmployeesView: React.FC = () => {
 
       const payload = Array.from(merged.values());
 
-      const { error: upErr } = await supabase.from(REPORTS_TABLE).upsert(payload, { onConflict: 'id' });
-      if (upErr) throw upErr;
+      // Không phụ thuộc onConflict; tách update/insert theo id
+      const toUpdate = payload.filter((p) => (p as any).id);
+      const toInsert = payload.filter((p) => !(p as any).id);
+
+      if (toUpdate.length > 0) {
+        const chunk = 80;
+        for (let i = 0; i < toUpdate.length; i += chunk) {
+          const part = toUpdate.slice(i, i + chunk);
+          const results = await Promise.all(
+            part.map((r) => supabase.from(REPORTS_TABLE).update(r).eq('id', (r as any).id))
+          );
+          const err = results.find((x) => x.error)?.error;
+          if (err) throw err;
+        }
+      }
+      if (toInsert.length > 0) {
+        const { error: insErr } = await supabase.from(REPORTS_TABLE).insert(toInsert);
+        if (insErr) throw insErr;
+      }
       setError(null);
+
+      const okMsg = `Đã đẩy ${payload.length} dòng vào detail_reports theo Ngày + Code.`;
+      try { window.alert(okMsg); } catch {}
+      // Ẩn dữ liệu source sau khi đẩy
+      setRows([]);
     } catch (e) {
       const msg = e && typeof e === 'object' && 'message' in e ? String((e as any).message) : 'Ghi dữ liệu thất bại.';
       setError(msg);
