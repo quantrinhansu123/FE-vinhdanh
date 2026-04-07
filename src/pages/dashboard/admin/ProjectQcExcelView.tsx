@@ -492,7 +492,7 @@ export const ProjectQcExcelView: React.FC = () => {
       }
 
       {
-        const okMsg = `Đã đồng bộ ${payload.length} dòng theo khóa Ngày + Code (chỉ cập nhật ad_cost).`;
+        const okMsg = `Đã đồng bộ ${payload.length} dòng theo khóa Ngày + Code (cập nhật ad_cost, không ghi revenue). Nếu không thấy key trùng thì thêm dòng mới.`;
         setExcelMsg(okMsg);
         try { window.alert(okMsg); } catch {}
       }
