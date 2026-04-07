@@ -771,10 +771,7 @@ export const ProjectQcExcelView: React.FC = () => {
               <thead>
                 <tr className="border-b border-[var(--border)] text-[9px] font-extrabold uppercase tracking-wide text-[var(--text3)]">
                   <th className="p-2 whitespace-nowrap">Ngày</th>
-                  <th className="p-2">Sản phẩm</th>
                   <th className="p-2">Code</th>
-                  <th className="p-2">Page / QC</th>
-                  <th className="p-2">Tài khoản</th>
                   <th className="p-2 text-right">Chi tiêu</th>
                   <th className="p-2 text-right">Doanh số</th>
                   <th className="p-2">Email</th>
@@ -784,17 +781,8 @@ export const ProjectQcExcelView: React.FC = () => {
                 {lastPushed.map((r, i) => (
                   <tr key={`${r.report_date}-${r.email}-${r.page || ''}-${i}`} className="border-b border-[rgba(255,255,255,0.04)]">
                     <td className="p-2 whitespace-nowrap">{formatReportDateVi(r.report_date)}</td>
-                    <td className="p-2 max-w-[220px] truncate" title={r.product || ''}>
-                      {r.product || '—'}
-                    </td>
                     <td className="p-2 max-w-[140px] truncate" title={r.code || ''}>
                       {r.code || '—'}
-                    </td>
-                    <td className="p-2 max-w-[260px] truncate" title={r.page || ''}>
-                      {r.page || '—'}
-                    </td>
-                    <td className="p-2 max-w-[220px] truncate" title={r.ad_account || ''}>
-                      {r.ad_account || '—'}
                     </td>
                     <td className="p-2 text-right">{formatCompactVnd(r.ad_cost)}</td>
                     <td className="p-2 text-right">{formatCompactVnd(r.revenue)}</td>
@@ -818,11 +806,7 @@ export const ProjectQcExcelView: React.FC = () => {
               <thead>
                 <tr className="border-b border-[var(--border)] text-[9px] font-extrabold uppercase tracking-wide text-[var(--text3)]">
                   <th className="p-2 whitespace-nowrap">Ngày</th>
-                  <th className="p-2">Sản phẩm</th>
-                  <th className="p-2">Thị trường</th>
                   <th className="p-2">Code</th>
-                  <th className="p-2">Page</th>
-                  <th className="p-2">TK</th>
                   <th className="p-2 text-right">Chi tiêu</th>
                   <th className="p-2 text-right">Doanh số</th>
                   <th className="p-2 text-right">Mess</th>
@@ -834,18 +818,8 @@ export const ProjectQcExcelView: React.FC = () => {
                 {stagedReportRows.map((r, i) => (
                   <tr key={`${r.report_date}-${r.page || ''}-${i}`} className="border-b border-[rgba(255,255,255,0.04)]">
                     <td className="p-2 whitespace-nowrap">{formatReportDateVi(r.report_date)}</td>
-                    <td className="p-2 max-w-[220px] truncate" title={r.product || ''}>
-                      {r.product || '—'}
-                    </td>
-                    <td className="p-2">{r.market || '—'}</td>
                     <td className="p-2 max-w-[120px] truncate" title={extractMaNvFromBracketPage(r.page || '') || ''}>
                       {extractMaNvFromBracketPage(r.page || '') || '—'}
-                    </td>
-                    <td className="p-2 max-w-[260px] truncate" title={r.page || ''}>
-                      {r.page || '—'}
-                    </td>
-                    <td className="p-2 max-w-[220px] truncate" title={r.ad_account || ''}>
-                      {r.ad_account || '—'}
                     </td>
                     <td className="p-2 text-right">{formatCompactVnd(r.ad_cost)}</td>
                     <td className="p-2 text-right">{formatCompactVnd(r.revenue)}</td>
