@@ -12,7 +12,7 @@ export const MKT_EXCEL_HEADERS = [
   'TKQC (ma_tkqc)',
   'Mã TK (ad_account)',
   'Chi phí QC',
-  'Mess',
+  'Lượt bắt đầu cuộc trò chuyện qua tin nhắn',
   'Tổng data nhận',
   'Doanh số (VND)',
   'Số đơn',
@@ -551,6 +551,7 @@ function parseCrmMktSheet(
       ma_tkqc: cellStr(r[start + 3]) || null,
       ad_account: cellStr(r[start + 4]) || null,
       ad_cost: cellNum(r[start + 5]),
+      // Cột H: "Lượt bắt đầu cuộc trò chuyện qua tin nhắn"
       mess_comment_count: cellNum(r[start + 6]),
       tong_data_nhan: cellNum(r[start + 7]),
       revenue: cellNum(r[start + 8]),
