@@ -773,6 +773,7 @@ export const ProjectQcExcelView: React.FC = () => {
                   <th className="p-2 whitespace-nowrap">Ngày</th>
                   <th className="p-2">Code</th>
                   <th className="p-2 text-right">Chi tiêu</th>
+                  <th className="p-2 text-right">Mess</th>
                   <th className="p-2 text-right">Doanh số</th>
                   <th className="p-2">Email</th>
                 </tr>
@@ -785,6 +786,7 @@ export const ProjectQcExcelView: React.FC = () => {
                       {r.code || '—'}
                     </td>
                     <td className="p-2 text-right">{formatCompactVnd(r.ad_cost)}</td>
+                    <td className="p-2 text-right">{r.mess_comment_count ?? '—'}</td>
                     <td className="p-2 text-right">{formatCompactVnd(r.revenue)}</td>
                     <td className="p-2">{r.email}</td>
                   </tr>
