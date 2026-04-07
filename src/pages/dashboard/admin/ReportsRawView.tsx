@@ -368,12 +368,7 @@ export const ReportsRawView: React.FC = () => {
                 <th className="p-2">Ngày</th>
                 <th className="p-2">Name</th>
                 <th className="p-2">Email</th>
-                <th className="p-2">Team</th>
-                <th className="p-2">Product</th>
-                <th className="p-2">Market</th>
-                <th className="p-2">Page</th>
                 <th className="p-2">Code</th>
-                <th className="p-2">TK</th>
                 <th className="p-2 text-right">Ads chi</th>
                 <th className="p-2 text-right">Doanh thu (VNĐ)</th>
                 <th className="p-2 text-right">Mess</th>
@@ -395,12 +390,7 @@ export const ReportsRawView: React.FC = () => {
                   <td className="p-2">{r.report_date?.slice(0, 10)}</td>
                   <td className="p-2 max-w-[200px] truncate" title={r.name || ''}>{r.name || '—'}</td>
                   <td className="p-2 max-w-[220px] truncate" title={r.email || ''}>{r.email || '—'}</td>
-                  <td className="p-2">{r.team || '—'}</td>
-                  <td className="p-2 max-w-[220px] truncate" title={r.product || ''}>{r.product || '—'}</td>
-                  <td className="p-2">{r.market || '—'}</td>
-                  <td className="p-2 max-w-[260px] truncate" title={r.page || ''}>{r.page || '—'}</td>
                   <td className="p-2">{(r as any).code || '—'}</td>
-                  <td className="p-2 max-w-[220px] truncate" title={r.ad_account || ''}>{r.ad_account || '—'}</td>
                   <td className="p-2 text-right">{Number(r.ad_cost || 0).toLocaleString('vi-VN')}</td>
                   <td className="p-2 text-right">{Number(r.tien_viet || 0).toLocaleString('vi-VN')}</td>
                   <td className="p-2 text-right">{r.mess_comment_count ?? '—'}</td>
