@@ -2,11 +2,47 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../api/supabase';
-import type { ReportRow } from '../../../types';
+import type { Employee, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { formatCompactVnd } from '../mkt/mktDetailReportShared';
 
 const REPORTS_TABLE = 'detail_reports';
+const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+const STAFF_FOR_DASH_SELECT = 'name, email, team, ma_ns';
+
+const ADMIN_DASH_PAGE_SIZE = 1000;
+const ADMIN_DASH_MAX_PAGES = 500;
+const ADMIN_DASH_DETAIL_SELECT =
+  'id, report_date, name, email, team, code, ad_cost, revenue, tien_viet, order_count, tong_lead, tong_data_nhan';
+
+async function fetchAllAdminDetailReports(
+  start: string,
+  end: string
+): Promise<{ data: ReportRow[]; error: { message: string } | null }> {
+  const all: ReportRow[] = [];
+  let lastId: string | null = null;
+  for (let p = 0; p < ADMIN_DASH_MAX_PAGES; p++) {
+    let q = supabase
+      .from(REPORTS_TABLE)
+      .select(ADMIN_DASH_DETAIL_SELECT)
+      .gte('report_date', start)
+      .lte('report_date', end)
+      .order('id', { ascending: true })
+      .limit(ADMIN_DASH_PAGE_SIZE);
+    if (lastId) q = q.gt('id', lastId);
+    const { data, error } = await q;
+    if (error) return { data: [], error: { message: error.message } };
+    const batch = (data || []) as ReportRow[];
+    if (!batch.length) break;
+    all.push(...batch);
+    const raw = batch[batch.length - 1]?.id;
+    const next = raw == null ? '' : String(raw);
+    if (!next) break;
+    lastId = next;
+    if (batch.length < ADMIN_DASH_PAGE_SIZE) break;
+  }
+  return { data: all, error: null };
+}
 
 function toLocalYyyyMmDd(d: Date): string {
   const y = d.getFullYear();
@@ -72,6 +108,34 @@ type MarketerAgg = {
   tongData: number;
 };
 
+type StaffLite = { name: string; team: string };
+
+function buildStaffMaps(rows: Employee[]): { byCode: Map<string, StaffLite>; byEmail: Map<string, StaffLite> } {
+  const byCode = new Map<string, StaffLite>();
+  const byEmail = new Map<string, StaffLite>();
+  for (const e of rows) {
+    const name = (e.name || '').trim();
+    const team = (e.team || '').trim();
+    const lite: StaffLite = { name, team };
+    const c = e.ma_ns?.trim().toLowerCase();
+    if (c) byCode.set(c, lite);
+    const em = e.email?.trim().toLowerCase();
+    if (em) byEmail.set(em, lite);
+  }
+  return { byCode, byEmail };
+}
+
+function resolveStaffFromMaps(
+  code: string | null,
+  emailLower: string,
+  maps: { byCode: Map<string, StaffLite>; byEmail: Map<string, StaffLite> }
+): StaffLite | null {
+  const c = code?.trim().toLowerCase();
+  if (c && maps.byCode.has(c)) return maps.byCode.get(c)!;
+  if (emailLower && maps.byEmail.has(emailLower)) return maps.byEmail.get(emailLower)!;
+  return null;
+}
+
 const ADS_DT_WARN = 45;
 const ADS_DT_MED = 30;
 
@@ -132,6 +196,7 @@ export const AdminDashboardView: React.FC = () => {
   const navigate = useNavigate();
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [prevRows, setPrevRows] = useState<ReportRow[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState(false);
@@ -152,35 +217,40 @@ export const AdminDashboardView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [curRes, prevRes] = await Promise.all([
-      supabase
-        .from(REPORTS_TABLE)
-        .select('report_date, name, email, team, code, ad_cost, revenue, tien_viet, order_count, tong_lead, tong_data_nhan')
-        .gte('report_date', monthStart)
-        .lte('report_date', monthEnd)
-        .limit(8000),
-      supabase
-        .from(REPORTS_TABLE)
-        .select('report_date, name, email, team, code, ad_cost, revenue, tien_viet, order_count, tong_lead, tong_data_nhan')
-        .gte('report_date', prevBounds.start)
-        .lte('report_date', prevBounds.end)
-        .limit(8000),
+
+    const [curFull, prevFull, empRes] = await Promise.all([
+      fetchAllAdminDetailReports(monthStart, monthEnd),
+      fetchAllAdminDetailReports(prevBounds.start, prevBounds.end),
+      supabase.from(EMPLOYEES_TABLE).select(STAFF_FOR_DASH_SELECT).limit(8000),
     ]);
 
-    if (curRes.error) {
-      console.error('admin-dash detail_reports:', curRes.error);
-      setError(curRes.error.message || 'Không tải được báo cáo.');
+    let empList: Employee[] = [];
+    if (empRes.error) {
+      console.warn('admin-dash employees:', empRes.error);
+    } else {
+      empList = (empRes.data || []) as Employee[];
+    }
+
+    if (curFull.error) {
+      console.error('admin-dash detail_reports:', curFull.error);
+      setError(curFull.error.message || 'Không tải được báo cáo.');
       setRows([]);
       setPrevRows([]);
-    } else {
-      setRows((curRes.data || []) as ReportRow[]);
-      if (prevRes.error) {
-        console.warn('admin-dash prev month:', prevRes.error);
-        setPrevRows([]);
-      } else {
-        setPrevRows((prevRes.data || []) as ReportRow[]);
-      }
+      setEmployees(empList);
+      setLoading(false);
+      return;
     }
+
+    let prevRowsData: ReportRow[] = [];
+    if (prevFull.error) {
+      console.warn('admin-dash prev month:', prevFull.error);
+    } else {
+      prevRowsData = prevFull.data;
+    }
+
+    setEmployees(empList);
+    setRows(curFull.data);
+    setPrevRows(prevRowsData);
     setLoading(false);
   }, [monthStart, monthEnd, prevBounds.start, prevBounds.end]);
 
@@ -227,12 +297,15 @@ export const AdminDashboardView: React.FC = () => {
     } finally {
       setCodesLoading(false);
     }
-  }, [codesFrom, codesTo]);
+  }, [codesFrom, codesTo, codesAll]);
+
+  const staffMaps = useMemo(() => buildStaffMaps(employees), [employees]);
 
   const byMarketer = useMemo(() => {
-    const map = new Map<string, MarketerAgg>();
+    type AggBuild = MarketerAgg & { aggCode: string | null; aggEmail: string };
+    const map = new Map<string, AggBuild>();
     for (const r of rows) {
-      const code = r.code?.trim();
+      const code = r.code?.trim() || null;
       const email = r.email?.trim().toLowerCase() || '';
       const nm = (r.name || '').trim();
       // Ưu tiên gom theo code; nếu thiếu thì theo email, cuối cùng mới theo name
@@ -244,24 +317,45 @@ export const AdminDashboardView: React.FC = () => {
           key,
           displayName,
           team: r.team?.trim() || null,
+          aggCode: null,
+          aggEmail: '',
           revenue: 0,
           adCost: 0,
           tongLead: 0,
           orders: 0,
           tongData: 0,
-        } satisfies MarketerAgg);
+        } satisfies AggBuild);
       // Doanh thu VNĐ: ưu tiên tien_viet; nếu thiếu, quy đổi từ revenue * 25,000
       cur.revenue += r.tien_viet != null ? safeNum(r.tien_viet) : Math.round(safeNum(r.revenue) * 25000);
       cur.adCost += safeNum(r.ad_cost);
       cur.tongLead += safeNum(r.tong_lead);
       cur.orders += safeNum(r.order_count);
       cur.tongData += safeNum(r.tong_data_nhan);
+      if (code && !cur.aggCode) cur.aggCode = code;
+      if (email && !cur.aggEmail) cur.aggEmail = email;
       if (!cur.team && r.team?.trim()) cur.team = r.team.trim();
       if (cur.displayName === '—' && nm) cur.displayName = displayName;
       map.set(key, cur);
     }
-    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
-  }, [rows]);
+
+    const out: MarketerAgg[] = [];
+    for (const m of map.values()) {
+      const staff = resolveStaffFromMaps(m.aggCode, m.aggEmail, staffMaps);
+      const displayName = staff?.name?.trim() ? staff.name.trim() : m.displayName;
+      const team = staff?.team?.trim() ? staff.team.trim() : m.team || null;
+      out.push({
+        key: m.key,
+        displayName,
+        team,
+        revenue: m.revenue,
+        adCost: m.adCost,
+        tongLead: m.tongLead,
+        orders: m.orders,
+        tongData: m.tongData,
+      });
+    }
+    return out.sort((a, b) => b.revenue - a.revenue);
+  }, [rows, staffMaps]);
 
   const activeCampaigns = useMemo(
     () => byMarketer.filter((m) => m.revenue > 0 || m.adCost > 0).length,
@@ -418,7 +512,8 @@ export const AdminDashboardView: React.FC = () => {
       <p className="text-[10px] text-[var(--ld-on-surface-variant)] leading-relaxed max-w-3xl">
         <strong className="text-[var(--ld-on-surface)]">Nguồn:</strong>{' '}
         <code className="text-[var(--ld-primary)]/90">{REPORTS_TABLE}</code> · tháng {monthLabel}. So sánh % là tháng trước (
-        {prevBounds.start.slice(0, 7)}).
+        {prevBounds.start.slice(0, 7)}). Tab Admin chỉ dành cho nhân sự có quyền (theo{' '}
+        <code className="text-[var(--ld-primary)]/90">vi_tri</code> / đăng nhập); dữ liệu tải theo lô, không giới hạn 8k dòng.
       </p>
 
       {/* Summary metrics */}

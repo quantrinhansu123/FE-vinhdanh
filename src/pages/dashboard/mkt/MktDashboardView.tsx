@@ -3,11 +3,15 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { KpiCard } from '../../../components/crm-dashboard/atoms/KpiCard';
 import { SectionCard, ProgressRow, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
-import type { AuthUser, TkqcAdListRow } from '../../../types';
+import type { AuthUser, Employee, TkqcAdListRow } from '../../../types';
+import { crmNavTierFromUser } from '../../../utils/crmNavAccess';
 import { REPORTS_TABLE, formatCompactVnd, formatKpiMoney, formatNumberDots, formatReportDateVi, toLocalYyyyMmDd } from './mktDetailReportShared';
 
 const KPI_STAFF_TARGETS_TABLE =
   import.meta.env.VITE_SUPABASE_KPI_STAFF_MONTHLY_TARGETS_TABLE?.trim() || 'kpi_staff_monthly_targets';
+const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
+const STAFF_SELECT = 'id, name, email, team, ma_ns, vi_tri, trang_thai, avatar_url';
 
 const LEAD_TARGET = 1500;
 const ORDER_TARGET = 400;
@@ -69,6 +73,56 @@ function emptyDailyAgg(): DailyAgg {
   return { revenue: 0, adCost: 0, lead: 0, orders: 0 };
 }
 
+function safeTrim(v: unknown): string {
+  return String(v ?? '').trim();
+}
+
+function isActiveStaff(tt: string | null | undefined): boolean {
+  return tt === 'dang_lam' || tt === 'tam_nghi' || tt === 'dot_tien';
+}
+
+function safeNum(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim().replace(/[\$,]/g, '').replace(/\s+/g, '');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Đồng bộ với leader-dash / detail_reports */
+function reportRevenueVnd(row: { tien_viet?: unknown; revenue?: unknown }): number {
+  return row.tien_viet != null ? safeNum(row.tien_viet) : Math.round(safeNum(row.revenue) * 25000);
+}
+
+type ReportScopeRow = {
+  report_date?: string;
+  revenue?: number | null;
+  tien_viet?: number | null;
+  ad_cost?: number | null;
+  tong_lead?: number | null;
+  order_count?: number | null;
+  email?: string | null;
+  code?: string | null;
+};
+
+function rowMatchesReportScope(
+  row: ReportScopeRow,
+  mode: 'all' | 'team' | 'self',
+  emailSet: Set<string>,
+  codeSet: Set<string>
+): boolean {
+  if (mode === 'all') return true;
+  const em = String(row.email || '')
+    .trim()
+    .toLowerCase();
+  const codeKey = String(row.code || '')
+    .trim()
+    .toLowerCase();
+  if (codeKey && codeSet.has(codeKey)) return true;
+  if (em && emailSet.has(em)) return true;
+  return false;
+}
+
 export type MktDashboardViewProps = {
   reportUser?: AuthUser | null;
 };
@@ -82,8 +136,9 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
   const [targetVnd, setTargetVnd] = useState<number | null>(null);
   const [accounts, setAccounts] = useState<TkqcAdListRow[]>([]);
 
-  const now = useMemo(() => new Date(), []);
   const todayStr = useMemo(() => toLocalYyyyMmDd(new Date()), []);
+
+  const navTier = useMemo(() => crmNavTierFromUser(reportUser ?? null), [reportUser]);
 
   const load = useCallback(async () => {
     if (!reportUser?.email?.trim()) {
@@ -95,12 +150,10 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
     setLoading(true);
     setError(null);
 
+    const tier = crmNavTierFromUser(reportUser);
     const emailLower = reportUser.email.trim().toLowerCase();
     const today = new Date();
-    const yesterday = addDays(today, -1);
-
     const todayIso = toLocalYyyyMmDd(today);
-    const yIso = toLocalYyyyMmDd(yesterday);
 
     const last7From = toLocalYyyyMmDd(addDays(today, -6));
     const last7To = todayIso;
@@ -115,49 +168,141 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
       dailyMap.set(toLocalYyyyMmDd(d), emptyDailyAgg());
     }
 
-    const [last7Res, monthRes, targetRes, accountsRes] = await Promise.all([
-      supabase
-        .from(REPORTS_TABLE)
-        .select('report_date, revenue, ad_cost, tong_lead, order_count')
-        .ilike('email', emailLower)
-        .gte('report_date', last7From)
-        .lte('report_date', last7To)
-        .order('report_date', { ascending: false })
-        .limit(5000),
-      supabase
-        .from(REPORTS_TABLE)
-        .select('revenue, ad_cost, tong_lead, order_count')
-        .ilike('email', emailLower)
-        .gte('report_date', monthStart)
-        .lte('report_date', monthEnd)
-        .limit(12000),
-      supabase
-        .from(KPI_STAFF_TARGETS_TABLE)
-        .select('muc_tieu_vnd')
-        .eq('nam_thang', ym)
-        .eq('employee_id', reportUser.id)
-        .maybeSingle(),
-      (async () => {
-        if (!reportUser.id?.trim()) return { data: [] as TkqcAdListRow[], error: null as any };
+    let scopeMode: 'all' | 'team' | 'self' = 'self';
+    const emailSet = new Set<string>();
+    const codeSet = new Set<string>();
+    let teamEmployeeIds: string[] = [];
 
-        // marketing_staff mapping: employee_id -> marketing_staff.id -> tkqc rows
-        const byEmp = await supabase.from(MARKETING_STAFF_TABLE).select('id').eq('employee_id', reportUser.id.trim());
-        const emailStaff = await supabase.from(MARKETING_STAFF_TABLE).select('id').ilike('email', emailLower);
-        const staffIds = [
-          ...(byEmp.data || []).map((r) => String((r as { id: string }).id)),
-          ...(emailStaff.data || []).map((r) => String((r as { id: string }).id)),
-        ];
-        const uniq = Array.from(new Set(staffIds));
-        if (uniq.length === 0) return { data: [] as TkqcAdListRow[], error: null as any };
+    if (tier === 'admin') {
+      scopeMode = 'all';
+      teamEmployeeIds = [];
+    } else if (tier === 'leader') {
+      scopeMode = 'team';
+      const viewerName = reportUser.name?.trim() || '';
+      const fallbackTeam = reportUser.team?.trim() || '';
+      let teamKeys: string[] = [];
+      if (viewerName) {
+        const teamRes = await supabase.from(TEAMS_TABLE).select('ten_team, leader').eq('leader', viewerName);
+        if (!teamRes.error) {
+          teamKeys = (teamRes.data || [])
+            .map((r) => safeTrim((r as { ten_team?: string }).ten_team))
+            .filter(Boolean);
+        } else {
+          console.warn('mkt-dash crm_teams:', teamRes.error);
+        }
+      }
+      if (!teamKeys.length && fallbackTeam) teamKeys = [fallbackTeam];
+      teamKeys = [...new Set(teamKeys.map((x) => x.trim()).filter(Boolean))];
 
+      const empRes = await supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true });
+      if (empRes.error) {
+        console.error('mkt-dash employees:', empRes.error);
+        setError(empRes.error.message || 'Không tải được nhân sự (leader).');
+        setLoading(false);
+        return;
+      }
+      const all = (empRes.data || []) as Employee[];
+      const teamList = teamKeys.length
+        ? all.filter((e) => teamKeys.includes(safeTrim(e.team)) && isActiveStaff(e.trang_thai))
+        : [];
+      teamEmployeeIds = teamList.map((e) => e.id).filter(Boolean);
+      for (const e of teamList) {
+        const em = e.email?.trim().toLowerCase();
+        if (em) emailSet.add(em);
+        const k = safeTrim(e.ma_ns).toLowerCase();
+        if (k) codeSet.add(k);
+      }
+    } else {
+      scopeMode = 'self';
+      emailSet.add(emailLower);
+      const k = safeTrim(reportUser.ma_ns).toLowerCase();
+      if (k) codeSet.add(k);
+      if (reportUser.id?.trim()) teamEmployeeIds = [reportUser.id.trim()];
+    }
+
+    const REPORT_ROW_SELECT =
+      'report_date, revenue, tien_viet, ad_cost, tong_lead, order_count, email, code';
+
+    const targetPromise =
+      tier === 'admin'
+        ? Promise.resolve({ data: null as unknown, error: null })
+        : tier === 'leader'
+          ? teamEmployeeIds.length > 0
+            ? supabase
+                .from(KPI_STAFF_TARGETS_TABLE)
+                .select('muc_tieu_vnd')
+                .eq('nam_thang', ym)
+                .in('employee_id', teamEmployeeIds)
+            : Promise.resolve({ data: [] as { muc_tieu_vnd?: number }[], error: null })
+          : supabase
+              .from(KPI_STAFF_TARGETS_TABLE)
+              .select('muc_tieu_vnd')
+              .eq('nam_thang', ym)
+              .eq('employee_id', reportUser.id)
+              .maybeSingle();
+
+    const accountsPromise = (async (): Promise<{ data: TkqcAdListRow[]; error: unknown }> => {
+      if (tier === 'admin') {
         const { data, error: aErr } = await supabase
           .from(TKQC_TABLE)
           .select(TKQC_SELECT)
-          .in('id_marketing_staff', uniq)
+          .order('ten_tkqc', { ascending: true, nullsFirst: false })
+          .order('ma_tkqc', { ascending: true })
+          .limit(500);
+        return { data: (data || []) as TkqcAdListRow[], error: aErr };
+      }
+      if (tier === 'leader') {
+        if (teamEmployeeIds.length === 0) return { data: [], error: null };
+        const msRes = await supabase
+          .from(MARKETING_STAFF_TABLE)
+          .select('id')
+          .in('employee_id', teamEmployeeIds);
+        const staffIds = Array.from(
+          new Set((msRes.data || []).map((r) => String((r as { id: string }).id)).filter(Boolean))
+        );
+        if (staffIds.length === 0) return { data: [], error: msRes.error };
+        const { data, error: aErr } = await supabase
+          .from(TKQC_TABLE)
+          .select(TKQC_SELECT)
+          .in('id_marketing_staff', staffIds)
           .order('ten_tkqc', { ascending: true, nullsFirst: false })
           .order('ma_tkqc', { ascending: true });
         return { data: (data || []) as TkqcAdListRow[], error: aErr };
-      })(),
+      }
+      if (!reportUser.id?.trim()) return { data: [], error: null };
+      const byEmp = await supabase.from(MARKETING_STAFF_TABLE).select('id').eq('employee_id', reportUser.id.trim());
+      const emailStaff = await supabase.from(MARKETING_STAFF_TABLE).select('id').ilike('email', emailLower);
+      const staffIds = [
+        ...(byEmp.data || []).map((r) => String((r as { id: string }).id)),
+        ...(emailStaff.data || []).map((r) => String((r as { id: string }).id)),
+      ];
+      const uniq = Array.from(new Set(staffIds));
+      if (uniq.length === 0) return { data: [], error: null };
+      const { data, error: aErr } = await supabase
+        .from(TKQC_TABLE)
+        .select(TKQC_SELECT)
+        .in('id_marketing_staff', uniq)
+        .order('ten_tkqc', { ascending: true, nullsFirst: false })
+        .order('ma_tkqc', { ascending: true });
+      return { data: (data || []) as TkqcAdListRow[], error: aErr };
+    })();
+
+    const [last7Res, monthRes, targetRes, accountsRes] = await Promise.all([
+      supabase
+        .from(REPORTS_TABLE)
+        .select(REPORT_ROW_SELECT)
+        .gte('report_date', last7From)
+        .lte('report_date', last7To)
+        .order('report_date', { ascending: false })
+        .limit(15000),
+      supabase
+        .from(REPORTS_TABLE)
+        .select(REPORT_ROW_SELECT)
+        .gte('report_date', monthStart)
+        .lte('report_date', monthEnd)
+        .limit(20000),
+      targetPromise,
+      accountsPromise,
     ]);
 
     if (last7Res.error) {
@@ -167,21 +312,15 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
       return;
     }
 
-    // Reduce last7 rows into daily aggregates.
-    for (const row of (last7Res.data || []) as Array<{
-      report_date?: string;
-      revenue?: number | null;
-      ad_cost?: number | null;
-      tong_lead?: number | null;
-      order_count?: number | null;
-    }>) {
+    for (const row of (last7Res.data || []) as ReportScopeRow[]) {
+      if (!rowMatchesReportScope(row, scopeMode, emailSet, codeSet)) continue;
       const d = row.report_date?.slice(0, 10);
       if (!d || !dailyMap.has(d)) continue;
       const cur = dailyMap.get(d) || emptyDailyAgg();
-      cur.revenue += Number(row.revenue) || 0;
-      cur.adCost += Number(row.ad_cost) || 0;
-      cur.lead += Number(row.tong_lead) || 0;
-      cur.orders += Number(row.order_count) || 0;
+      cur.revenue += reportRevenueVnd(row);
+      cur.adCost += safeNum(row.ad_cost);
+      cur.lead += safeNum(row.tong_lead);
+      cur.orders += safeNum(row.order_count);
       dailyMap.set(d, cur);
     }
     setDaily(dailyMap);
@@ -192,17 +331,27 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
     }
 
     const mAgg = emptyDailyAgg();
-    for (const row of (monthRes.data || []) as Array<{ revenue?: number | null; ad_cost?: number | null; tong_lead?: number | null; order_count?: number | null }>) {
-      mAgg.revenue += Number(row.revenue) || 0;
-      mAgg.adCost += Number(row.ad_cost) || 0;
-      mAgg.lead += Number(row.tong_lead) || 0;
-      mAgg.orders += Number(row.order_count) || 0;
+    for (const row of (monthRes.data || []) as ReportScopeRow[]) {
+      if (!rowMatchesReportScope(row, scopeMode, emailSet, codeSet)) continue;
+      mAgg.revenue += reportRevenueVnd(row);
+      mAgg.adCost += safeNum(row.ad_cost);
+      mAgg.lead += safeNum(row.tong_lead);
+      mAgg.orders += safeNum(row.order_count);
     }
     setMonthAgg(mAgg);
 
     if (targetRes.error) {
       console.warn('mkt-dash kpi target:', targetRes.error);
       setTargetVnd(null);
+    } else if (tier === 'admin') {
+      setTargetVnd(null);
+    } else if (tier === 'leader' && Array.isArray(targetRes.data)) {
+      let sum = 0;
+      for (const r of targetRes.data as { muc_tieu_vnd?: number }[]) {
+        const v = Number(r.muc_tieu_vnd);
+        if (Number.isFinite(v) && v > 0) sum += v;
+      }
+      setTargetVnd(sum > 0 ? sum : null);
     } else {
       const v = Number((targetRes.data as { muc_tieu_vnd?: number } | null)?.muc_tieu_vnd);
       setTargetVnd(Number.isFinite(v) && v > 0 ? v : null);
@@ -215,7 +364,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
     }
 
     setLoading(false);
-  }, [reportUser?.email, reportUser?.id]);
+  }, [reportUser]);
 
   useEffect(() => {
     void load();
@@ -331,7 +480,9 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
           valueSize="lg"
         />
         <KpiCard
-          label="DT tháng của tôi"
+          label={
+            navTier === 'admin' ? 'DT tháng (toàn hệ)' : navTier === 'leader' ? 'DT tháng team' : 'DT tháng của tôi'
+          }
           value={monthRevenueValue}
           sub={`Mục tiêu: ${monthTargetText}`}
           delta={kpiDeltaText}
@@ -411,7 +562,15 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
         </SectionCard>
 
         <div className="flex flex-col gap-[14px]">
-          <SectionCard title="🎯 KPI tháng của tôi">
+          <SectionCard
+            title={
+              navTier === 'admin'
+                ? '🎯 KPI tháng (tổng hợp)'
+                : navTier === 'leader'
+                  ? '🎯 KPI tháng team'
+                  : '🎯 KPI tháng của tôi'
+            }
+          >
             <ProgressRow
               label="Doanh số"
               valueText={revenueValueTextKpi}
@@ -438,7 +597,11 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
           <SectionCard title="🎯 Tài khoản Ads">
             {topAccounts.length === 0 ? (
               <div className="text-[12px] text-[var(--text3)] py-8 text-center font-bold">
-                Chưa có TKQC gán cho bạn.
+                {navTier === 'admin'
+                  ? 'Chưa có TKQC (hoặc vượt giới hạn hiển thị).'
+                  : navTier === 'leader'
+                    ? 'Chưa có TKQC cho team.'
+                    : 'Chưa có TKQC gán cho bạn.'}
               </div>
             ) : (
               <div className="flex flex-col gap-[6px]">

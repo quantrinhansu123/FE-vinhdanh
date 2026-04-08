@@ -10,7 +10,26 @@ import {
 } from '../../../api/upcareCrm';
 import { supabase } from '../../../api/supabase';
 import { REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboard/mkt/mktDetailReportShared';
+
+/** Upcare MKT → detail_reports: chỉ cập nhật revenue + tien_viet (không đụng name/email/code/report_date). */
+type UpcareReportsPatch = { revenue: number; tien_viet: number };
 import { downloadMktReportExcelTemplate } from '../../dashboard/mkt/mktHistoryExcel';
+
+/** Nhiều dòng trên trang cùng mã (code) → một dòng, cộng dồn amount trước khi đẩy. */
+function aggregateUpcareRowsBySameCode(list: UpcareMktEmployeeRow[]): UpcareMktEmployeeRow[] {
+  const m = new Map<string, UpcareMktEmployeeRow>();
+  for (const r of list) {
+    const c = String(r.code).trim();
+    const prev = m.get(c);
+    if (prev) {
+      prev.amount = (Number(prev.amount) || 0) + (Number(r.amount) || 0);
+      if (!prev.name?.trim() && r.name?.trim()) prev.name = r.name;
+    } else {
+      m.set(c, { ...r, code: c, amount: Number(r.amount) || 0 });
+    }
+  }
+  return Array.from(m.values());
+}
 
 function defaultDateRange(): { from: string; to: string } {
   const to = new Date();
@@ -117,20 +136,34 @@ export const UpcareMktEmployeesView: React.FC = () => {
     setSaving(true);
     try {
       const dayKeys = buildInclusiveDays();
-
-      // Chỉ đồng bộ những hàng có code hợp lệ
-      const codes = Array.from(
-        new Set(
-          rows
-            .map((r) => (r.code != null ? String(r.code).trim() : ''))
-            .filter((s) => s.length > 0)
-        )
-      );
-
-      if (codes.length === 0) {
-        setSaving(false);
+      if (dayKeys.length === 0) {
+        try {
+          window.alert('Khoảng ngày không hợp lệ.');
+        } catch {}
         return;
       }
+
+      // Chỉ đẩy dòng có mã (code); không có mã thì bỏ qua hoàn toàn
+      const rowsWithCode = rows.filter((r) => {
+        const c = r.code != null ? String(r.code).trim() : '';
+        return c.length > 0;
+      });
+      const skippedNoCode = rows.length - rowsWithCode.length;
+      if (rowsWithCode.length === 0) {
+        try {
+          window.alert(
+            'Không có dòng nào có mã (Code). Chỉ đồng bộ khi có đủ Ngày (theo khoảng đã chọn) và Mã nhân sự.'
+          );
+        } catch {}
+        return;
+      }
+
+      const rowsAggregated = aggregateUpcareRowsBySameCode(rowsWithCode);
+      const mergedSameCodeOnPage = rowsWithCode.length - rowsAggregated.length;
+
+      const codes = Array.from(
+        new Set(rowsAggregated.map((r) => String(r.code).trim()))
+      );
 
       // Lấy các bản ghi đã có trong DB theo (report_date, code)
       const { data: existing, error: selErr } = await supabase
@@ -146,67 +179,61 @@ export const UpcareMktEmployeesView: React.FC = () => {
         idByKey.set(k, (row as any).id);
       }
 
-      // Gộp trùng (report_date, code) trong chính payload — cộng revenue để tránh vi phạm unique
-      type UpItem = {
-        id?: string;
-        report_date: string;
-        name: string;
-        revenue: number;
-        tien_viet: number;
-        code: string;
-        email: string;
-      };
-      const merged = new Map<string, UpItem>();
+      // Chỉ cập nhật bản ghi đã có trùng (report_date, code); không insert dòng mới
+      type RowUp = { id: string; patch: UpcareReportsPatch };
+      const toUpdate: RowUp[] = [];
+      let skippedNoDbRow = 0;
 
       for (const ymd of dayKeys) {
-        for (const r of rows) {
-          const c = r.code != null ? String(r.code).trim() : '';
-          if (!c) continue;
+        for (const r of rowsAggregated) {
+          const c = String(r.code).trim();
           const k = `${ymd}\0${c}`;
-          const existingItem = merged.get(k);
-          const amt = Number(r.amount) || 0;
-          if (existingItem) {
-            existingItem.revenue += amt;
-            existingItem.tien_viet += Math.round(amt * 25000);
-            if (!existingItem.name && r.name) existingItem.name = r.name;
-          } else {
-            merged.set(k, {
-              ...(idByKey.has(k) ? { id: idByKey.get(k) } : {}),
-              report_date: ymd,
-              name: r.name,
-              revenue: amt,
-              tien_viet: Math.round(amt * 25000),
-              code: c,
-              email: currentUserEmail,
-            });
+          const id = idByKey.get(k);
+          if (!id) {
+            skippedNoDbRow += 1;
+            continue;
           }
+          const amt = Number(r.amount) || 0;
+          toUpdate.push({
+            id,
+            patch: { revenue: amt, tien_viet: Math.round(amt * 25000) },
+          });
         }
       }
 
-      const payload = Array.from(merged.values());
-
-      // Không phụ thuộc onConflict; tách update/insert theo id
-      const toUpdate = payload.filter((p) => (p as any).id);
-      const toInsert = payload.filter((p) => !(p as any).id);
-
-      if (toUpdate.length > 0) {
-        const chunk = 80;
-        for (let i = 0; i < toUpdate.length; i += chunk) {
-          const part = toUpdate.slice(i, i + chunk);
-          const results = await Promise.all(
-            part.map((r) => supabase.from(REPORTS_TABLE).update(r).eq('id', (r as any).id))
+      if (toUpdate.length === 0) {
+        try {
+          window.alert(
+            'Không cập nhật dòng nào: trong detail_reports không có bản ghi trùng Ngày + Mã với dữ liệu Upcare (chỉ cập nhật khi đã tồn tại; không tạo mới).'
           );
-          const err = results.find((x) => x.error)?.error;
-          if (err) throw err;
-        }
+        } catch {}
+        return;
       }
-      if (toInsert.length > 0) {
-        const { error: insErr } = await supabase.from(REPORTS_TABLE).insert(toInsert);
-        if (insErr) throw insErr;
+
+      const chunk = 80;
+      for (let i = 0; i < toUpdate.length; i += chunk) {
+        const part = toUpdate.slice(i, i + chunk);
+        const results = await Promise.all(
+          part.map(({ id, patch }) =>
+            supabase.from(REPORTS_TABLE).update(patch).eq('id', id)
+          )
+        );
+        const err = results.find((x) => x.error)?.error;
+        if (err) throw err;
       }
       setError(null);
 
-      const okMsg = `Đã đẩy ${payload.length} dòng vào detail_reports theo Ngày + Code.`;
+      const tailNoCode =
+        skippedNoCode > 0 ? ` Đã bỏ qua ${skippedNoCode} dòng không có mã.` : '';
+      const tailMerge =
+        mergedSameCodeOnPage > 0
+          ? ` Đã cộng gộp ${mergedSameCodeOnPage} dòng trùng mã trên trang trước khi đẩy.`
+          : '';
+      const tailSkip =
+        skippedNoDbRow > 0
+          ? ` ${skippedNoDbRow} cặp (ngày+mã) không có trong detail_reports — bỏ qua (không thêm dòng).`
+          : '';
+      const okMsg = `Đã cập nhật ${toUpdate.length} bản ghi trong detail_reports (chỉ cột revenue, tien_viet).${tailNoCode}${tailMerge}${tailSkip}`;
       try { window.alert(okMsg); } catch {}
       // Ẩn dữ liệu source sau khi đẩy
       setRows([]);
@@ -216,7 +243,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [rows, buildInclusiveDays]);
+  }, [rows, buildInclusiveDays, currentUserEmail]);
 
   return (
     <div className="-m-3 min-h-[calc(100vh-5.5rem)] bg-[#070d1f] p-6 font-[Inter,sans-serif] text-[#dfe4fe] sm:p-8 ag-prism-scroll">
@@ -291,7 +318,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
               onClick={() => void pushToDetailReports()}
               disabled={saving || loading || rows.length === 0}
               className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-[#69f6b8] to-[#4de2a2] px-5 py-2.5 text-sm font-bold text-[#013828] shadow-lg shadow-[#69f6b8]/15 transition-all hover:brightness-110 disabled:opacity-50"
-              title="Ghi vào bảng detail_reports theo từng ngày trong khoảng đã chọn (upsert theo report_date + code)"
+              title="Chỉ cập nhật bản ghi đã có trong detail_reports (trùng ngày + mã); chỉ sửa revenue và tien_viet. Không tạo dòng mới. Dòng trùng mã trên trang được cộng amount trước khi áp vào từng ngày."
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Đẩy vào detail_reports

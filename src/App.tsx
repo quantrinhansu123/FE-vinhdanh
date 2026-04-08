@@ -16,8 +16,9 @@ import {
 import { LoginPage } from './pages/LoginPage';
 import { DashboardAdminLayout } from './pages/DashboardAdminLayout';
 import { LeaderboardPage } from './pages/LeaderboardPage';
-import DashboardPage from './pages/dashboard/DashboardPage';
 import type { Employee, AuthUser } from './types';
+import { crmAdminPathForView } from './utils/crmAdminRoutes';
+import { crmNavTierFromUser, defaultViewForTier } from './utils/crmNavAccess';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const AVATARS_BUCKET = import.meta.env.VITE_SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
@@ -285,7 +286,13 @@ function AppRoutes() {
 
       <Route
         path="/crm-dashboard/*"
-        element={<DashboardPage />}
+        element={
+          authUser ? (
+            <Navigate to={crmAdminPathForView(defaultViewForTier(crmNavTierFromUser(authUser)))} replace />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />

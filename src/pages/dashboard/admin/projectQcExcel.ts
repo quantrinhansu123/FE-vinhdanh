@@ -6,24 +6,17 @@ export const QC_EXCEL_TABLE =
 export const QC_EXCEL_TEMPLATE_FILENAME = 'mau-du-lieu-qc-du-an.xlsx';
 
 /**
- * Đúng thứ tự cột như export Meta (Ads Manager):
- * A–C tài khoản / quảng cáo / ngày (hoặc «All»), D trống, E tiền tệ, F–J chỉ số.
- * Meta thường chỉ xuất tới J; K–M (CPC, khoảng báo cáo) là tùy chọn nếu có trong file.
+ * Mẫu tải xuống: tên cột như export Meta (VN). Khi đọc file thật, parser **map theo tên tiêu đề cột**
+ * (chuẩn hóa, không phụ thuộc thứ tự A,B,C…).
  */
+/** Mẫu tải về: tối thiểu. File export Meta đầy đủ vẫn import được (đọc theo tên cột). */
 export const QC_EXCEL_HEADERS = [
   'Tên tài khoản',
   'Tên quảng cáo',
   'Ngày',
-  '',
   'Đơn vị tiền tệ',
   'Số tiền đã chi tiêu',
-  'Chi phí trên mỗi lượt kết quả',
-  'CPM (Chi phí trên mỗi 1.000 lượt hiển thị)',
-  'CTR (Tất cả)',
   'Lượt bắt đầu cuộc trò chuyện qua tin nhắn',
-  'CPC (tất cả)',
-  'Bắt đầu báo cáo',
-  'Kết thúc báo cáo',
 ] as const;
 
 export type QcExcelDbRow = {
@@ -43,10 +36,10 @@ export type QcExcelDbRow = {
   source_file: string | null;
 };
 
-/** Hai dòng mẫu: dòng «All» + dòng theo ngày (A/B để trống như file Meta gộp nhóm) */
+/** Hai dòng mẫu: [mã] trong tên quảng cáo; dòng All + dòng theo ngày */
 const EXAMPLE_ROWS: (string | number)[][] = [
-  ['FBC 7', 'FABICO - 122120954511034419', 'All', '', 'VND', 1707762, 5078.54, 0.4, 0.21, 1],
-  ['', '', '2026-03-31', '', 'VND', 120000, 5000, 0.35, 0.18, 0],
+  ['FBC 7', 'FABICO - 122120954511034419 [VD-QC-01]', 'All', 'VND', 1707762, 1],
+  ['', '', '2026-03-31', 'VND', 120000, 0],
 ];
 
 function excelSerialToYyyyMmDd(serial: number): string | null {
@@ -142,6 +135,137 @@ function parseMetric(val: unknown): number | null {
   return n;
 }
 
+/** Chuẩn hoá tiêu đề: lower, đ→d, bỏ dấu — để khớp «Số đơn», «Sản phẩm»… */
+function normalizeHeaderVi(s: string): string {
+  return cellStr(s)
+    .toLowerCase()
+    .replace(/\u0110/g, 'd')
+    .replace(/\u0111/g, 'd')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+type QcField =
+  | 'ten_tai_khoan'
+  | 'ten_quang_cao'
+  | 'ngay'
+  | 'don_vi_tien_te'
+  | 'so_tien_chi_tieu_vnd'
+  | 'chi_phi_mua'
+  | 'cpm'
+  | 'ctr_tat_ca'
+  | 'luot_tro_chuyen_tin_nhan'
+  | 'cpc'
+  | 'bao_cao_tu'
+  | 'bao_cao_den';
+
+/** Gán cột theo tên header: rule trước ưu tiên (tránh nhầm «Ngày» vs «Bắt đầu báo cáo»). */
+const QC_HEADER_RULES: { field: QcField; match: (n: string) => boolean }[] = [
+  {
+    field: 'bao_cao_tu',
+    match: (n) =>
+      (n.includes('bat dau') && n.includes('bao cao')) ||
+      n.includes('reporting period start') ||
+      (n.includes('period') && n.includes('start') && !n.includes('end')) ||
+      /^start(\s+date)?$/i.test(n.trim()),
+  },
+  {
+    field: 'bao_cao_den',
+    match: (n) =>
+      (n.includes('ket thuc') && n.includes('bao cao')) ||
+      n.includes('reporting period end') ||
+      (n.includes('period') && n.includes('end')) ||
+      /^end(\s+date)?$/i.test(n.trim()),
+  },
+  { field: 'ten_tai_khoan', match: (n) => n.includes('ten tai khoan') || n.includes('account name') },
+  { field: 'ten_quang_cao', match: (n) => n.includes('ten quang cao') || n.includes('ad name') || n.includes('tieu de quang cao') },
+  { field: 'don_vi_tien_te', match: (n) => n.includes('don vi tien') || n === 'currency' || n.includes('currency') },
+  {
+    field: 'so_tien_chi_tieu_vnd',
+    match: (n) =>
+      n.includes('so tien da chi tieu') ||
+      n.includes('amount spent') ||
+      (n.includes('chi tieu') && n.includes('so tien')) ||
+      (n.includes('spend') && !n.includes('cpc') && !n.includes('cpm')),
+  },
+  {
+    field: 'chi_phi_mua',
+    match: (n) =>
+      n.includes('chi phi tren moi luot ket qua') ||
+      n.includes('cost per result') ||
+      (n.includes('cost per') && n.includes('result')),
+  },
+  { field: 'cpm', match: (n) => /\bcpm\b/.test(n) },
+  { field: 'ctr_tat_ca', match: (n) => /\bctr\b/.test(n) },
+  {
+    field: 'luot_tro_chuyen_tin_nhan',
+    match: (n) =>
+      n.includes('tro chuyen qua tin nhan') ||
+      n.includes('messaging conversations') ||
+      n.includes('cuoc tro chuyen') ||
+      (n.includes('conversation') && n.includes('start')),
+  },
+  { field: 'cpc', match: (n) => /\bcpc\b/.test(n) },
+  {
+    field: 'ngay',
+    match: (n) =>
+      n === 'ngay' ||
+      n === 'day' ||
+      (n.startsWith('ngay ') && !n.includes('bat dau') && !n.includes('ket thuc')) ||
+      /^day$/i.test(n),
+  },
+];
+
+function buildQcColumnMap(headerRow: unknown[]): Partial<Record<QcField, number>> {
+  const map: Partial<Record<QcField, number>> = {};
+  const used = new Set<number>();
+  for (const { field, match } of QC_HEADER_RULES) {
+    if (map[field] != null) continue;
+    for (let c = 0; c < headerRow.length; c++) {
+      if (used.has(c)) continue;
+      const raw = cellStr(headerRow[c]);
+      if (!raw) continue;
+      const n = normalizeHeaderVi(raw);
+      if (!n) continue;
+      if (match(n)) {
+        map[field] = c;
+        used.add(c);
+        break;
+      }
+    }
+  }
+  return map;
+}
+
+function findQcHeaderRowIndex(aoa: unknown[][]): number {
+  const maxScan = Math.min(12, aoa.length);
+  let bestIdx = 0;
+  let bestScore = -1;
+  for (let hi = 0; hi < maxScan; hi++) {
+    const row = aoa[hi] as unknown[];
+    if (!row?.length) continue;
+    const m = buildQcColumnMap(row);
+    let score = 0;
+    if (m.ten_tai_khoan != null) score += 2;
+    if (m.ten_quang_cao != null) score += 2;
+    if (m.ngay != null) score += 2;
+    if (m.so_tien_chi_tieu_vnd != null) score += 2;
+    if (m.don_vi_tien_te != null) score += 1;
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = hi;
+    }
+  }
+  return bestIdx;
+}
+
+function cellAt(r: unknown[], col: number | undefined): unknown {
+  if (col == null || col < 0) return undefined;
+  return r[col];
+}
+
 export function downloadQcExcelTemplate(): void {
   const hdr = Array.from(QC_EXCEL_HEADERS);
   const aoa = [
@@ -153,16 +277,27 @@ export function downloadQcExcelTemplate(): void {
     }),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = QC_EXCEL_HEADERS.map((_, i) => ({ wch: i === 3 ? 4 : i === 1 ? 28 : 18 }));
+  ws['!cols'] = QC_EXCEL_HEADERS.map((_, i) => ({ wch: i === 1 ? 36 : i === 5 ? 26 : 18 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Du lieu QC');
+  const helpAoa = [
+    ['Hướng dẫn mẫu QC dự án'],
+    [''],
+    ['• Mẫu chỉ còn các cột cần cho QC / đẩy detail_reports.'],
+    ['• Export Meta đầy đủ (CPM, CTR, CPC, khoảng báo cáo…) vẫn import được — app đọc theo tên cột.'],
+    ['• «Tên quảng cáo»: thêm [mã_ma_ns] khi đẩy detail_reports (vd: … [VD-QC-01]).'],
+    ['• Ngày: yyyy-mm-dd, hoặc All / Tất cả cho dòng tổng hợp.'],
+    ['• Mẫu không gồm cột trống Meta / cột legacy detail_reports (page_report, branch, kpis, …).'],
+  ];
+  const wsHelp = XLSX.utils.aoa_to_sheet(helpAoa);
+  wsHelp['!cols'] = [{ wch: 90 }];
+  XLSX.utils.book_append_sheet(wb, wsHelp, 'Huong dan');
   XLSX.writeFile(wb, QC_EXCEL_TEMPLATE_FILENAME);
 }
 
-function rowHasData(r: unknown[], minCols = 3): boolean {
+function rowHasData(r: unknown[]): boolean {
   if (!r?.length) return false;
-  const slice = r.slice(0, 13);
-  return slice.some((c) => c !== '' && c != null && String(c).trim() !== '');
+  return r.some((c) => c !== '' && c != null && String(c).trim() !== '');
 }
 
 export async function parseQcExcelFile(
@@ -199,12 +334,20 @@ export async function parseQcExcelFile(
     return { rows, errors };
   }
 
-  let dataStart = 1;
-  const h0 = cellStr(aoa[0]?.[0]).toLowerCase();
-  if (!h0.includes('tài khoản') && !h0.includes('tai khoan')) {
-    dataStart = 0;
+  const headerIdx = findQcHeaderRowIndex(aoa);
+  const headerRow = aoa[headerIdx] as unknown[];
+  const col = buildQcColumnMap(headerRow);
+
+  if (col.ngay == null) {
+    errors.push({
+      row: headerIdx + 1,
+      msg:
+        'Không tìm thấy cột ngày theo tên tiêu đề (ví dụ «Ngày», «Day»). Kiểm tra dòng tiêu đề hoặc export Meta/Ads.',
+    });
+    return { rows, errors };
   }
 
+  const dataStart = headerIdx + 1;
   let lastTenTk = '';
   let lastTenQc = '';
 
@@ -213,27 +356,28 @@ export async function parseQcExcelFile(
     const sheetRow = i + 1;
     if (!rowHasData(r)) continue;
 
-    const rawTk = cellStr(r[0]);
-    const rawQc = cellStr(r[1]);
+    const rawTk = cellStr(cellAt(r, col.ten_tai_khoan));
+    const rawQc = cellStr(cellAt(r, col.ten_quang_cao));
     if (rawTk) lastTenTk = rawTk;
     if (rawQc) lastTenQc = rawQc;
     const tenTk = lastTenTk;
     const tenQc = lastTenQc;
 
-    const ngayRaw = r[2];
+    const ngayRaw = cellAt(r, col.ngay);
     const ngayTxt = cellStr(ngayRaw);
     const summaryNgay = isSummaryNgayCell(ngayRaw) || ngayTxt === '';
     const ngay = summaryNgay ? null : parseNgayCell(ngayRaw);
 
-    const donVi = cellStr(r[4]);
-    const spend = parseMoney(r[5]);
-    const cpp = parseMetric(r[6]);
-    const cpm = parseMetric(r[7]);
-    const ctr = cellStr(r[8]) || null;
-    const mess = parseMetric(r[9]);
-    const cpc = parseMetric(r[10]);
-    const tu = parseDateTimeCell(r[11]);
-    const den = parseDateTimeCell(r[12]);
+    const donVi = cellStr(cellAt(r, col.don_vi_tien_te));
+    const spend = parseMoney(cellAt(r, col.so_tien_chi_tieu_vnd));
+    const cpp = parseMetric(cellAt(r, col.chi_phi_mua));
+    const cpm = parseMetric(cellAt(r, col.cpm));
+    const ctrRaw = cellAt(r, col.ctr_tat_ca);
+    const ctr = cellStr(ctrRaw) || null;
+    const mess = parseMetric(cellAt(r, col.luot_tro_chuyen_tin_nhan));
+    const cpc = parseMetric(cellAt(r, col.cpc));
+    const tu = parseDateTimeCell(cellAt(r, col.bao_cao_tu));
+    const den = parseDateTimeCell(cellAt(r, col.bao_cao_den));
 
     const hasMetrics =
       spend != null ||
@@ -246,12 +390,11 @@ export async function parseQcExcelFile(
     if (!tenTk && !tenQc && !hasMetrics) continue;
 
     if (!summaryNgay && !ngay) {
-      // Nếu ô ngày có nội dung nhưng không parse được → báo lỗi; nếu rỗng thì coi là tổng hợp (All)
       if (ngayTxt !== '') {
         errors.push({
           row: sheetRow,
           msg:
-            'Cột C (Ngày): cần ngày hợp lệ (yyyy-mm-dd, dd/mm/yyyy…) hoặc «All»/«Tất cả» cho dòng tổng hợp.',
+            'Cột ngày (theo tên tiêu đề): cần ngày hợp lệ (yyyy-mm-dd, dd/mm/yyyy…) hoặc «All»/«Tất cả» cho dòng tổng hợp.',
         });
         continue;
       }

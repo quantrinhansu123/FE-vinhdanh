@@ -42,7 +42,7 @@ function initialsFromName(name: string): string {
   return (p[0][0] + p[p.length - 1][0]).toUpperCase();
 }
 
-/** Nhãn + class theo mock Flux (Active / On Leave / …) */
+/** Nhãn + class trạng thái nhân sự (Active / On Leave / …) */
 function statusFlux(tt: string | null | undefined): { label: string; cls: string } {
   switch (tt) {
     case 'dang_lam':

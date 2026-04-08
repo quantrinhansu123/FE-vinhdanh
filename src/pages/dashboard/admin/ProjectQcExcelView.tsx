@@ -74,8 +74,7 @@ export const ProjectQcExcelView: React.FC = () => {
       ad_account: string | null;
       ad_cost: number;
       mess_comment_count: number;
-      order_count: number | null;
-      revenue: number;
+      tong_data_nhan: number;
       team: string | null;
       name: string | null;
       email: string;
@@ -250,7 +249,7 @@ export const ProjectQcExcelView: React.FC = () => {
     }
   }, [currentUserEmail]);
 
-  // Ghi các dòng đã parse (preview) vào detail_reports — khóa (report_date, code), chỉ cập nhật ad_cost
+  // Ghi các dòng đã parse (preview) vào detail_reports — khóa (report_date, code); theo mẫu MKT (không gồm doanh số/đơn/lead)
   const commitStagedReportRows = useCallback(async () => {
     if (!currentUserEmail) {
       window.alert('Cần đăng nhập để đồng bộ.');
@@ -274,10 +273,11 @@ export const ProjectQcExcelView: React.FC = () => {
         product: string | null;
         market: string | null;
         page: string | null;
+        ma_tkqc: string | null;
         ad_account: string | null;
         ad_cost: number;
         mess_comment_count: number;
-        order_count: number | null;
+        tong_data_nhan: number;
         team: string | null;
         name: string | null;
         email: string;
@@ -295,10 +295,11 @@ export const ProjectQcExcelView: React.FC = () => {
           product: r.product || null,
           market: r.market || null,
           page: r.page || null,
+          ma_tkqc: r.ma_tkqc?.trim() || null,
           ad_account: r.ad_account || null,
           ad_cost: Number(r.ad_cost) || 0,
           mess_comment_count: Number(r.mess_comment_count) || 0,
-          order_count: Number.isFinite(Number(r.order_count)) ? Number(r.order_count) : null,
+          tong_data_nhan: Number(r.tong_data_nhan) || 0,
           team,
           name,
           email,
@@ -317,10 +318,11 @@ export const ProjectQcExcelView: React.FC = () => {
         if (ex) {
           ex.ad_cost += p.ad_cost;
           ex.mess_comment_count += p.mess_comment_count;
-          if (ex.order_count == null && p.order_count != null) ex.order_count = p.order_count;
+          ex.tong_data_nhan += p.tong_data_nhan;
           if (!ex.product && p.product) ex.product = p.product;
           if (!ex.market && p.market) ex.market = p.market;
           if (!ex.page && p.page) ex.page = p.page;
+          if (!ex.ma_tkqc && p.ma_tkqc) ex.ma_tkqc = p.ma_tkqc;
           if (!ex.ad_account && p.ad_account) ex.ad_account = p.ad_account;
         } else {
           merged.set(k, { ...p });
@@ -375,7 +377,7 @@ export const ProjectQcExcelView: React.FC = () => {
       }
 
       {
-        const okMsg = `Đã đồng bộ ${payload.length} dòng theo khóa Ngày + Code (cập nhật ad_cost, không ghi revenue).`;
+        const okMsg = `Đã đồng bộ ${payload.length} dòng vào detail_reports (Ngày + Code): chi phí QC, mess, tổng data, TKQC, page…`;
         setExcelMsg(okMsg);
         try { window.alert(okMsg); } catch {}
       }
@@ -414,9 +416,8 @@ export const ProjectQcExcelView: React.FC = () => {
           ad_account: r.ten_tai_khoan || null,
           ad_cost: Number(r.so_tien_chi_tieu_vnd) || 0,
           mess_comment_count: Number(r.luot_tro_chuyen_tin_nhan) || 0,
-          order_count: null as number | null,
-          // KHÔNG đẩy doanh số
-          // revenue: undefined,
+          tong_data_nhan: 0,
+          ma_tkqc: null as string | null,
           team: null as string | null,
           name:
             (Array.isArray(r.du_an) ? r.du_an?.[0]?.ten_du_an : r.du_an?.ten_du_an) ||
@@ -433,7 +434,8 @@ export const ProjectQcExcelView: React.FC = () => {
         ad_account: string | null;
         ad_cost: number;
         mess_comment_count: number;
-        order_count: number | null;
+        tong_data_nhan: number;
+        ma_tkqc: string | null;
         team: string | null;
         name: string | null;
         email: string;
@@ -492,7 +494,7 @@ export const ProjectQcExcelView: React.FC = () => {
       }
 
       {
-        const okMsg = `Đã đồng bộ ${payload.length} dòng theo khóa Ngày + Code (cập nhật ad_cost, không ghi revenue). Nếu không thấy key trùng thì thêm dòng mới.`;
+        const okMsg = `Đã đồng bộ ${payload.length} dòng theo khóa Ngày + Code (chi phí QC, mess, tổng data). Nếu không thấy key trùng thì thêm dòng mới.`;
         setExcelMsg(okMsg);
         try { window.alert(okMsg); } catch {}
       }
@@ -506,8 +508,7 @@ export const ProjectQcExcelView: React.FC = () => {
           ad_account: p.ad_account,
           ad_cost: p.ad_cost,
           mess_comment_count: p.mess_comment_count,
-          order_count: p.order_count,
-          revenue: 0,
+          tong_data_nhan: p.tong_data_nhan,
           team: p.team,
           name: p.name,
           email: p.email,
@@ -774,7 +775,7 @@ export const ProjectQcExcelView: React.FC = () => {
                   <th className="p-2">Code</th>
                   <th className="p-2 text-right">Chi tiêu</th>
                   <th className="p-2 text-right">Mess</th>
-                  <th className="p-2 text-right">Doanh số</th>
+                  <th className="p-2 text-right">Tổng data</th>
                   <th className="p-2">Email</th>
                 </tr>
               </thead>
@@ -787,7 +788,7 @@ export const ProjectQcExcelView: React.FC = () => {
                     </td>
                     <td className="p-2 text-right">{formatCompactVnd(r.ad_cost)}</td>
                     <td className="p-2 text-right">{r.mess_comment_count ?? '—'}</td>
-                    <td className="p-2 text-right">{formatCompactVnd(r.revenue)}</td>
+                    <td className="p-2 text-right">{r.tong_data_nhan ?? '—'}</td>
                     <td className="p-2">{r.email}</td>
                   </tr>
                 ))}
@@ -810,10 +811,9 @@ export const ProjectQcExcelView: React.FC = () => {
                   <th className="p-2 whitespace-nowrap">Ngày</th>
                   <th className="p-2">Code</th>
                   <th className="p-2 text-right">Chi tiêu</th>
-                  <th className="p-2 text-right">Doanh số</th>
                   <th className="p-2 text-right">Mess</th>
-                  <th className="p-2 text-right">Đơn</th>
-                  <th className="p-2 text-right">Lead</th>
+                  <th className="p-2 text-right">Tổng data</th>
+                  <th className="p-2">TKQC</th>
                 </tr>
               </thead>
               <tbody className="text-[11px] text-[var(--text2)] font-[var(--mono)]">
@@ -824,10 +824,11 @@ export const ProjectQcExcelView: React.FC = () => {
                       {extractMaNvFromBracketPage(r.page || '') || '—'}
                     </td>
                     <td className="p-2 text-right">{formatCompactVnd(r.ad_cost)}</td>
-                    <td className="p-2 text-right">{formatCompactVnd(r.revenue)}</td>
                     <td className="p-2 text-right">{r.mess_comment_count}</td>
-                    <td className="p-2 text-right">{r.order_count}</td>
-                    <td className="p-2 text-right">{r.tong_lead}</td>
+                    <td className="p-2 text-right">{r.tong_data_nhan}</td>
+                    <td className="p-2 max-w-[100px] truncate" title={r.ma_tkqc || ''}>
+                      {r.ma_tkqc || '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

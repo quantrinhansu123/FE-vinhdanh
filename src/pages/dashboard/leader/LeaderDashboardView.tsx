@@ -4,7 +4,47 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../api/supabase';
 import type { AuthUser, Employee } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
-import { formatCompactVnd, formatKpiMoney, REPORTS_TABLE, toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
+import { formatCompactVnd, formatKpiMoney, toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
+
+/** Hiệu suất Marketing (leader): luôn lấy từ bảng này, không dùng VITE_SUPABASE_REPORTS_TABLE */
+const DETAIL_REPORTS_TABLE = 'detail_reports';
+
+/** Lấy theo lô + keyset `id > lastId` để không bị trần một lần query */
+const DETAIL_REPORTS_PAGE_SIZE = 1000;
+/** Tối đa số lô (1000 × 500 = 500k dòng/tháng) */
+const DETAIL_REPORT_MAX_PAGES = 500;
+
+const LEADER_DETAIL_REPORTS_SELECT =
+  'id, email, name, code, ad_account, ma_tkqc, ad_cost, revenue, tien_viet, tong_lead, tong_data_nhan, mess_comment_count, order_count';
+
+async function fetchAllLeaderDetailReportsForRange(
+  start: string,
+  end: string
+): Promise<{ data: Record<string, unknown>[]; error: { message: string } | null }> {
+  const all: Record<string, unknown>[] = [];
+  let lastId: string | null = null;
+  for (let p = 0; p < DETAIL_REPORT_MAX_PAGES; p++) {
+    let q = supabase
+      .from(DETAIL_REPORTS_TABLE)
+      .select(LEADER_DETAIL_REPORTS_SELECT)
+      .gte('report_date', start)
+      .lte('report_date', end)
+      .order('id', { ascending: true })
+      .limit(DETAIL_REPORTS_PAGE_SIZE);
+    if (lastId) q = q.gt('id', lastId);
+    const { data, error } = await q;
+    if (error) return { data: [], error };
+    const batch = data || [];
+    if (batch.length === 0) break;
+    all.push(...batch);
+    const raw = batch[batch.length - 1]?.id;
+    const next = raw == null ? '' : String(raw);
+    if (!next) break;
+    lastId = next;
+    if (batch.length < DETAIL_REPORTS_PAGE_SIZE) break;
+  }
+  return { data: all, error: null };
+}
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
@@ -13,7 +53,7 @@ const KPI_TEAM_TABLE =
 const KPI_STAFF_TABLE =
   import.meta.env.VITE_SUPABASE_KPI_STAFF_MONTHLY_TARGETS_TABLE?.trim() || 'kpi_staff_monthly_targets';
 
-/** CPA (VND) coi là vượt ngưỡng so với mock “90k” (90M VND khi quy đổi báo cáo nội bộ) */
+/** CPA (VND) ngưỡng cảnh báo (90M — quy ước tiền trong báo cáo nội bộ) */
 const CPA_ALERT_THRESHOLD_VND = 90_000_000;
 
 const STAFF_SELECT = 'id, name, email, team, ma_ns, vi_tri, trang_thai, avatar_url';
@@ -59,6 +99,28 @@ function isActiveStaff(tt: string | null | undefined): boolean {
 
 function safeTrim(v: unknown): string {
   return String(v ?? '').trim();
+}
+
+/** Tên hiển thị kèm mã (ma_ns / code — khớp cột `code` trong detail_reports khi gộp số liệu) */
+function mktNameWithCode(m: Employee): string {
+  const name = safeTrim(m.name) || '—';
+  const code = safeTrim(m.ma_ns) || safeTrim(m.code);
+  if (!code) return name;
+  return `${name} · ${code}`;
+}
+
+/** Giống admin-dash: tiền từ detail_reports (chuỗi có dấu phẩy / khoảng trắng) */
+function safeNum(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim().replace(/[\$,]/g, '').replace(/\s+/g, '');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Doanh thu VND từ detail_reports — cùng quy tắc AdminDashboardView */
+function reportRevenueVnd(row: { tien_viet?: unknown; revenue?: unknown }): number {
+  return row.tien_viet != null ? safeNum(row.tien_viet) : Math.round(safeNum(row.revenue) * 25000);
 }
 
 function adsDtPct(ads: number, rev: number): number | null {
@@ -165,12 +227,14 @@ const ObsidianKpiCard: React.FC<{
 
 export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer = null }) => {
   const navigate = useNavigate();
-  const ym = ymNow();
-  const { start, end } = monthRangeLocal(ym);
+  const [selectedYm, setSelectedYm] = useState<string>(() => ymNow());
+  const { start, end } = monthRangeLocal(selectedYm);
   const monthLabel = useMemo(() => {
-    const [y, m] = ym.split('-');
+    const [y, m] = selectedYm.split('-');
     return `${m}/${y}`;
-  }, [ym]);
+  }, [selectedYm]);
+  const currentYm = ymNow();
+  const isViewingCurrentMonth = selectedYm === currentYm;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -199,8 +263,10 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     setLoading(true);
     setError(null);
 
+    const isAdminViewer = viewer?.role === 'admin';
+
     let teamKeys: string[] = [];
-    if (viewerName) {
+    if (!isAdminViewer && viewerName) {
       const teamRes = await supabase.from(TEAMS_TABLE).select('ten_team, leader').eq('leader', viewerName);
       if (!teamRes.error) {
         teamKeys = (teamRes.data || [])
@@ -210,10 +276,14 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
         console.warn('leader-dash crm_teams:', teamRes.error);
       }
     }
-    if (!teamKeys.length && fallbackTeam) teamKeys = [fallbackTeam];
+    if (!isAdminViewer && !teamKeys.length && fallbackTeam) teamKeys = [fallbackTeam];
     teamKeys = [...new Set(teamKeys.map((x) => x.trim()).filter(Boolean))];
 
-    const teamLabel = teamKeys.length ? teamKeys.join(' · ') : fallbackTeam;
+    const teamLabel = isAdminViewer
+      ? 'Toàn bộ nhân sự (admin)'
+      : teamKeys.length
+        ? teamKeys.join(' · ')
+        : fallbackTeam;
     setTeamName(teamLabel);
 
     const empRes = await supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true });
@@ -225,9 +295,11 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     }
 
     const all = (empRes.data || []) as Employee[];
-    const teamList = teamKeys.length
-      ? all.filter((e) => teamKeys.includes(safeTrim(e.team)) && isActiveStaff(e.trang_thai))
-      : [];
+    const teamList = isAdminViewer
+      ? all.filter((e) => isActiveStaff(e.trang_thai))
+      : teamKeys.length
+        ? all.filter((e) => teamKeys.includes(safeTrim(e.team)) && isActiveStaff(e.trang_thai))
+        : [];
 
     const emails = [
       ...new Set(
@@ -237,30 +309,40 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       ),
     ];
 
+    /** detail_reports.code thường trùng employees.ma_ns (bảng employees không có cột code) */
+    const codeKeyToEmail = new Map<string, string>();
+    for (const e of teamList) {
+      const em = e.email?.trim().toLowerCase();
+      if (!em) continue;
+      const k = safeTrim(e.ma_ns).toLowerCase();
+      if (k) codeKeyToEmail.set(k, em);
+    }
+
     const idList = teamList.map((e) => e.id);
 
+    const kpiTeamKeyList = isAdminViewer
+      ? [...new Set(teamList.map((e) => safeTrim(e.team)).filter(Boolean))]
+      : teamKeys;
+
     const teamKpiPromise =
-      teamKeys.length > 0
+      kpiTeamKeyList.length > 0
         ? supabase
             .from(KPI_TEAM_TABLE)
             .select('muc_tieu_doanh_thu_team, team_key')
-            .eq('nam_thang', ym)
-            .in('team_key', teamKeys)
+            .eq('nam_thang', selectedYm)
+            .in('team_key', kpiTeamKeyList)
         : Promise.resolve({ data: [] as { muc_tieu_doanh_thu_team?: number; team_key?: string }[], error: null });
 
     const [teamKpiRes, staffKpiRes, repRes] = await Promise.all([
       teamKpiPromise,
       idList.length
-        ? supabase.from(KPI_STAFF_TABLE).select('employee_id, muc_tieu_vnd').eq('nam_thang', ym).in('employee_id', idList)
-        : Promise.resolve({ data: [] as { employee_id: string; muc_tieu_vnd: number }[], error: null }),
-      emails.length
         ? supabase
-            .from(REPORTS_TABLE)
-            .select('email, name, ad_account, ma_tkqc, ad_cost, revenue, tong_lead, tong_data_nhan, mess_comment_count, order_count')
-            .gte('report_date', start)
-            .lte('report_date', end)
-            .limit(12000)
-        : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
+            .from(KPI_STAFF_TABLE)
+            .select('employee_id, muc_tieu_vnd')
+            .eq('nam_thang', selectedYm)
+            .in('employee_id', idList)
+        : Promise.resolve({ data: [] as { employee_id: string; muc_tieu_vnd: number }[], error: null }),
+      emails.length ? fetchAllLeaderDetailReportsForRange(start, end) : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (teamKpiRes.error) {
@@ -288,38 +370,61 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     const next = new Map<string, Agg>();
 
     if (repRes.error) {
-      console.error('leader-dash detail_reports:', repRes.error);
-      setError(repRes.error.message || 'Không tải detail_reports.');
-      setMembers(teamList);
+      console.error(`leader-dash ${DETAIL_REPORTS_TABLE}:`, repRes.error);
+      setError(repRes.error.message || `Không tải ${DETAIL_REPORTS_TABLE}.`);
+      setMembers([]);
       setByEmail(new Map());
       setLoading(false);
       return;
     }
 
+    /** Email nhân sự (canonical) đã có ≥1 dòng detail_reports khớp team trong kỳ — không lấy roster “trống” */
+    const emailsWithDetailRows = new Set<string>();
     for (const row of repRes.data || []) {
       const em = String(row.email || '')
         .trim()
         .toLowerCase();
-      if (!em || !emailSet.has(em)) continue;
+      const codeKey = String((row as { code?: string | null }).code || '')
+        .trim()
+        .toLowerCase();
+      let target: string | null = null;
+      // Ưu tiên code (detail_reports) khớp ma_ns nhân sự trong phạm vi team/admin
+      if (codeKey && codeKeyToEmail.has(codeKey)) target = codeKeyToEmail.get(codeKey)!;
+      else if (em && emailSet.has(em)) target = em;
+      if (!target) continue;
 
-      const a = next.get(em) || emptyAgg();
-      a.rev += Number(row.revenue) || 0;
-      a.ads += Number(row.ad_cost) || 0;
-      a.tongLead += Number(row.tong_lead) || 0;
-      a.tongData += Number(row.tong_data_nhan) || 0;
-      a.mess += Number(row.mess_comment_count) || 0;
-      a.orders += Number(row.order_count) || 0;
-      const acc = String(row.ad_account || '').trim();
-      const mq = String(row.ma_tkqc || '').trim();
+      emailsWithDetailRows.add(target);
+      const a = next.get(target) || emptyAgg();
+      a.rev += reportRevenueVnd(row as { tien_viet?: unknown; revenue?: unknown });
+      a.ads += safeNum((row as { ad_cost?: unknown }).ad_cost);
+      a.tongLead += safeNum((row as { tong_lead?: unknown }).tong_lead);
+      a.tongData += safeNum((row as { tong_data_nhan?: unknown }).tong_data_nhan);
+      a.mess += safeNum((row as { mess_comment_count?: unknown }).mess_comment_count);
+      a.orders += safeNum((row as { order_count?: unknown }).order_count);
+      const acc = String((row as { ad_account?: string | null }).ad_account || '').trim();
+      const mq = String((row as { ma_tkqc?: string | null }).ma_tkqc || '').trim();
       if (acc) a.accounts.add(acc);
       if (mq) a.accounts.add(mq);
-      next.set(em, a);
+      next.set(target, a);
     }
 
-    setMembers(teamList);
+    // Cho phép aggForMember tra cứu theo ma_ns: cùng bucket với email
+    for (const e of teamList) {
+      const em = e.email?.trim().toLowerCase();
+      const mns = safeTrim(e.ma_ns).toLowerCase();
+      if (!em || !mns) continue;
+      const bucket = next.get(em);
+      if (bucket && !next.has(mns)) next.set(mns, bucket);
+    }
+
+    const membersFromDetail = teamList.filter((e) => {
+      const em = e.email?.trim().toLowerCase();
+      return Boolean(em && emailsWithDetailRows.has(em));
+    });
+    setMembers(membersFromDetail);
     setByEmail(next);
     setLoading(false);
-  }, [viewer?.email, viewer?.team, viewer?.name, start, end, ym]);
+  }, [viewer?.email, viewer?.team, viewer?.name, viewer?.role, start, end, selectedYm]);
 
   useEffect(() => {
     void load();
@@ -330,6 +435,11 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       const e = m.email?.trim().toLowerCase();
       if (e && byEmail.has(e)) {
         const x = byEmail.get(e);
+        if (x) return x;
+      }
+      const mns = safeTrim(m.ma_ns).toLowerCase();
+      if (mns && byEmail.has(mns)) {
+        const x = byEmail.get(mns);
         if (x) return x;
       }
       return emptyAgg();
@@ -425,7 +535,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
         const { m, a, cpdt, mess, lead, cpa, cpl, cpo, crPct, aov } = row;
         const cells = [
           String(idx + 1),
-          m.name,
+          mktNameWithCode(m),
           String(a.rev),
           String(a.ads),
           cpdt != null ? cpdt.toFixed(2) : '',
@@ -444,10 +554,10 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `leader-dash-${teamName.replace(/\s+/g, '_') || 'team'}-${ym}.csv`;
+    a.download = `leader-dash-${teamName.replace(/\s+/g, '_') || 'team'}-${selectedYm}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
-  }, [displayRows, teamName, ym]);
+  }, [displayRows, teamName, selectedYm]);
 
   if (!viewer?.email) {
     return (
@@ -468,7 +578,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
         </div>
       )}
 
-      {!teamName ? (
+      {!teamName && viewer?.role !== 'admin' ? (
         <div className="mb-3 text-[11px] text-[var(--ld-tertiary)] font-semibold border border-[var(--ld-tertiary)]/30 rounded-lg px-3 py-2 bg-[color-mix(in_srgb,var(--ld-tertiary)_10%,transparent)]">
           Không xác định được team: cần <code className="text-[10px]">tên Leader</code> khớp cột leader trong{' '}
           <code className="text-[10px]">crm_teams</code>, hoặc gán <code className="text-[10px]">team</code> trên nhân sự tại{' '}
@@ -476,12 +586,36 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
         </div>
       ) : null}
 
-      <div className="flex items-center justify-end mb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] leader-dash-label uppercase tracking-widest text-[var(--ld-on-surface-variant)]">
+            Tháng báo cáo
+          </span>
+          <input
+            type="month"
+            value={selectedYm}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (/^\d{4}-\d{2}$/.test(v)) setSelectedYm(v);
+            }}
+            className="bg-[var(--ld-surface-container-highest)] border border-[var(--ld-outline-variant)]/40 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[var(--ld-on-surface)] min-h-[34px] [color-scheme:dark]"
+            aria-label="Chọn tháng lấy dữ liệu detail_reports"
+          />
+          {!isViewingCurrentMonth ? (
+            <button
+              type="button"
+              onClick={() => setSelectedYm(ymNow())}
+              className="text-[11px] font-semibold text-[var(--ld-primary)] hover:underline px-1"
+            >
+              Về tháng này
+            </button>
+          ) : null}
+        </div>
         <button
           type="button"
           onClick={() => void load()}
           disabled={loading}
-          className="flex items-center gap-1.5 bg-[var(--ld-surface-container-highest)] hover:bg-[var(--ld-surface-bright)] text-[var(--ld-on-surface-variant)] py-1.5 px-2.5 rounded-lg text-[11px] font-semibold border border-[var(--ld-outline-variant)]/40 disabled:opacity-50 transition-colors"
+          className="flex items-center justify-center gap-1.5 bg-[var(--ld-surface-container-highest)] hover:bg-[var(--ld-surface-bright)] text-[var(--ld-on-surface-variant)] py-1.5 px-2.5 rounded-lg text-[11px] font-semibold border border-[var(--ld-outline-variant)]/40 disabled:opacity-50 transition-colors self-start sm:self-auto"
         >
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           Làm mới
@@ -530,7 +664,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
               label="MKT hoạt động"
               value={`${mktActive}/${Math.max(members.length, 1)}`}
               deltaKind="stable"
-              deltaText="Tháng này"
+              deltaText={isViewingCurrentMonth ? 'Tháng này' : `Thg ${monthLabel}`}
               icon="horizontal_rule"
             />
             <ObsidianKpiCard
@@ -550,7 +684,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                   Hiệu suất Marketing — {teamName || 'Team'}
                 </h2>
                 <p className="text-xs text-[var(--ld-on-surface-variant)] leader-dash-label mt-0.5">
-                  Tháng {monthLabel} · Chi tiết {REPORTS_TABLE}
+                  Tháng {monthLabel} · Chi tiết {DETAIL_REPORTS_TABLE}
                 </p>
               </div>
               <div className="flex gap-2 shrink-0">
@@ -581,7 +715,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                   {teamName
                     ? filterHighCpdt
                       ? 'Không có MKT nào vượt ngưỡng CP/DT 35%.'
-                      : 'Không có nhân sự hoạt động trong các team phụ trách (hoặc chưa có báo cáo tháng).'
+                      : `Không có dòng detail_reports trong tháng ${monthLabel} khớp team (theo email hoặc code = mã NS trên nhân sự).`
                     : 'Chưa gán team / leader — xem cảnh báo phía trên.'}
                 </div>
               ) : (
@@ -589,7 +723,12 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                   <thead>
                     <tr className="text-[10px] leader-dash-label uppercase tracking-widest text-[var(--ld-on-surface-variant)]">
                       <th className="pb-2 pl-4 font-medium">#</th>
-                      <th className="pb-2 font-medium">Marketing</th>
+                      <th className="pb-2 font-medium">
+                        Marketing
+                        <span className="block text-[9px] font-normal normal-case tracking-normal text-[var(--ld-on-surface-variant)] opacity-90">
+                          tên · mã NS
+                        </span>
+                      </th>
                       <th className="pb-2 font-medium">Doanh số</th>
                       <th className="pb-2 font-medium">Chi phí</th>
                       <th className="pb-2 font-medium">CP/DT</th>
@@ -615,8 +754,11 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                         >
                           <td className="py-3.5 pl-4 rounded-l-xl font-bold text-[var(--ld-primary)] align-top">{rank}</td>
                           <td className="py-3.5 align-top">
-                            <div className={`font-semibold ${critical ? 'text-[var(--ld-tertiary)]' : 'text-[var(--ld-on-surface)]'}`}>
-                              {m.name}
+                            <div
+                              className={`font-semibold ${critical ? 'text-[var(--ld-tertiary)]' : 'text-[var(--ld-on-surface)]'}`}
+                              title={mktNameWithCode(m)}
+                            >
+                              {mktNameWithCode(m)}
                             </div>
                             <div
                               className="text-[10px] text-[var(--ld-on-surface-variant)] truncate max-w-[200px]"
@@ -692,7 +834,9 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                           <div className="flex items-center gap-3 min-w-0">
                             <StaffAvatar member={m} />
                             <div className="min-w-0">
-                              <p className="text-xs font-semibold text-[var(--ld-on-surface)] truncate">{m.name}</p>
+                              <p className="text-xs font-semibold text-[var(--ld-on-surface)] truncate" title={mktNameWithCode(m)}>
+                                {mktNameWithCode(m)}
+                              </p>
                               <p className="text-[10px] text-[var(--ld-on-surface-variant)] truncate">{subRole}</p>
                             </div>
                           </div>
@@ -730,7 +874,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                     <div>
                       <p className="text-xs font-bold text-[var(--ld-error)]">CP/DT vượt ngưỡng</p>
                       <p className="text-[10px] text-[var(--ld-on-surface-variant)]">
-                        {needsAttention[0].m.name}: CP/DT {needsAttention[0].cpdt?.toFixed(1)}% (Ngưỡng theo dõi: 35%)
+                        {mktNameWithCode(needsAttention[0].m)}: CP/DT {needsAttention[0].cpdt?.toFixed(1)}% (Ngưỡng theo dõi: 35%)
                       </p>
                     </div>
                   </div>
@@ -750,7 +894,8 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                     <div>
                       <p className="text-xs font-bold text-[var(--ld-error)]">CPA vượt ngưỡng</p>
                       <p className="text-[10px] text-[var(--ld-on-surface-variant)]">
-                        {cpaAlertRow.m.name}: CPA {formatCompactVnd(cpaAlertRow.cpa)} (Ngưỡng: {formatCompactVnd(CPA_ALERT_THRESHOLD_VND)})
+                        {mktNameWithCode(cpaAlertRow.m)}: CPA {formatCompactVnd(cpaAlertRow.cpa)} (Ngưỡng:{' '}
+                        {formatCompactVnd(CPA_ALERT_THRESHOLD_VND)})
                       </p>
                     </div>
                   </div>

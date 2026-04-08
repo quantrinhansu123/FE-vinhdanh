@@ -1,5 +1,4 @@
 import React from 'react';
-import { AlertItem } from './atoms/SharedAtoms';
 
 interface NotificationPanelProps {
   isOpen: boolean;
@@ -23,32 +22,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ isOpen, on
         </button>
       </div>
       
-      <div className="flex flex-col gap-[7px]">
-        <AlertItem 
-          title="MKT C — Ads/DT 68%" 
-          description="Burn Score 84 · 2 phút trước" 
-          statusText="Nguy hiểm" 
-          statusType="R" 
-        />
-        <AlertItem 
-          title="MKT A — Ads/DT 58%" 
-          description="Burn Score 78 · 5 phút trước" 
-          statusText="Nguy hiểm" 
-          statusType="R" 
-        />
-        <AlertItem 
-          title="2 MKT chưa nhập báo cáo" 
-          description="Deadline 22:00 · 20 phút trước" 
-          statusText="Nhắc nhở" 
-          statusType="Y" 
-        />
-        <AlertItem 
-          title="Yêu cầu ngân sách — 150M" 
-          description="Team A · Media One · 1h trước" 
-          statusText="Cần làm" 
-          statusType="Y" 
-        />
-      </div>
+      <div className="flex flex-col gap-[7px] text-[12px] text-[var(--text3)] py-4 px-1">Chưa có thông báo.</div>
     </div>
   );
 };

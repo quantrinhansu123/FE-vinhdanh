@@ -3,20 +3,17 @@ import { parseIntVi } from './mktDetailReportShared';
 
 export const MKT_EXCEL_TEMPLATE_FILENAME = 'mau-nhap-bao-cao-mkt.xlsx';
 
-/** Dòng 1: tiêu đề. Dữ liệu từ dòng 2. Cột A→L cố định thứ tự như mẫu. */
+/** Dòng tiêu đề: tên cột như mẫu. Dữ liệu từ dòng sau tiêu đề — parser map theo **tên cột**, không cố định A→L. */
 export const MKT_EXCEL_HEADERS = [
   'Ngày báo cáo (yyyy-mm-dd)',
   'Sản phẩm',
   'Thị trường',
-  'Page',
+  'Page (gồm [mã_ma_ns] để đồng bộ)',
   'TKQC (ma_tkqc)',
   'Mã TK (ad_account)',
   'Chi phí QC',
   'Lượt bắt đầu cuộc trò chuyện qua tin nhắn',
   'Tổng data nhận',
-  'Doanh số (VND)',
-  'Số đơn',
-  'Tổng lead',
 ] as const;
 
 export type MktExcelInsertRow = {
@@ -29,24 +26,18 @@ export type MktExcelInsertRow = {
   ad_cost: number;
   mess_comment_count: number;
   tong_data_nhan: number;
-  revenue: number;
-  order_count: number;
-  tong_lead: number;
 };
 
 const EXAMPLE_ROW: string[] = [
   '2026-04-01',
   'Ví dụ sản phẩm',
   'Ví dụ thị trường',
-  'Fanpage / Page',
+  'Fanpage mẫu [VD-MKT-01]',
   'QC-A01',
   '123456789012345',
   '500000',
   '120',
   '50',
-  '10000000',
-  '5',
-  '30',
 ];
 
 /** Excel serial (hệ 1900/1904) → yyyy-mm-dd qua SheetJS — khớp Excel thật. */
@@ -200,22 +191,6 @@ function parseDateFromSheetCell(
   return { ok: false };
 }
 
-/** Tìm ngày ở cột A, B hoặc C (file có cột STT / cột trống). */
-function findDateInRow(
-  ws: XLSX.WorkSheet,
-  row0: number,
-  rowArr: unknown[],
-  date1904: boolean
-): { ok: true; iso: string; colShift: number } | { ok: false } {
-  for (let c = 0; c < 3; c++) {
-    const fromSheet = parseDateFromSheetCell(ws, row0, c, date1904);
-    if (fromSheet.ok) return { ok: true, iso: fromSheet.iso, colShift: c };
-    const fromArr = parseDateCell(rowArr[c], date1904);
-    if (fromArr.ok) return { ok: true, iso: fromArr.iso, colShift: c };
-  }
-  return { ok: false };
-}
-
 function cellStr(val: unknown): string {
   if (val == null || val === '') return '';
   if (typeof val === 'number' && Number.isFinite(val)) return String(val);
@@ -238,6 +213,119 @@ function looksLikeCrmMktHeader(headerRow: unknown[] | undefined): boolean {
   if (a.includes('ngày') && a.includes('báo cáo')) return true;
   if (a.includes('ngày') && (b.includes('sản phẩm') || b.includes('san pham'))) return true;
   return false;
+}
+
+function cellAt(r: unknown[], col: number | undefined): unknown {
+  if (col == null || col < 0) return undefined;
+  return r[col];
+}
+
+/** Map cột CRM theo tên tiêu đề (rule trước ưu tiên; mỗi cột chỉ gán một lần). */
+const CRM_HEADER_RULES: { key: keyof MktExcelInsertRow; match: (n: string) => boolean }[] = [
+  {
+    key: 'report_date',
+    match: (n) =>
+      (n.includes('ngay') && n.includes('bao') && n.includes('cao')) ||
+      n.includes('report_date') ||
+      n.includes('ngay bao cao') ||
+      ((n === 'ngay' || n === 'date') && !n.includes('bat dau') && !n.includes('ket thuc')),
+  },
+  { key: 'product', match: (n) => n.includes('san pham') || (n.includes('product') && !n.includes('byproduct')) },
+  { key: 'market', match: (n) => n.includes('thi truong') || n === 'market' || /^market\b/.test(n) },
+  {
+    key: 'page',
+    match: (n) =>
+      n === 'page' || n.includes('fanpage') || (n.includes('page') && !n.includes('landing')),
+  },
+  {
+    key: 'ma_tkqc',
+    match: (n) => n.includes('ma_tkqc') || n.includes('tkqc') || (n.includes('ma') && n.includes('tkqc')),
+  },
+  {
+    key: 'ad_account',
+    match: (n) =>
+      n.includes('ad account') ||
+      n.includes('ma tk') ||
+      (n.includes('tai khoan') && (n.includes('qc') || n.includes('quang cao'))) ||
+      n.includes('advertiser id'),
+  },
+  {
+    key: 'ad_cost',
+    match: (n) =>
+      (n.includes('chi') && n.includes('phi') && n.includes('qc')) ||
+      n.includes('ad cost') ||
+      n.includes('chi phi qc') ||
+      (n.includes('chi tieu') && (n.includes('qc') || n.includes('ads'))),
+  },
+  {
+    key: 'mess_comment_count',
+    match: (n) =>
+      n.includes('tro chuyen') ||
+      n.includes('messaging') ||
+      (n.includes('mess') && n.includes('comment')) ||
+      n.includes('cuoc tro chuyen'),
+  },
+  { key: 'tong_data_nhan', match: (n) => n.includes('tong data') || n.includes('data nhan') },
+];
+
+function buildCrmColumnMap(headerRow: unknown[]): Partial<Record<keyof MktExcelInsertRow, number>> {
+  const map: Partial<Record<keyof MktExcelInsertRow, number>> = {};
+  const used = new Set<number>();
+  for (const { key, match } of CRM_HEADER_RULES) {
+    for (let c = 0; c < headerRow.length; c++) {
+      if (used.has(c)) continue;
+      const n = normalizeHeaderVi(cellStr(headerRow[c]));
+      if (!n) continue;
+      if (match(n)) {
+        map[key] = c;
+        used.add(c);
+        break;
+      }
+    }
+  }
+  return map;
+}
+
+function findCrmHeaderRowIndex(aoa: unknown[][]): number {
+  let bestIdx = 0;
+  let bestScore = -1;
+  const maxScan = Math.min(8, aoa.length);
+  for (let hi = 0; hi < maxScan; hi++) {
+    const row = aoa[hi] as unknown[];
+    if (!row?.length) continue;
+    const m = buildCrmColumnMap(row);
+    let s = 0;
+    if (m.report_date != null) s += 5;
+    if (m.product != null) s += 1;
+    if (m.market != null) s += 1;
+    if (m.page != null) s += 1;
+    if (m.ad_cost != null) s += 1;
+    if (s > bestScore) {
+      bestScore = s;
+      bestIdx = hi;
+    }
+  }
+  return bestIdx;
+}
+
+/** Cột chi tiêu theo tên (export Meta EN/VN). */
+function findAmountSpentColumnIndex(aoa: unknown[][]): number | null {
+  for (let hi = 0; hi < Math.min(8, aoa.length); hi++) {
+    const row = aoa[hi] as unknown[];
+    if (!row?.length) continue;
+    for (let c = 0; c < row.length; c++) {
+      const n = normalizeHeaderVi(cellStr(row[c]));
+      if (!n) continue;
+      if (
+        n.includes('amount spent') ||
+        n.includes('so tien da chi tieu') ||
+        (n.includes('so tien') && n.includes('chi tieu'))
+      ) {
+        return c;
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -319,12 +407,15 @@ function looksLikeAdsAccountLabel(text: string): boolean {
   return false;
 }
 
-/** Chuẩn hoá tiêu đề tiếng Việt để tìm cột (bỏ dấu). */
+/** Chuẩn hoá tiêu đề để khớp tên cột: lower, đ→d, bỏ dấu kết hợp, gộp khoảng trắng. */
 function normalizeHeaderVi(s: string): string {
   return cellStr(s)
     .toLowerCase()
+    .replace(/\u0110/g, 'd')
+    .replace(/\u0111/g, 'd')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2018\u2019\u201c\u201d]/g, "'")
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -375,6 +466,20 @@ function findAdsAdNameColumn(aoa: unknown[][]): number | null {
   return null;
 }
 
+/** Cột ngày (Meta EN «Day» / VN «Ngày») theo dòng tiêu đề. */
+function findAdsDayColumn(aoa: unknown[][]): number | null {
+  const maxHeaderRows = Math.min(8, aoa.length);
+  for (let hi = 0; hi < maxHeaderRows; hi++) {
+    const row = aoa[hi] as unknown[];
+    if (!row?.length) continue;
+    for (let c = 0; c < Math.min(row.length, 48); c++) {
+      const n = normalizeHeaderVi(cellStr(row[c]));
+      if (n === 'day' || n === 'ngay') return c;
+    }
+  }
+  return null;
+}
+
 function parseCellToIsoOptional(
   ws: XLSX.WorkSheet,
   row0: number,
@@ -413,6 +518,8 @@ function parseAdsAccountHierarchyExport(
 
   const periodCols = findAdsReportPeriodColumns(aoa);
   const adNameCol = findAdsAdNameColumn(aoa);
+  const amountSpentCol = findAmountSpentColumnIndex(aoa);
+  const dayCol = findAdsDayColumn(aoa);
 
   let groupName = '';
   let accountLabel: string | null = null;
@@ -431,18 +538,31 @@ function parseAdsAccountHierarchyExport(
     }
 
     let dateIso: string | null = null;
-    for (let c = 0; c < maxScanCol; c++) {
-      const d = parseExplicitDateForAdsExport(ws, i, c, date1904);
-      if (d.ok) {
-        dateIso = d.iso;
-        break;
+    if (dayCol != null) {
+      const d0 = parseExplicitDateForAdsExport(ws, i, dayCol, date1904);
+      if (d0.ok) dateIso = d0.iso;
+      else {
+        const rawD = r[dayCol];
+        if (typeof rawD === 'string' && /^\d{4}-\d{2}-\d{2}(?:\s|T|$)/.test(rawD.trim())) {
+          const arrD = parseDateCell(rawD, date1904);
+          if (arrD.ok) dateIso = arrD.iso;
+        }
       }
-      const raw = r[c];
-      if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}(?:\s|T|$)/.test(raw.trim())) {
-        const arrD = parseDateCell(raw, date1904);
-        if (arrD.ok) {
-          dateIso = arrD.iso;
+    }
+    if (!dateIso) {
+      for (let c = 0; c < maxScanCol; c++) {
+        const d = parseExplicitDateForAdsExport(ws, i, c, date1904);
+        if (d.ok) {
+          dateIso = d.iso;
           break;
+        }
+        const raw = r[c];
+        if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}(?:\s|T|$)/.test(raw.trim())) {
+          const arrD = parseDateCell(raw, date1904);
+          if (arrD.ok) {
+            dateIso = arrD.iso;
+            break;
+          }
         }
       }
     }
@@ -458,7 +578,9 @@ function parseAdsAccountHierarchyExport(
         }
       }
 
-      const { ad_cost, revenue } = firstMoneyMetricsFromExportRow(r);
+      const fallbackMoney = firstMoneyMetricsFromExportRow(r);
+      const ad_cost =
+        amountSpentCol != null ? cellNum(r[amountSpentCol]) : fallbackMoney.ad_cost;
       const ad_account = (accountKey || accountLabel || groupName || '').trim() || null;
       const pageFromAdName =
         adNameCol != null ? cellStr(r[adNameCol]).trim() || null : null;
@@ -472,9 +594,6 @@ function parseAdsAccountHierarchyExport(
         ad_cost,
         mess_comment_count: 0,
         tong_data_nhan: 0,
-        revenue,
-        order_count: 0,
-        tong_lead: 0,
       });
       continue;
     }
@@ -495,9 +614,22 @@ function parseAdsAccountHierarchyExport(
 export function downloadMktReportExcelTemplate(): void {
   const aoa = [Array.from(MKT_EXCEL_HEADERS), EXAMPLE_ROW];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = MKT_EXCEL_HEADERS.map(() => ({ wch: 18 }));
+  ws['!cols'] = MKT_EXCEL_HEADERS.map((_, i) => ({ wch: i === 3 ? 32 : i === 7 ? 26 : 18 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Bao cao');
+  const helpAoa = [
+    ['Hướng dẫn mẫu báo cáo MKT'],
+    [''],
+    ['• File đọc theo TÊN CỘT (có thể đổi thứ tự cột).'],
+    ['• Dòng 1 = tiêu đề; dữ liệu từ dòng 2.'],
+    ['• Cột Page: phải có mã nhân sự trong ngoặc […], trùng ma_ns trên CRM (vd: Fanpage [VD-MKT-01]).'],
+    ['• «Tổng data nhận», chi phí, mess, TKQC… được đẩy vào detail_reports khi bấm Đồng bộ (không còn cột Doanh số / Số đơn / Tổng lead trên mẫu).'],
+    ['• Ngày: yyyy-mm-dd, dd/mm/yyyy hoặc ô định dạng Ngày trong Excel.'],
+    ['• Mẫu không gồm các cột legacy đã bỏ ở detail_reports (shift, branch, page_report, kpis, …).'],
+  ];
+  const wsHelp = XLSX.utils.aoa_to_sheet(helpAoa);
+  wsHelp['!cols'] = [{ wch: 88 }];
+  XLSX.utils.book_append_sheet(wb, wsHelp, 'Huong dan');
   XLSX.writeFile(wb, MKT_EXCEL_TEMPLATE_FILENAME);
 }
 
@@ -517,46 +649,51 @@ function parseCrmMktSheet(
   const errors: { row: number; msg: string }[] = [];
   const rows: MktExcelInsertRow[] = [];
 
-  for (let i = 1; i < aoa.length; i++) {
+  const headerIdx = findCrmHeaderRowIndex(aoa);
+  const headerRow = aoa[headerIdx] as unknown[];
+  const col = buildCrmColumnMap(headerRow);
+
+  if (col.report_date == null) {
+    errors.push({
+      row: headerIdx + 1,
+      msg:
+        'Không tìm thấy cột ngày báo cáo theo tên tiêu đề (ví dụ «Ngày báo cáo», «report_date», «Ngày»).',
+    });
+    return { rows, errors };
+  }
+
+  const dateCol = col.report_date;
+
+  for (let i = headerIdx + 1; i < aoa.length; i++) {
     const r = (aoa[i] as unknown[]) || [];
     const sheetRow = i + 1;
     if (!r || r.length === 0) continue;
     const allEmpty = r.every((c) => c === '' || c == null || String(c).trim() === '');
     if (allEmpty) continue;
 
-    const dateFound = findDateInRow(ws, i, r, date1904);
-    if (!dateFound.ok) {
-      const addrA = XLSX.utils.encode_cell({ r: i, c: 0 });
-      const cellA = ws[addrA] as XLSX.CellObject | undefined;
-      const hint =
-        cellA?.w?.trim() ||
-        cellStr(cellA?.v) ||
-        cellStr(r[0]) ||
-        cellStr(r[1]) ||
-        '';
-      if (hint === '' && r.slice(1).every((c) => !cellStr(c))) continue;
+    const dateParsed = parseDateFromSheetCell(ws, i, dateCol, date1904);
+    if (!dateParsed.ok) {
+      const addr = XLSX.utils.encode_cell({ r: i, c: dateCol });
+      const cell = ws[addr] as XLSX.CellObject | undefined;
+      const hint = cell?.w?.trim() || cellStr(cell?.v) || cellStr(r[dateCol]) || '';
+      if (hint === '' && r.every((c) => !cellStr(c))) continue;
       errors.push({
         row: sheetRow,
-        msg: `Cột ngày (A–C) — không đọc được${hint ? `: "${hint}"` : ''} (yyyy-mm-dd, dd/mm/yyyy, yyyy/mm/dd, ô Định dạng Ngày, hoặc serial Excel).`,
+        msg: `Cột ngày (theo tên tiêu đề) — không đọc được${hint ? `: "${hint}"` : ''} (yyyy-mm-dd, dd/mm/yyyy, serial Excel…).`,
       });
       continue;
     }
 
-    const start = 1 + dateFound.colShift;
     rows.push({
-      report_date: dateFound.iso,
-      product: cellStr(r[start]) || null,
-      market: cellStr(r[start + 1]) || null,
-      page: cellStr(r[start + 2]) || null,
-      ma_tkqc: cellStr(r[start + 3]) || null,
-      ad_account: cellStr(r[start + 4]) || null,
-      ad_cost: cellNum(r[start + 5]),
-      // Cột H: "Lượt bắt đầu cuộc trò chuyện qua tin nhắn"
-      mess_comment_count: cellNum(r[start + 6]),
-      tong_data_nhan: cellNum(r[start + 7]),
-      revenue: cellNum(r[start + 8]),
-      order_count: cellNum(r[start + 9]),
-      tong_lead: cellNum(r[start + 10]),
+      report_date: dateParsed.iso,
+      product: cellStr(cellAt(r, col.product)) || null,
+      market: cellStr(cellAt(r, col.market)) || null,
+      page: cellStr(cellAt(r, col.page)) || null,
+      ma_tkqc: cellStr(cellAt(r, col.ma_tkqc)) || null,
+      ad_account: cellStr(cellAt(r, col.ad_account)) || null,
+      ad_cost: cellNum(cellAt(r, col.ad_cost)),
+      mess_comment_count: cellNum(cellAt(r, col.mess_comment_count)),
+      tong_data_nhan: cellNum(cellAt(r, col.tong_data_nhan)),
     });
   }
 
@@ -596,7 +733,16 @@ export async function parseMktReportExcelFile(file: File): Promise<{
     const aoa = sheetToAoa(ws);
     if (!aoa || aoa.length < 2) continue;
 
-    if (looksLikeCrmMktHeader(aoa[0] as unknown[])) {
+    let sheetIsCrmMkt = false;
+    for (let hi = 0; hi < Math.min(6, aoa.length); hi++) {
+      const probe = aoa[hi] as unknown[];
+      if (!probe?.length) continue;
+      if (looksLikeCrmMktHeader(probe) || buildCrmColumnMap(probe).report_date != null) {
+        sheetIsCrmMkt = true;
+        break;
+      }
+    }
+    if (sheetIsCrmMkt) {
       return parseCrmMktSheet(ws, aoa, date1904);
     }
 

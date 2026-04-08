@@ -190,7 +190,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
         <Topbar
           title={VIEW_TITLES[currentView] || 'CRM Mini Ads'}
           onToggleNotif={() => setIsNotifOpen(!isNotifOpen)}
-          hasNewNotif={true}
+          hasNewNotif={false}
         />
 
         <main className="flex-1 overflow-y-auto p-[12px] dash-scrollbar custom-scrollbar bg-[var(--bg0)]">
