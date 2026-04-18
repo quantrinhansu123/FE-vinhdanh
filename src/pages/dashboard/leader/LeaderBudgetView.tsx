@@ -21,6 +21,16 @@ const BUDGET_SELECT = `
   id_du_an,
   agency_id,
   updated_at,
+  giam_doc_da_duyet,
+  giam_doc_duyet_boi,
+  giam_doc_duyet_at,
+  ke_toan_da_duyet,
+  ke_toan_duyet_boi,
+  ke_toan_duyet_at,
+  da_giai_ngan,
+  giai_ngan_boi,
+  giai_ngan_at,
+  anh_giai_ngan_urls,
   tkqc_accounts ( id, don_vi, tkqc, page ),
   tkqc ( id, ma_tkqc, ten_pae, du_an ( ten_du_an, don_vi ) ),
   du_an ( id, ten_du_an, ma_du_an, don_vi ),
@@ -71,6 +81,15 @@ function formatReqDate(iso: string): string {
   return d.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function formatByAt(by?: string | null, at?: string | null): string {
+  const byText = by?.trim() || '';
+  const atText = at ? formatReqDate(at) : '';
+  if (byText && atText) return `${byText} · ${atText}`;
+  if (byText) return byText;
+  if (atText) return atText;
+  return '—';
+}
+
 function budgetAgencyLabel(r: BudgetRequestRow): string {
   const t = r.tkqc;
   if (t?.du_an?.don_vi?.trim()) return t.du_an.don_vi.trim();
@@ -84,7 +103,7 @@ function budgetAgencyLabel(r: BudgetRequestRow): string {
 function statusBadgeObsidian(trangThai: BudgetRequestStatus) {
   if (trangThai === 'cho_phe_duyet') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-tertiary)_12%,transparent)] text-[var(--ld-tertiary)] border border-[var(--ld-tertiary)]/25">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-tertiary)_12%,transparent)] text-[var(--ld-tertiary)] border border-[var(--ld-tertiary)]/25 shrink-0">
         <span className="material-symbols-outlined text-[12px]">schedule</span>
         Chờ duyệt
       </span>
@@ -92,17 +111,37 @@ function statusBadgeObsidian(trangThai: BudgetRequestStatus) {
   }
   if (trangThai === 'dong_y') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-secondary)_12%,transparent)] text-[var(--ld-secondary)] border border-[var(--ld-secondary)]/25">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-secondary)_12%,transparent)] text-[var(--ld-secondary)] border border-[var(--ld-secondary)]/25 shrink-0">
         <span className="material-symbols-outlined text-[12px]">check_circle</span>
         Đã duyệt
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-error)_12%,transparent)] text-[var(--ld-error)] border border-[var(--ld-error)]/25">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-error)_12%,transparent)] text-[var(--ld-error)] border border-[var(--ld-error)]/25 shrink-0">
       <span className="material-symbols-outlined text-[12px]">cancel</span>
       Từ chối
     </span>
+  );
+}
+
+function ApprovalStepBadge({ label, done, by, at }: { label: string; done: boolean; by?: string | null; at?: string | null }) {
+  const tooltip = done && (by || at) ? `${label}: ${by || ''} ${at ? '(' + formatReqDate(at) + ')' : ''}` : label;
+  return (
+    <div className="flex flex-col items-center gap-0.5 group/step relative" title={tooltip}>
+      <div
+        className={`w-5 h-5 rounded-full flex items-center justify-center border transition-colors ${
+          done
+            ? 'bg-[var(--ld-secondary)] border-[var(--ld-secondary)] text-[var(--ld-on-secondary)]'
+            : 'bg-transparent border-[var(--ld-outline-variant)] text-[var(--ld-on-surface-variant)] opacity-40'
+        }`}
+      >
+        <span className="material-symbols-outlined text-[14px]">{done ? 'check' : 'radio_button_unchecked'}</span>
+      </div>
+      <span className={`text-[9px] font-bold uppercase tracking-tighter ${done ? 'text-[var(--ld-secondary)]' : 'text-[var(--ld-on-surface-variant)] opacity-40'}`}>
+        {label === 'Giám đốc' ? 'GĐ' : label === 'Kế toán' ? 'KT' : 'GN'}
+      </span>
+    </div>
   );
 }
 
@@ -404,14 +443,16 @@ export const LeaderBudgetView: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 px-4 sm:px-6 py-4 bg-[color-mix(in_srgb,var(--ld-surface-container-highest)_30%,transparent)] rounded-t-lg mb-2 text-left max-sm:hidden">
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.5fr)] gap-2 px-4 sm:px-6 py-4 bg-[color-mix(in_srgb,var(--ld-surface-container-highest)_30%,transparent)] rounded-t-lg mb-2 text-left max-sm:hidden">
               <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest">Mã YC</span>
               <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest">Agency / đơn vị</span>
               <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest text-right">
                 Số tiền
               </span>
               <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest">Ngày gửi</span>
+              <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest text-center">Tiến độ duyệt</span>
               <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest">Trạng thái</span>
+              <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest">Chi tiết duyệt / giải ngân</span>
             </div>
 
             {loading && !filteredHistory.length ? (
@@ -435,23 +476,67 @@ export const LeaderBudgetView: React.FC = () => {
               </div>
             ) : (
               <div className="flex-1 overflow-x-auto leader-dash-no-scrollbar -mx-2">
-                <div className="min-w-[640px] space-y-2 px-2">
-                  {filteredHistory.map((r) => (
-                    <div
-                      key={r.id}
-                      className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center px-4 sm:px-6 py-3.5 rounded-xl bg-[color-mix(in_srgb,var(--ld-surface-container-highest)_25%,transparent)] border border-[var(--ld-outline-variant)]/10 hover:border-[var(--ld-primary)]/15 transition-colors"
-                    >
-                      <span className="font-bold text-[var(--ld-primary)] text-sm">{displayMa(r.id)}</span>
-                      <span className="text-sm text-[var(--ld-on-surface)] truncate" title={budgetAgencyLabel(r)}>
-                        {budgetAgencyLabel(r)}
-                      </span>
-                      <span className="text-sm font-mono font-bold text-[var(--ld-on-surface)] text-right tabular-nums">
-                        {formatVndDots(Number(r.ngan_sach_xin))}
-                      </span>
-                      <span className="text-xs text-[var(--ld-on-surface-variant)]">{formatReqDate(r.ngay_gio_xin)}</span>
-                      <div className="flex justify-start">{statusBadgeObsidian(r.trang_thai)}</div>
-                    </div>
-                  ))}
+                <div className="min-w-[980px] space-y-2 px-2">
+                  {filteredHistory.map((r) => {
+                    const disbursementUrls = (r.anh_giai_ngan_urls || []).filter((u) => typeof u === 'string' && u.trim().length > 0);
+                    return (
+                      <div
+                        key={r.id}
+                        className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.5fr)] gap-2 items-center px-4 sm:px-6 py-3.5 rounded-xl bg-[color-mix(in_srgb,var(--ld-surface-container-highest)_25%,transparent)] border border-[var(--ld-outline-variant)]/10 hover:border-[var(--ld-primary)]/15 transition-colors"
+                      >
+                        <span className="font-bold text-[var(--ld-primary)] text-sm">{displayMa(r.id)}</span>
+                        <span className="text-sm text-[var(--ld-on-surface)] truncate" title={budgetAgencyLabel(r)}>
+                          {budgetAgencyLabel(r)}
+                        </span>
+                        <span className="text-sm font-mono font-bold text-[var(--ld-on-surface)] text-right tabular-nums">
+                          {formatVndDots(Number(r.ngan_sach_xin))}
+                        </span>
+                        <span className="text-xs text-[var(--ld-on-surface-variant)]">{formatReqDate(r.ngay_gio_xin)}</span>
+
+                        <div className="flex items-center justify-center gap-4 border-x border-[var(--ld-outline-variant)]/10 px-2">
+                          <ApprovalStepBadge label="Giám đốc" done={!!r.giam_doc_da_duyet} by={r.giam_doc_duyet_boi} at={r.giam_doc_duyet_at} />
+                          <ApprovalStepBadge label="Kế toán" done={!!r.ke_toan_da_duyet} by={r.ke_toan_duyet_boi} at={r.ke_toan_duyet_at} />
+                          <ApprovalStepBadge label="Giải ngân" done={!!r.da_giai_ngan} by={r.giai_ngan_boi} at={r.giai_ngan_at} />
+                        </div>
+
+                        <div className="flex justify-start">{statusBadgeObsidian(r.trang_thai)}</div>
+
+                        <div className="text-[10px] leading-relaxed text-[var(--ld-on-surface-variant)] space-y-0.5">
+                          <p>
+                            <span className="text-[var(--ld-on-surface)] font-semibold">GĐ:</span> {formatByAt(r.giam_doc_duyet_boi, r.giam_doc_duyet_at)}
+                          </p>
+                          <p>
+                            <span className="text-[var(--ld-on-surface)] font-semibold">KT:</span> {formatByAt(r.ke_toan_duyet_boi, r.ke_toan_duyet_at)}
+                          </p>
+                          <p>
+                            <span className="text-[var(--ld-on-surface)] font-semibold">GN:</span> {formatByAt(r.giai_ngan_boi, r.giai_ngan_at)}
+                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[var(--ld-on-surface)] font-semibold">Ảnh GN:</span>
+                            {disbursementUrls.length === 0 ? (
+                              <span>0</span>
+                            ) : (
+                              <>
+                                <span>{disbursementUrls.length}</span>
+                                {disbursementUrls.slice(0, 2).map((url, idx) => (
+                                  <a
+                                    key={`${r.id}-proof-${idx}`}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-[var(--ld-primary)] hover:underline"
+                                    title={url}
+                                  >
+                                    Xem {idx + 1}
+                                  </a>
+                                ))}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
