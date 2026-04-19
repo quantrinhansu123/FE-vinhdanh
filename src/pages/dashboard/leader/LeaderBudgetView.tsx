@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { BudgetRequestFormModal } from '../../../components/crm-dashboard/BudgetRequestFormModal';
+import { MultiSelect } from '../../../components/common/MultiSelect';
 import { supabase } from '../../../api/supabase';
 import type { BudgetRequestRow, BudgetRequestStatus, ReportRow } from '../../../types';
 import { formatNumberDots } from '../mkt/mktDetailReportShared';
@@ -9,6 +11,7 @@ const BUDGET_TABLE = import.meta.env.VITE_SUPABASE_BUDGET_REQUESTS_TABLE?.trim()
 const REPORTS_TABLE = 'detail_reports';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
 const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_TABLE?.trim() || 'tkqc';
+const AGENCIES_TABLE = import.meta.env.VITE_SUPABASE_AGENCIES_TABLE?.trim() || 'crm_agencies';
 const BUDGET_SELECT = `
   id,
   ngan_sach_xin,
@@ -31,6 +34,7 @@ const BUDGET_SELECT = `
   giai_ngan_boi,
   giai_ngan_at,
   anh_giai_ngan_urls,
+  chung_tu_urls,
   tkqc_accounts ( id, don_vi, tkqc, page ),
   tkqc ( id, ma_tkqc, ten_pae, du_an ( ten_du_an, don_vi ) ),
   du_an ( id, ten_du_an, ma_du_an, don_vi ),
@@ -44,6 +48,7 @@ type TkqcOpt = {
   ten_pae: string | null;
   du_an?: { ten_du_an: string; ma_du_an: string | null } | null;
 };
+type AgencyOpt = { id: string; ten_agency: string | null; ma_agency?: string | null };
 
 function toLocalYyyyMmDd(d: Date): string {
   const y = d.getFullYear();
@@ -175,14 +180,18 @@ const SummaryCard: React.FC<{
 export const LeaderBudgetView: React.FC = () => {
   const [duAnList, setDuAnList] = useState<DuAnOpt[]>([]);
   const [tkqcList, setTkqcList] = useState<TkqcOpt[]>([]);
+  const [agencyList, setAgencyList] = useState<AgencyOpt[]>([]);
   const [requests, setRequests] = useState<BudgetRequestRow[]>([]);
   const [reportRows, setReportRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [viewRequest, setViewRequest] = useState<BudgetRequestRow | null>(null);
   const [clockTick, setClockTick] = useState(0);
 
-  const [idDuAn, setIdDuAn] = useState('');
+  /* Filter: multi-select dự án và agency */
+  const [selectedDuAnIds, setSelectedDuAnIds] = useState<string[]>([]);
+  const [selectedAgencyIds, setSelectedAgencyIds] = useState<string[]>([]);
 
   const monthBounds = useMemo(() => {
     const t = new Date();
@@ -208,20 +217,25 @@ export const LeaderBudgetView: React.FC = () => {
   );
 
   const loadRefs = useCallback(async () => {
-    const dRes = await supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true });
+    const [dRes, aRes] = await Promise.all([
+      supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true }),
+      supabase.from(AGENCIES_TABLE).select('id, ma_agency, ten_agency').order('ten_agency', { ascending: true }),
+    ]);
     if (dRes.error) console.error('du_an (leader budget):', dRes.error);
     else setDuAnList((dRes.data || []) as DuAnOpt[]);
+    if (aRes.error) console.error('crm_agencies (leader budget):', aRes.error);
+    else setAgencyList((aRes.data || []) as AgencyOpt[]);
   }, []);
 
-  const loadTkqc = useCallback(async (projectId: string) => {
-    if (!projectId) {
+  const loadTkqc = useCallback(async (projectIds: string[]) => {
+    if (projectIds.length === 0) {
       setTkqcList([]);
       return;
     }
     const q = await supabase
       .from(TKQC_TABLE)
       .select('id, ma_tkqc, ten_pae, du_an ( ten_du_an, ma_du_an )')
-      .eq('id_du_an', projectId)
+      .in('id_du_an', projectIds)
       .order('ma_tkqc', { ascending: true });
     if (q.error) {
       console.error('tkqc (leader budget):', q.error);
@@ -276,17 +290,28 @@ export const LeaderBudgetView: React.FC = () => {
   }, [loadData]);
 
   useEffect(() => {
-    void loadTkqc(idDuAn);
-  }, [idDuAn, loadTkqc]);
+    void loadTkqc(selectedDuAnIds);
+  }, [selectedDuAnIds, loadTkqc]);
 
   const filteredHistory = useMemo(() => {
-    if (!idDuAn) return requests;
-    const allowed = new Set(tkqcList.map((t) => t.id));
-    return requests.filter((r) => {
-      if (r.id_du_an === idDuAn) return true;
-      return Boolean(r.tkqc_id && allowed.has(r.tkqc_id));
-    });
-  }, [requests, idDuAn, tkqcList]);
+    let list = requests;
+
+    /* Lọc theo agency */
+    if (selectedAgencyIds.length > 0) {
+      list = list.filter((r) => r.agency_id && selectedAgencyIds.includes(r.agency_id));
+    }
+
+    /* Lọc theo dự án */
+    if (selectedDuAnIds.length > 0) {
+      const allowed = new Set(tkqcList.map((t) => t.id));
+      list = list.filter((r) => {
+        if (r.id_du_an && selectedDuAnIds.includes(r.id_du_an)) return true;
+        return Boolean(r.tkqc_id && allowed.has(r.tkqc_id));
+      });
+    }
+
+    return list;
+  }, [requests, selectedDuAnIds, selectedAgencyIds, tkqcList]);
 
   const maTkqcSet = useMemo(
     () => new Set(tkqcList.map((t) => t.ma_tkqc?.trim()).filter(Boolean) as string[]),
@@ -294,7 +319,7 @@ export const LeaderBudgetView: React.FC = () => {
   );
 
   const adCostMonthScoped = useMemo(() => {
-    if (idDuAn && maTkqcSet.size > 0) {
+    if (selectedDuAnIds.length > 0 && maTkqcSet.size > 0) {
       return reportRows.reduce((acc, r) => {
         const ma = r.ma_tkqc?.trim();
         if (!ma || !maTkqcSet.has(ma)) return acc;
@@ -302,7 +327,7 @@ export const LeaderBudgetView: React.FC = () => {
       }, 0);
     }
     return reportRows.reduce((acc, r) => acc + safeNum(r.ad_cost), 0);
-  }, [reportRows, idDuAn, maTkqcSet]);
+  }, [reportRows, selectedDuAnIds, maTkqcSet]);
 
   const kpi = useMemo(() => {
     const list = filteredHistory;
@@ -325,10 +350,32 @@ export const LeaderBudgetView: React.FC = () => {
     };
   }, [filteredHistory, monthBounds, adCostMonthScoped]);
 
-  const scopeBadgeText = idDuAn ? 'Theo dự án đã chọn' : '200 yêu cầu mới nhất';
+  const hasFilter = selectedDuAnIds.length > 0 || selectedAgencyIds.length > 0;
+  const scopeBadgeText = hasFilter ? 'Theo bộ lọc đã chọn' : '200 yêu cầu mới nhất';
+
+  /* Chuyển list sang options cho MultiSelect */
+  const duAnOptions = useMemo(
+    () =>
+      duAnList.map((d) => ({
+        value: d.id,
+        label: d.ten_du_an,
+        sublabel: d.ma_du_an ?? undefined,
+      })),
+    [duAnList]
+  );
+
+  const agencyOptions = useMemo(
+    () =>
+      agencyList.map((a) => ({
+        value: a.id,
+        label: a.ten_agency || a.id,
+        sublabel: a.ma_agency ?? undefined,
+      })),
+    [agencyList]
+  );
 
   return (
-    <div className="leader-dash-obsidian dash-fade-up text-[var(--ld-on-surface)] -m-[12px] p-6 sm:p-8 min-h-[min(100%,calc(100vh-8rem))] leader-obsidian-scrollbar overflow-y-auto">
+    <div className="leader-dash-obsidian dash-fade-up text-[var(--ld-on-surface)] p-6 sm:p-8 min-h-[min(100%,calc(100vh-8rem))] leader-obsidian-scrollbar overflow-y-auto overflow-x-hidden">
       <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end gap-6 mb-10">
         <div>
           <h1 className="text-3xl font-extrabold text-[var(--ld-on-surface)] tracking-tight" style={{ fontFamily: '"Inter", sans-serif' }}>
@@ -342,33 +389,32 @@ export const LeaderBudgetView: React.FC = () => {
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-4 items-center">
-          <div className="ld-glass-chip ld-ghost-border rounded-lg px-4 py-2 flex items-center gap-3 min-w-[min(100%,280px)]">
-            <span className="material-symbols-outlined text-[var(--ld-primary)] text-sm shrink-0">filter_alt</span>
-            <select
-              value={idDuAn}
-              onChange={(e) => setIdDuAn(e.target.value)}
-              className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 text-sm leader-dash-label text-[var(--ld-on-surface)] cursor-pointer outline-none"
-              aria-label="Phạm vi dự án"
-            >
-              <option value="" className="bg-[var(--ld-surface-container)] text-[var(--ld-on-surface)]">
-                — Tất cả dự án —
-              </option>
-              {duAnList.map((d) => (
-                <option key={d.id} value={d.id} className="bg-[var(--ld-surface-container)] text-[var(--ld-on-surface)]">
-                  {[d.ma_du_an, d.ten_du_an].filter(Boolean).join(' · ') || d.ten_du_an}
-                </option>
-              ))}
-            </select>
-            <span className="material-symbols-outlined text-[var(--ld-on-surface-variant)] text-xs shrink-0">expand_more</span>
-          </div>
+        <div className="flex flex-row flex-wrap lg:flex-nowrap gap-6 items-center w-full lg:w-auto">
+          <MultiSelect
+            options={agencyOptions}
+            value={selectedAgencyIds}
+            onChange={setSelectedAgencyIds}
+            placeholder="Tất cả agency"
+            label="Agency"
+            icon="business"
+            className="flex-1 lg:flex-none lg:min-w-[240px]"
+          />
+          <MultiSelect
+            options={duAnOptions}
+            value={selectedDuAnIds}
+            onChange={setSelectedDuAnIds}
+            placeholder="Tất cả dự án"
+            label="Dự án"
+            icon="folder_open"
+            className="flex-1 lg:flex-none lg:min-w-[240px]"
+          />
         </div>
       </div>
 
       <p className="text-[10px] text-[var(--ld-on-surface-variant)] leading-relaxed mb-8 max-w-4xl">
         <strong className="text-[var(--ld-on-surface)]">Nguồn:</strong>{' '}
         <code className="text-[var(--ld-primary)]/90">{BUDGET_TABLE}</code> ·{' '}
-        <code className="text-[var(--ld-primary)]/90">{REPORTS_TABLE}</code> (ad_cost){idDuAn ? ', lọc ma_tkqc theo dự án' : ''} ·{' '}
+        <code className="text-[var(--ld-primary)]/90">{REPORTS_TABLE}</code> (ad_cost){selectedDuAnIds.length > 0 ? ', lọc ma_tkqc theo dự án' : ''} ·{' '}
         <code className="text-[var(--ld-primary)]/90">{TKQC_TABLE}</code>
       </p>
 
@@ -397,7 +443,7 @@ export const LeaderBudgetView: React.FC = () => {
           label="Chi ads khai báo (tháng)"
           valueMain={formatVndDots(adCostMonthScoped)}
           valueSub={<span className="text-[var(--ld-tertiary)]">VNĐ</span>}
-          footnote={idDuAn ? 'Theo ma_tkqc TKQC dự án' : 'Mọi dòng trong tháng'}
+          footnote={selectedDuAnIds.length > 0 ? 'Theo ma_tkqc TKQC dự án' : 'Mọi dòng trong tháng'}
           icon="campaign"
         />
         <SummaryCard
@@ -469,8 +515,8 @@ export const LeaderBudgetView: React.FC = () => {
                   Chưa có yêu cầu
                 </h3>
                 <p className="text-[var(--ld-on-surface-variant)] text-sm text-center max-w-sm px-4">
-                  {idDuAn
-                    ? 'Không có yêu cầu cho dự án đã chọn (theo id_du_an hoặc TKQC thuộc dự án).'
+                  {hasFilter
+                    ? 'Không có yêu cầu khớp với bộ lọc đã chọn.'
                     : 'Bắt đầu bằng việc tạo yêu cầu ngân sách mới.'}
                 </p>
               </div>
@@ -501,38 +547,15 @@ export const LeaderBudgetView: React.FC = () => {
 
                         <div className="flex justify-start">{statusBadgeObsidian(r.trang_thai)}</div>
 
-                        <div className="text-[10px] leading-relaxed text-[var(--ld-on-surface-variant)] space-y-0.5">
-                          <p>
-                            <span className="text-[var(--ld-on-surface)] font-semibold">GĐ:</span> {formatByAt(r.giam_doc_duyet_boi, r.giam_doc_duyet_at)}
-                          </p>
-                          <p>
-                            <span className="text-[var(--ld-on-surface)] font-semibold">KT:</span> {formatByAt(r.ke_toan_duyet_boi, r.ke_toan_duyet_at)}
-                          </p>
-                          <p>
-                            <span className="text-[var(--ld-on-surface)] font-semibold">GN:</span> {formatByAt(r.giai_ngan_boi, r.giai_ngan_at)}
-                          </p>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[var(--ld-on-surface)] font-semibold">Ảnh GN:</span>
-                            {disbursementUrls.length === 0 ? (
-                              <span>0</span>
-                            ) : (
-                              <>
-                                <span>{disbursementUrls.length}</span>
-                                {disbursementUrls.slice(0, 2).map((url, idx) => (
-                                  <a
-                                    key={`${r.id}-proof-${idx}`}
-                                    href={url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-[var(--ld-primary)] hover:underline"
-                                    title={url}
-                                  >
-                                    Xem {idx + 1}
-                                  </a>
-                                ))}
-                              </>
-                            )}
-                          </div>
+                        <div className="flex justify-start">
+                          <button
+                            type="button"
+                            onClick={() => setViewRequest(r)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--ld-surface-container-highest)] text-[var(--ld-primary)] text-[10px] font-bold leader-dash-label border border-[var(--ld-outline-variant)]/20 hover:brightness-110 transition-all"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">visibility</span>
+                            Xem chi tiết
+                          </button>
                         </div>
                       </div>
                     );
@@ -583,6 +606,106 @@ export const LeaderBudgetView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {viewRequest && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md leader-dash-obsidian">
+          <div className="bg-[var(--ld-surface-container-high)] w-full max-w-lg rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-[var(--ld-outline-variant)]/20 overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--ld-outline-variant)]/10 flex justify-between items-center">
+              <h3 className="font-bold text-[var(--ld-on-surface)]">Thông tin chi tiết</h3>
+              <button type="button" onClick={() => setViewRequest(null)} className="text-[var(--ld-on-surface-variant)] hover:text-[var(--ld-on-surface)]">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto leader-obsidian-scrollbar">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-[var(--ld-on-surface-variant)] tracking-wider">Mã yêu cầu</p>
+                  <p className="font-mono text-[var(--ld-primary)] font-bold">#{displayMa(viewRequest.id)}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-[var(--ld-on-surface-variant)] tracking-wider">Trạng thái</p>
+                  <div>{statusBadgeObsidian(viewRequest.trang_thai)}</div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-[var(--ld-on-surface-variant)] tracking-wider">Số tiền</p>
+                  <p className="font-bold text-[var(--ld-on-surface)]">{formatVndDots(Number(viewRequest.ngan_sach_xin))} VNĐ</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-[var(--ld-on-surface-variant)] tracking-wider">Ngày gửi</p>
+                  <p className="text-sm text-[var(--ld-on-surface)]">{formatReqDate(viewRequest.ngay_gio_xin)}</p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-[var(--ld-surface-container)] border border-[var(--ld-outline-variant)]/10 space-y-3">
+                <p className="text-[10px] uppercase font-bold text-[var(--ld-on-surface-variant)] tracking-widest border-b border-[var(--ld-outline-variant)]/10 pb-2">Tiến trình phê duyệt</p>
+                <div className="space-y-2.5">
+                  {[
+                    { label: 'Giám đốc', done: viewRequest.giam_doc_da_duyet, by: viewRequest.giam_doc_duyet_boi, at: viewRequest.giam_doc_duyet_at },
+                    { label: 'Kế toán', done: viewRequest.ke_toan_da_duyet, by: viewRequest.ke_toan_duyet_boi, at: viewRequest.ke_toan_duyet_at },
+                    { label: 'Giải ngân', done: viewRequest.da_giai_ngan, by: viewRequest.giai_ngan_boi, at: viewRequest.giai_ngan_at },
+                  ].map(({ label, done, by, at }) => (
+                    <div key={label} className="flex justify-between items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${done ? 'bg-[var(--ld-secondary)] shadow-[0_0_6px_var(--ld-secondary)]' : 'bg-[var(--ld-on-surface-variant)]/30'}`} />
+                        <span className="text-xs font-bold text-[var(--ld-on-surface)]">{label}:</span>
+                      </div>
+                      <span className="text-[11px] text-[var(--ld-on-surface-variant)] text-right">{formatByAt(by, at)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {viewRequest.ly_do_tu_choi && (
+                <div className="p-4 rounded-xl bg-[color-mix(in_srgb,var(--ld-error)_8%,transparent)] border border-[var(--ld-error)]/20">
+                  <p className="text-[10px] uppercase font-bold text-[var(--ld-error)] tracking-widest mb-1">Lý do từ chối</p>
+                  <p className="text-xs text-[var(--ld-on-surface)] leading-relaxed">{viewRequest.ly_do_tu_choi}</p>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <p className="text-[10px] uppercase font-bold text-[var(--ld-on-surface-variant)] tracking-widest">Ảnh minh chứng / Giải ngân</p>
+                {(() => {
+                  const images = [...(viewRequest.chung_tu_urls || []), ...(viewRequest.anh_giai_ngan_urls || [])].filter(Boolean);
+                  if (images.length === 0) return (
+                    <div className="py-8 text-center border-2 border-dashed border-[var(--ld-outline-variant)]/20 rounded-xl text-[var(--ld-on-surface-variant)] text-xs italic">
+                      Không có hình ảnh đính kèm.
+                    </div>
+                  );
+                  return (
+                    <div className="grid grid-cols-1 gap-3">
+                      {images.map((url, idx) => (
+                        <div key={idx} className="relative group rounded-xl overflow-hidden border border-[var(--ld-outline-variant)]/20 aspect-video bg-black/40">
+                          <img src={url} alt={`Evidence ${idx + 1}`} className="w-full h-full object-contain" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <button
+                              type="button"
+                              onClick={() => window.open(url, '_blank')}
+                              className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-full text-white text-xs font-bold hover:bg-white/20 transition-all flex items-center gap-2"
+                            >
+                              <span className="material-symbols-outlined text-sm">open_in_new</span>
+                              Mở ảnh gốc
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+            <div className="p-4 border-t border-[var(--ld-outline-variant)]/10">
+              <button
+                type="button"
+                onClick={() => setViewRequest(null)}
+                className="w-full py-2.5 rounded-xl bg-[var(--ld-surface-container-highest)] text-[var(--ld-on-surface)] font-bold text-sm hover:brightness-110 transition-all"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
