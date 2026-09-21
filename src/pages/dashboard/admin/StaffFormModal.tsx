@@ -15,9 +15,10 @@ const TRANG_THAI_OPTIONS = [
   { value: 'dot_tien', label: 'Đốt tiền' },
 ] as const;
 
-/** Vị trí cố định (dropdown) */
+/** Vị trí cố định (dropdown) — khớp phân cấp 4 tầng + Admin */
 const VI_TRI_OPTIONS = [
   { value: 'Admin', label: 'Admin' },
+  { value: 'Giám đốc', label: 'Giám đốc' },
   { value: 'Quản lý dự án', label: 'Quản lý dự án' },
   { value: 'Leader', label: 'Leader' },
   { value: 'Nhân viên MKT', label: 'Nhân viên MKT' },

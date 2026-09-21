@@ -16,13 +16,61 @@ import {
 import { LoginPage } from './pages/LoginPage';
 import { DashboardAdminLayout } from './pages/DashboardAdminLayout';
 import { LeaderboardPage } from './pages/LeaderboardPage';
-import type { Employee, AuthUser } from './types';
+import type { Employee, AuthUser, UserRole } from './types';
+import { USER_ROLE_LABELS } from './types';
 import { crmAdminPathForView } from './utils/crmAdminRoutes';
-import { crmNavTierFromUser, defaultViewForTier } from './utils/crmNavAccess';
+import {
+  crmNavTierFromUser,
+  defaultViewForTier,
+  isAdminViTriPosition,
+  isDirectorViTriPosition,
+  isProjectManagerViTriPosition,
+  isLeaderViTriPosition,
+  isMktViTriPosition,
+} from './utils/crmNavAccess';
+import { normalizeUserRole } from './utils/roleScope';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const AVATARS_BUCKET = import.meta.env.VITE_SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
 const AUTH_STORAGE_KEY = 'fe_vinhdanh_auth_user';
+const SUPER_ADMIN_EMAIL = 'upedu2024@gmail.com';
+
+/** Suy role từ vi_tri khi chưa có gán role trong DB */
+function resolveRoleFromViTri(viTri: string | null | undefined): UserRole {
+  if (isAdminViTriPosition(viTri)) return 'admin';
+  if (isDirectorViTriPosition(viTri)) return 'director';
+  if (isProjectManagerViTriPosition(viTri)) return 'project_manager';
+  if (isLeaderViTriPosition(viTri)) return 'leader';
+  if (isMktViTriPosition(viTri)) return 'mkt';
+  return 'user';
+}
+
+/** Đọc role ưu tiên từ crm_user_roles → crm_roles (best-effort, thiếu bảng thì bỏ qua) */
+async function fetchDbRoleForEmployee(employeeId: string): Promise<UserRole | null> {
+  try {
+    const res = await supabase
+      .from('crm_user_roles')
+      .select('crm_roles!inner(code)')
+      .eq('employee_id', employeeId)
+      .limit(10);
+    if (res.error || !res.data) return null;
+    const codes = (res.data as Array<{ crm_roles?: { code?: string } | Array<{ code?: string }> }>)
+      .map((r) => {
+        const j = r.crm_roles;
+        if (Array.isArray(j)) return j[0]?.code;
+        return j?.code;
+      })
+      .map((c) => (typeof c === 'string' ? c.trim().toLowerCase() : ''))
+      .filter(Boolean);
+    const rank: UserRole[] = ['admin', 'director', 'project_manager', 'manager', 'leader', 'mkt'];
+    for (const want of rank) {
+      if (codes.includes(want)) return normalizeUserRole(want);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 function logSupabaseError(action: string, error: { code?: string; message?: string; details?: string; hint?: string } | null) {
   if (!error) return;
@@ -59,7 +107,18 @@ function AppRoutes() {
       try {
         const parsed = JSON.parse(raw) as AuthUser;
         if (parsed?.email) {
-          setAuthUser(parsed);
+          // Nâng cấp cache cũ: role 'user' nhưng vi_tri đã rõ → suy lại role đúng để scope dữ liệu chuẩn
+          const normalizedRole = normalizeUserRole(parsed.role);
+          if (normalizedRole === 'user' && parsed.vi_tri) {
+            const upgraded = resolveRoleFromViTri(parsed.vi_tri);
+            if (upgraded !== 'user') {
+              const next = { ...parsed, role: upgraded };
+              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next));
+              setAuthUser(next);
+              return;
+            }
+          }
+          setAuthUser({ ...parsed, role: normalizedRole });
         }
       } catch (error) {
         console.warn('Invalid login cache, reset required.', error);
@@ -201,14 +260,24 @@ function AppRoutes() {
       throw new Error('Sai email hoặc mật khẩu');
     }
 
+    const viTri = user.vi_tri?.trim() ? user.vi_tri.trim() : null;
+    // Ưu tiên: super-admin hard-code → role trong crm_user_roles → suy từ vi_tri
+    let role: UserRole = resolveRoleFromViTri(viTri);
+    if (normalizedEmail === SUPER_ADMIN_EMAIL) {
+      role = 'admin';
+    } else if (user.id) {
+      const dbRole = await fetchDbRoleForEmployee(String(user.id));
+      if (dbRole) role = dbRole;
+    }
+
     const nextUser: AuthUser = {
       id: String(user.id || ''),
       email: String(user.email),
-      role: normalizedEmail === 'upedu2024@gmail.com' ? 'admin' : 'user',
+      role,
       name: String(user.name || ''),
       team: String(user.team || ''),
       avatar_url: user.avatar_url || null,
-      vi_tri: user.vi_tri?.trim() ? user.vi_tri.trim() : null,
+      vi_tri: viTri,
       ma_ns: user.ma_ns?.trim() ? user.ma_ns.trim() : null,
     };
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextUser));
@@ -284,7 +353,7 @@ function AppRoutes() {
               onClose={() => navigate('/')}
               onLogout={handleLogout}
               userName={authUser.name || 'Admin User'}
-              userSubtitle={authUser.role === 'admin' ? 'Hệ thống cấp cao' : authUser.team || 'Người dùng'}
+              userSubtitle={USER_ROLE_LABELS[normalizeUserRole(authUser.role)] + (authUser.team ? ` · ${authUser.team}` : '')}
               avatarUrl={authUser.avatar_url}
               reportUser={authUser}
             />

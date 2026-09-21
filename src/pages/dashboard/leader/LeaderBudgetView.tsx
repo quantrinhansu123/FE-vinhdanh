@@ -4,8 +4,10 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { BudgetRequestFormModal } from '../../../components/crm-dashboard/BudgetRequestFormModal';
 import { MultiSelect } from '../../../components/common/MultiSelect';
 import { supabase } from '../../../api/supabase';
-import type { BudgetRequestRow, BudgetRequestStatus, ReportRow } from '../../../types';
+import type { AuthUser, BudgetRequestRow, BudgetRequestStatus, ReportRow } from '../../../types';
 import { formatNumberDots } from '../mkt/mktDetailReportShared';
+import { isPrivilegedViewer, scopeBannerText } from '../../../utils/roleScope';
+import { isMissingBudgetApprovalColumn, stripBudgetApprovalColumns } from '../../../utils/budgetRequestsApproval';
 
 const BUDGET_TABLE = import.meta.env.VITE_SUPABASE_BUDGET_REQUESTS_TABLE?.trim() || 'budget_requests';
 const REPORTS_TABLE = 'detail_reports';
@@ -177,7 +179,7 @@ const SummaryCard: React.FC<{
   </div>
 );
 
-export const LeaderBudgetView: React.FC = () => {
+export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = null }) => {
   const [duAnList, setDuAnList] = useState<DuAnOpt[]>([]);
   const [tkqcList, setTkqcList] = useState<TkqcOpt[]>([]);
   const [agencyList, setAgencyList] = useState<AgencyOpt[]>([]);
@@ -218,14 +220,42 @@ export const LeaderBudgetView: React.FC = () => {
 
   const loadRefs = useCallback(async () => {
     const [dRes, aRes] = await Promise.all([
-      supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true }),
+      supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an, leader, staff_ids').order('ten_du_an', { ascending: true }),
       supabase.from(AGENCIES_TABLE).select('id, ma_agency, ten_agency').order('ten_agency', { ascending: true }),
     ]);
     if (dRes.error) console.error('du_an (leader budget):', dRes.error);
-    else setDuAnList((dRes.data || []) as DuAnOpt[]);
+    else {
+      const all = (dRes.data || []) as Array<DuAnOpt & { leader?: string | null; staff_ids?: unknown }>;
+      // Phân cấp: GĐ/QLDA/admin xem tất cả; Leader/NV mặc định lọc dự án thuộc team mình
+      if (viewer && !isPrivilegedViewer(viewer)) {
+        const vName = viewer.name?.trim() || '';
+        const vId = viewer.id || '';
+        let teamProjectIds = new Set<string>();
+        if (vName) {
+          const tRes = await supabase.from('crm_teams').select('du_an_ids').eq('leader', vName);
+          if (!tRes.error) {
+            for (const t of (tRes.data || []) as Array<{ du_an_ids?: unknown }>) {
+              const arr = Array.isArray(t.du_an_ids) ? t.du_an_ids : [];
+              for (const x of arr) if (typeof x === 'string') teamProjectIds.add(x);
+            }
+          }
+        }
+        const scoped = all.filter((d) => {
+          if (teamProjectIds.has(d.id)) return true;
+          if (vName && (d.leader || '').trim() === vName) return true;
+          const sids = Array.isArray(d.staff_ids) ? d.staff_ids.map(String) : [];
+          if (vId && sids.includes(String(vId))) return true;
+          return false;
+        });
+        setDuAnList(scoped);
+        setSelectedDuAnIds((prev) => (prev.length === 0 ? scoped.map((d) => d.id) : prev));
+      } else {
+        setDuAnList(all);
+      }
+    }
     if (aRes.error) console.error('crm_agencies (leader budget):', aRes.error);
     else setAgencyList((aRes.data || []) as AgencyOpt[]);
-  }, []);
+  }, [viewer?.id, viewer?.name, viewer?.role, viewer?.vi_tri]);
 
   const loadTkqc = useCallback(async (projectIds: string[]) => {
     if (projectIds.length === 0) {
@@ -248,8 +278,10 @@ export const LeaderBudgetView: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [q, repRes] = await Promise.all([
-      supabase.from(BUDGET_TABLE).select(BUDGET_SELECT).order('ngay_gio_xin', { ascending: false }).limit(200),
+    const runBudgetQuery = (select: string) =>
+      supabase.from(BUDGET_TABLE).select(select).order('ngay_gio_xin', { ascending: false }).limit(200);
+    const [firstBudget, repRes] = await Promise.all([
+      runBudgetQuery(BUDGET_SELECT),
       supabase
         .from(REPORTS_TABLE)
         .select('report_date, ad_cost, ma_tkqc')
@@ -258,17 +290,32 @@ export const LeaderBudgetView: React.FC = () => {
         .limit(8000),
     ]);
 
+    let q = firstBudget;
+    let budgetWarn: string | null = null;
+    // DB chưa chạy migration alter_budget_requests_approval_flow.sql -> query lại không có các cột duyệt
+    if (q.error && isMissingBudgetApprovalColumn(q.error)) {
+      const retry = await runBudgetQuery(stripBudgetApprovalColumns(BUDGET_SELECT));
+      if (!retry.error) {
+        budgetWarn =
+          'Thiếu cột duyệt nhiều bước — đang hiển thị tạm (ẩn trạng thái Giám đốc/Kế toán/Giải ngân). Hãy chạy supabase/alter_budget_requests_approval_flow.sql.';
+      }
+      q = retry as typeof q;
+    }
+
     if (q.error) {
       console.error('budget_requests (leader):', q.error);
       const em = q.error.message || '';
       setError(
-        em.includes('tkqc_id') || em.includes('tkqc')
-          ? 'Thiếu cột hoặc quan hệ tkqc trên budget_requests — chạy supabase/alter_budget_requests_tkqc_id.sql trên Supabase.'
-          : em || 'Không tải được lịch sử yêu cầu.'
+        isMissingBudgetApprovalColumn(q.error)
+          ? `${em} — Hãy chạy supabase/alter_budget_requests_approval_flow.sql trong Supabase SQL Editor để tạo cột.`
+          : em.includes('tkqc_id') || em.includes('tkqc')
+            ? 'Thiếu cột hoặc quan hệ tkqc trên budget_requests — chạy supabase/alter_budget_requests_tkqc_id.sql trên Supabase.'
+            : em || 'Không tải được lịch sử yêu cầu.'
       );
       setRequests([]);
     } else {
-      setRequests((q.data || []) as BudgetRequestRow[]);
+      setRequests((q.data || []) as unknown as BudgetRequestRow[]);
+      if (budgetWarn) setError(budgetWarn);
     }
 
     if (repRes.error) {
@@ -416,6 +463,7 @@ export const LeaderBudgetView: React.FC = () => {
         <code className="text-[var(--ld-primary)]/90">{BUDGET_TABLE}</code> ·{' '}
         <code className="text-[var(--ld-primary)]/90">{REPORTS_TABLE}</code> (ad_cost){selectedDuAnIds.length > 0 ? ', lọc ma_tkqc theo dự án' : ''} ·{' '}
         <code className="text-[var(--ld-primary)]/90">{TKQC_TABLE}</code>
+        {scopeBannerText(viewer) ? ` · ${scopeBannerText(viewer)}` : ''}
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">

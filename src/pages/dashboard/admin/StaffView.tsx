@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
-import type { Employee } from '../../../types';
+import type { AuthUser, Employee } from '../../../types';
 import { StaffFormModal } from './StaffFormModal';
 import { StaffDetailModal } from './StaffDetailModal';
+import { canEditProjects, canViewAllTeams, scopeBannerText } from '../../../utils/roleScope';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const PAGE_SIZE = 10;
@@ -104,9 +105,10 @@ function downloadStaffCsv(rows: Employee[]) {
 
 type StaffViewProps = {
   onEmployeesRefresh?: () => void | Promise<void>;
+  viewer?: AuthUser | null;
 };
 
-export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
+export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer = null }) => {
   const [rows, setRows] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -151,13 +153,26 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) =>
+    // Phân cấp: GĐ/QLDA/admin xem tất cả; Leader xem team mình; NV chỉ xem bản thân + cùng team (read-only)
+    let scoped = rows;
+    if (!canViewAllTeams(viewer)) {
+      const vTeam = viewer?.team?.trim() || '';
+      const vEmail = viewer?.email?.trim().toLowerCase() || '';
+      const vId = viewer?.id || '';
+      scoped = rows.filter((r) => {
+        if (vId && r.id === vId) return true;
+        if (vEmail && r.email?.trim().toLowerCase() === vEmail) return true;
+        if (vTeam && r.team?.trim() === vTeam) return true;
+        return false;
+      });
+    }
+    if (!q) return scoped;
+    return scoped.filter((r) =>
       [r.name, r.team, r.ma_ns, r.email, r.vi_tri, r.leader, r.du_an_ten]
         .map((x) => (x || '').toLowerCase())
         .some((s) => s.includes(q))
     );
-  }, [rows, search]);
+  }, [rows, search, viewer?.email, viewer?.id, viewer?.role, viewer?.team, viewer?.vi_tri]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -286,6 +301,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span className="material-symbols-outlined">refresh</span>}
           </button>
+          {canEditProjects(viewer) ? (
           <button
             type="button"
             onClick={openCreate}
@@ -293,6 +309,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
           >
             Thêm nhân sự
           </button>
+          ) : null}
         </div>
       </header>
 
@@ -304,6 +321,11 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
           <p className="text-sm text-[var(--hrm-on-variant)]">
             Tổng quan và quản lý đội ngũ marketing — đồng bộ mã NS, fanpage, trạng thái với báo cáo MKT.
           </p>
+          {scopeBannerText(viewer) ? (
+            <p className="text-xs font-semibold text-[var(--hrm-primary)]">
+              {scopeBannerText(viewer)} · {filtered.length}/{rows.length} nhân sự
+            </p>
+          ) : null}
         </div>
 
         {error && (
@@ -518,6 +540,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
                               >
                                 <span className="material-symbols-outlined text-lg">visibility</span>
                               </button>
+                              {canEditProjects(viewer) ? (
                               <button
                                 type="button"
                                 onClick={(e) => openEdit(e, row)}
@@ -528,6 +551,8 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
                               >
                                 <span className="material-symbols-outlined text-lg">edit</span>
                               </button>
+                              ) : null}
+                              {canEditProjects(viewer) ? (
                               <button
                                 type="button"
                                 onClick={(e) => void handleDelete(e, row)}
@@ -542,6 +567,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
                                   <span className="material-symbols-outlined text-lg">delete</span>
                                 )}
                               </button>
+                              ) : null}
                             </div>
                           </td>
                         </tr>

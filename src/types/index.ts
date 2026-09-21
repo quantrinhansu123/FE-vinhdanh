@@ -71,7 +71,41 @@ export type ProjectRow = {
 
 export type ChartGranularity = 'day' | 'week' | 'month' | 'year';
 
-export type UserRole = 'admin' | 'manager' | 'director' | 'user';
+/**
+ * Vai trò đăng nhập (AuthUser.role) — phân cấp 4 tầng yêu cầu:
+ * admin (siêu quản trị) > director (Giám đốc) > project_manager (Quản lý dự án)
+ * > leader (Leader team) > mkt (Nhân viên) > user (fallback hạn chế nhất).
+ * 'manager' giữ lại làm alias của 'project_manager' để tương thích dữ liệu cũ.
+ */
+export type UserRole =
+  | 'admin'
+  | 'director'
+  | 'project_manager'
+  | 'manager'
+  | 'leader'
+  | 'mkt'
+  | 'user';
+
+/** Giá trị employees.vi_tri chuẩn (dropdown StaffFormModal) */
+export const VI_TRI_OPTIONS = [
+  'Admin',
+  'Giám đốc',
+  'Quản lý dự án',
+  'Leader',
+  'Nhân viên MKT',
+] as const;
+export type ViTri = (typeof VI_TRI_OPTIONS)[number];
+
+/** Nhãn hiển thị cho từng role */
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Hệ thống cấp cao',
+  director: 'Giám đốc',
+  project_manager: 'Quản lý dự án',
+  manager: 'Quản lý dự án',
+  leader: 'Leader',
+  mkt: 'Nhân viên MKT',
+  user: 'Người dùng',
+};
 
 export interface AuthUser {
   id: string;

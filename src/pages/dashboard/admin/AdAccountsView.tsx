@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
-import type { CrmTeamRow, TkqcAdListRow } from '../../../types';
+import type { AuthUser, CrmTeamRow, TkqcAdListRow } from '../../../types';
 import { AdAccountFormModal } from './AdAccountFormModal';
+import { canEditProjects, canViewAllProjects, scopeBannerText } from '../../../utils/roleScope';
 
 const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_TABLE?.trim() || 'tkqc';
 const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
@@ -98,7 +99,7 @@ function telegramDisplay(row: TkqcAdListRow): { text: string; href: string | nul
   return { text: '—', href: null };
 }
 
-export const AdAccountsView: React.FC = () => {
+export const AdAccountsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = null }) => {
   const [rows, setRows] = useState<TkqcAdListRow[]>([]);
   const [teams, setTeams] = useState<CrmTeamRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -180,8 +181,40 @@ export const AdAccountsView: React.FC = () => {
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) => {
+    // Phân cấp: GĐ/QLDA/admin xem tất cả; Leader/NV chỉ TK thuộc team/dự án mình
+    let scoped = rows;
+    if (!canViewAllProjects(viewer) && viewer) {
+      const vName = viewer.name?.trim() || '';
+      const vId = viewer.id || '';
+      const vTeam = viewer.team?.trim() || '';
+      const myTeamIds = new Set(
+        teams
+          .filter((t) => {
+            if (vName && t.leader?.trim() === vName) return true;
+            const mids = Array.isArray(t.member_ids) ? t.member_ids.map(String) : [];
+            if (vId && mids.includes(String(vId))) return true;
+            if (vTeam && t.ten_team?.trim() === vTeam) return true;
+            return false;
+          })
+          .map((t) => t.id)
+      );
+      const myProjectIds = new Set<string>();
+      for (const t of teams) {
+        if (!myTeamIds.has(t.id)) continue;
+        const arr = Array.isArray(t.du_an_ids) ? t.du_an_ids : [];
+        for (const x of arr) if (typeof x === 'string') myProjectIds.add(x);
+      }
+      scoped = rows.filter((row) => {
+        if (row.id_crm_team && myTeamIds.has(row.id_crm_team)) return true;
+        if (row.du_an?.id && myProjectIds.has(row.du_an.id)) return true;
+        if (!row.id_crm_team && myProjectIds.size === 0 && vTeam) {
+          return teamProjectLabel(row, teams).toLowerCase().includes(vTeam.toLowerCase());
+        }
+        return false;
+      });
+    }
+    if (!q) return scoped;
+    return scoped.filter((row) => {
       const blob = [
         row.ma_tkqc,
         row.ten_tkqc,
@@ -197,7 +230,7 @@ export const AdAccountsView: React.FC = () => {
         .toLowerCase();
       return blob.includes(q);
     });
-  }, [rows, search]);
+  }, [rows, search, teams, viewer?.id, viewer?.name, viewer?.role, viewer?.team, viewer?.vi_tri]);
 
   useEffect(() => {
     setPage(1);
@@ -239,6 +272,9 @@ export const AdAccountsView: React.FC = () => {
             Agency Control Center
           </h2>
           <p className="mt-1 text-sm text-[#bac9cc]">Real-time oversight of partner operations and liquidity.</p>
+          {scopeBannerText(viewer) ? (
+            <p className="mt-2 text-xs font-semibold text-cyan-300">{scopeBannerText(viewer)} · {filteredRows.length}/{rows.length} TK</p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
@@ -274,6 +310,7 @@ export const AdAccountsView: React.FC = () => {
           >
             <span className="material-symbols-outlined text-xl">download</span>
           </button>
+          {canEditProjects(viewer) ? (
           <button
             type="button"
             onClick={openAdd}
@@ -281,6 +318,7 @@ export const AdAccountsView: React.FC = () => {
           >
             Add account
           </button>
+          ) : null}
         </div>
       </div>
 
@@ -476,6 +514,7 @@ export const AdAccountsView: React.FC = () => {
                           )}
                         </td>
                         <td className="px-4 py-5 text-right sm:px-6">
+                          {canEditProjects(viewer) ? (
                           <div className="flex justify-end gap-2">
                             <button
                               type="button"
@@ -503,6 +542,9 @@ export const AdAccountsView: React.FC = () => {
                               )}
                             </button>
                           </div>
+                          ) : (
+                            <span className="text-xs text-slate-500">Chỉ xem</span>
+                          )}
                         </td>
                       </tr>
                     );

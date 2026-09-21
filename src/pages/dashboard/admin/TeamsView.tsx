@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
-import type { CrmTeamRow, DuAnRow } from '../../../types';
+import type { AuthUser, CrmTeamRow, DuAnRow } from '../../../types';
 import { TeamFormModal } from './TeamFormModal';
+import { canEditProjects, canViewAllTeams, scopeBannerText } from '../../../utils/roleScope';
 
 const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
@@ -43,7 +44,7 @@ function teamBadge(trangThai: string | undefined): { label: string; type: 'G' | 
   }
 }
 
-export const TeamsView: React.FC = () => {
+export const TeamsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = null }) => {
   const [rows, setRows] = useState<CrmTeamRow[]>([]);
   const [duAnById, setDuAnById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -97,14 +98,27 @@ export const TeamsView: React.FC = () => {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => {
+    const canViewAll = canViewAllTeams(viewer);
+    const vName = viewer?.name?.trim() || '';
+    const vId = viewer?.id || '';
+    const vTeam = viewer?.team?.trim() || '';
+    const scoped = canViewAll
+      ? rows
+      : rows.filter((r) => {
+          if (vName && r.leader?.trim() === vName) return true;
+          const mids = asStringIdArray(r.member_ids).map(String);
+          if (vId && mids.includes(String(vId))) return true;
+          if (vTeam && r.ten_team?.trim() === vTeam) return true;
+          return false;
+        });
+    if (!q) return scoped;
+    return scoped.filter((r) => {
       const hay = [r.ma_team, r.ten_team, r.leader, projectLabel(r.du_an_ids)]
         .map((x) => (x || '').toString().toLowerCase())
         .join(' ');
       return hay.includes(q);
     });
-  }, [rows, search, projectLabel]);
+  }, [rows, search, projectLabel, viewer?.id, viewer?.name, viewer?.role, viewer?.team, viewer?.vi_tri]);
 
   return (
     <div className="dash-fade-up">
@@ -113,6 +127,9 @@ export const TeamsView: React.FC = () => {
         <div className="space-y-1">
           <p className="text-[var(--ld-primary)] font-bold text-[11px] uppercase tracking-widest">Enterprise Tier</p>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--ld-on-surface)] tracking-tight">Module 2 — Quản lý Team</h1>
+          {scopeBannerText(viewer) ? (
+            <p className="text-xs font-semibold text-[var(--ld-primary)]">{scopeBannerText(viewer)} · {filtered.length}/{rows.length} team</p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -124,6 +141,7 @@ export const TeamsView: React.FC = () => {
             {loading ? <Loader2 size={16} className="animate-spin" /> : <span className="material-symbols-outlined text-sm">refresh</span>}
             Làm mới
           </button>
+          {canEditProjects(viewer) ? (
           <button
             className="bg-[var(--ld-primary)] text-[var(--ld-on-primary)] px-4 py-2 rounded-xl font-bold hover:brightness-110 active:scale-95"
             onClick={() => { setEditing(null); setFormOpen(true); }}
@@ -132,6 +150,7 @@ export const TeamsView: React.FC = () => {
             <span className="material-symbols-outlined text-sm align-[-3px] mr-1">add_circle</span>
             Thêm team
           </button>
+          ) : null}
         </div>
       </div>
 
@@ -214,6 +233,7 @@ export const TeamsView: React.FC = () => {
                           <Badge type={st.type}>{st.label}</Badge>
                         </td>
                         <td className="p-[12px_16px] text-right">
+                          {canEditProjects(viewer) ? (
                           <button
                             type="button"
                             onClick={() => {
@@ -225,6 +245,9 @@ export const TeamsView: React.FC = () => {
                             <span className="material-symbols-outlined text-sm align-[-3px] mr-1">edit</span>
                             Sửa
                           </button>
+                          ) : (
+                            <span className="text-[11px] text-[var(--text3)]">Chỉ xem</span>
+                          )}
                         </td>
                       </tr>
                     );

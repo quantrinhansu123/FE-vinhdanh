@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../api/supabase';
 import type { AuthUser, Employee } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
+import { isPrivilegedViewer, scopeBannerText } from '../../../utils/roleScope';
 import { formatCompactVnd, formatKpiMoney, toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
 import { isMissingTienVietError, stripTienVietFromSelect } from '../../../utils/detailReportsVnd';
 
@@ -274,7 +275,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     setLoading(true);
     setError(null);
 
-    const isAdminViewer = viewer?.role === 'admin';
+    const isAdminViewer = isPrivilegedViewer(viewer);
 
     let teamKeys: string[] = [];
     if (!isAdminViewer && viewerName) {
@@ -589,7 +590,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
         </div>
       )}
 
-      {!teamName && viewer?.role !== 'admin' ? (
+      {!teamName && !isPrivilegedViewer(viewer) ? (
         <div className="mb-3 text-[11px] text-[var(--ld-tertiary)] font-semibold border border-[var(--ld-tertiary)]/30 rounded-lg px-3 py-2 bg-[color-mix(in_srgb,var(--ld-tertiary)_10%,transparent)]">
           Không xác định được team: cần <code className="text-[10px]">tên Leader</code> khớp cột leader trong{' '}
           <code className="text-[10px]">crm_teams</code>, hoặc gán <code className="text-[10px]">team</code> trên nhân sự tại{' '}
@@ -696,6 +697,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                 </h2>
                 <p className="text-xs text-[var(--ld-on-surface-variant)] leader-dash-label mt-0.5">
                   Tháng {monthLabel} · Chi tiết {DETAIL_REPORTS_TABLE}
+                  {scopeBannerText(viewer) ? ` · ${scopeBannerText(viewer)}` : ''}
                 </p>
               </div>
               <div className="flex gap-2 shrink-0">

@@ -9,7 +9,9 @@ import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 import { BudgetRequestFormModal } from '../../../components/crm-dashboard/BudgetRequestFormModal';
 import { supabase } from '../../../api/supabase';
-import type { BudgetRequestRow, ReportRow } from '../../../types';
+import type { AuthUser, BudgetRequestRow, ReportRow } from '../../../types';
+import { canEditProjects, scopeBannerText } from '../../../utils/roleScope';
+import { isMissingBudgetApprovalColumn, stripBudgetApprovalColumns } from '../../../utils/budgetRequestsApproval';
 
 const BUDGET_TABLE = import.meta.env.VITE_SUPABASE_BUDGET_REQUESTS_TABLE?.trim() || 'budget_requests';
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
@@ -173,7 +175,9 @@ function downloadHistoryCsv(rows: BudgetRequestRow[]) {
   URL.revokeObjectURL(url);
 }
 
-export const BudgetView: React.FC = () => {
+export const BudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = null }) => {
+  const canApprove = canEditProjects(viewer);
+  const scopeBanner = scopeBannerText(viewer);
   const [requests, setRequests] = useState<BudgetRequestRow[]>([]);
   const [reportRows, setReportRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -195,17 +199,37 @@ export const BudgetView: React.FC = () => {
     since.setMonth(since.getMonth() - 2);
     const sinceStr = toLocalYyyyMmDd(since);
 
-    const [budRes, repRes] = await Promise.all([
-      supabase.from(BUDGET_TABLE).select(BUDGET_SELECT).order('ngay_gio_xin', { ascending: false }).limit(200),
+    const runBudgetQuery = (select: string) =>
+      supabase.from(BUDGET_TABLE).select(select).order('ngay_gio_xin', { ascending: false }).limit(200);
+
+    const [firstBud, repRes] = await Promise.all([
+      runBudgetQuery(BUDGET_SELECT),
       supabase.from(REPORTS_TABLE).select('report_date, ad_cost').gte('report_date', sinceStr),
     ]);
 
+    let budRes = firstBud;
+    let budgetWarn: string | null = null;
+    // DB chưa chạy migration alter_budget_requests_approval_flow.sql -> query lại không có cột anh_giai_ngan_urls
+    if (budRes.error && isMissingBudgetApprovalColumn(budRes.error)) {
+      const retry = await runBudgetQuery(stripBudgetApprovalColumns(BUDGET_SELECT));
+      if (!retry.error) {
+        budgetWarn =
+          'Thiếu cột giải ngân — đang hiển thị tạm. Hãy chạy supabase/alter_budget_requests_approval_flow.sql.';
+      }
+      budRes = retry as typeof budRes;
+    }
+
     if (budRes.error) {
       console.error('budget_requests:', budRes.error);
-      setError(budRes.error.message || 'Không tải được yêu cầu ngân sách.');
+      setError(
+        isMissingBudgetApprovalColumn(budRes.error)
+          ? `${budRes.error.message} — Hãy chạy supabase/alter_budget_requests_approval_flow.sql trong Supabase SQL Editor để tạo cột.`
+          : budRes.error.message || 'Không tải được yêu cầu ngân sách.'
+      );
       setRequests([]);
     } else {
-      setRequests((budRes.data || []) as BudgetRequestRow[]);
+      setRequests((budRes.data || []) as unknown as BudgetRequestRow[]);
+      if (budgetWarn) setError(budgetWarn);
     }
 
     if (repRes.error) {
@@ -689,6 +713,7 @@ export const BudgetView: React.FC = () => {
                               </div>
                             </div>
                             <div className="flex gap-2 mt-3">
+                              {canApprove ? (
                               <button
                                 type="button"
                                 disabled={busy}
@@ -697,6 +722,8 @@ export const BudgetView: React.FC = () => {
                               >
                                 Duyệt
                               </button>
+                              ) : null}
+                              {canApprove ? (
                               <button
                                 type="button"
                                 disabled={busy}
@@ -705,6 +732,10 @@ export const BudgetView: React.FC = () => {
                               >
                                 Từ chối
                               </button>
+                              ) : (
+                                <span className="flex-1 py-2 text-center text-[10px] font-bold text-[var(--ld-on-surface-variant)]">Chỉ xem · {scopeBanner || ''}</span>
+                              )}
+                              {canApprove ? (
                               <button
                                 type="button"
                                 disabled={busy}
@@ -714,6 +745,7 @@ export const BudgetView: React.FC = () => {
                               >
                                 <span className="material-symbols-outlined text-sm">delete</span>
                               </button>
+                              ) : null}
                             </div>
                             <button
                               type="button"

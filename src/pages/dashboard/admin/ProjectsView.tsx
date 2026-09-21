@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
-import type { DuAnRow } from '../../../types';
+import type { AuthUser, DuAnRow } from '../../../types';
 import { ProjectFormModal } from './ProjectFormModal';
+import { canEditProjects, canViewAllProjects, scopeBannerText } from '../../../utils/roleScope';
 
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
+const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
 const PAGE_SIZE = 10;
 
 const ROW_ICONS = ['package_2', 'rocket_launch', 'hub', 'energy_savings_leaf', 'token', 'assignment'] as const;
@@ -89,7 +91,7 @@ function statusUi(trangThai: string | undefined): {
   }
 }
 
-export const ProjectsView: React.FC = () => {
+export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = null }) => {
   const [rows, setRows] = useState<DuAnRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +100,12 @@ export const ProjectsView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'all' | 'dang_chay' | 'tam_dung'>('all');
   const [page, setPage] = useState(1);
+  /** Leader: giới hạn theo team phụ trách (crm_teams.leader == viewer.name → du_an_ids) */
+  const [scopedProjectIds, setScopedProjectIds] = useState<string[] | null>(null);
+
+  const canViewAll = canViewAllProjects(viewer);
+  const canEdit = canEditProjects(viewer);
+  const scopeBanner = scopeBannerText(viewer);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,8 +124,37 @@ export const ProjectsView: React.FC = () => {
     } else {
       setRows((data || []) as DuAnRow[]);
     }
+
+    // Leader/NV: resolve dự án thuộc team mình để lọc (admin/GĐ/QLDA xem tất cả nên bỏ qua)
+    if (viewer && !canViewAllProjects(viewer)) {
+      try {
+        const vName = viewer.name?.trim() || '';
+        const vId = viewer.id || '';
+        const ids = new Set<string>();
+        if (vName) {
+          const tRes = await supabase.from(TEAMS_TABLE).select('du_an_ids').eq('leader', vName);
+          if (!tRes.error) {
+            for (const t of (tRes.data || []) as Array<{ du_an_ids?: unknown }>) {
+              const arr = Array.isArray(t.du_an_ids) ? t.du_an_ids : [];
+              for (const x of arr) if (typeof x === 'string') ids.add(x);
+            }
+          }
+        }
+        // Dự án gán trực tiếp: leader == tên mình hoặc staff_ids chứa mình
+        for (const p of ((data || []) as DuAnRow[])) {
+          if (vName && p.leader?.trim() === vName) ids.add(p.id);
+          const sids = Array.isArray(p.staff_ids) ? p.staff_ids : [];
+          if (vId && sids.map(String).includes(String(vId))) ids.add(p.id);
+        }
+        setScopedProjectIds([...ids]);
+      } catch {
+        setScopedProjectIds([]);
+      }
+    } else {
+      setScopedProjectIds(null);
+    }
     setLoading(false);
-  }, []);
+  }, [viewer?.id, viewer?.name, viewer?.role, viewer?.vi_tri]);
 
   useEffect(() => {
     void load();
@@ -143,6 +180,8 @@ export const ProjectsView: React.FC = () => {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((p) => {
+      // Phân cấp: Leader/NV chỉ thấy dự án thuộc team mình
+      if (!canViewAll && scopedProjectIds && !scopedProjectIds.includes(p.id)) return false;
       if (tab === 'dang_chay' && p.trang_thai !== 'dang_chay') return false;
       if (tab === 'tam_dung' && p.trang_thai !== 'tam_dung') return false;
       if (!q) return true;
@@ -153,7 +192,7 @@ export const ProjectsView: React.FC = () => {
         (p.leader || '').toLowerCase().includes(q)
       );
     });
-  }, [rows, search, tab]);
+  }, [rows, search, tab, canViewAll, scopedProjectIds]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -209,6 +248,12 @@ export const ProjectsView: React.FC = () => {
             Dự án (Module 1)
           </h2>
           <p className="text-sm text-[var(--ld-on-surface-variant)] mt-1 leader-dash-label">Nguồn: {DU_AN_TABLE}</p>
+          {scopeBanner ? (
+            <p className="mt-2 inline-flex items-center gap-2 rounded-lg border border-[var(--ld-primary)]/25 bg-[color-mix(in_srgb,var(--ld-primary)_10%,transparent)] px-3 py-1.5 text-xs font-semibold text-[var(--ld-primary)]">
+              <span className="material-symbols-outlined text-sm">visibility</span>
+              {scopeBanner} · {filtered.length}/{rows.length} dự án
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -220,6 +265,7 @@ export const ProjectsView: React.FC = () => {
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             Làm mới
           </button>
+          {canEdit ? (
           <button
             type="button"
             onClick={() => {
@@ -231,6 +277,7 @@ export const ProjectsView: React.FC = () => {
             <span className="material-symbols-outlined">add_circle</span>
             Thêm dự án
           </button>
+          ) : null}
         </div>
       </div>
 
@@ -407,6 +454,7 @@ export const ProjectsView: React.FC = () => {
                     {rows.length === 0 ? (
                       <div className="space-y-4">
                         <p>Chưa có dự án trong {DU_AN_TABLE}.</p>
+                        {canEdit ? (
                         <button
                           type="button"
                           onClick={() => {
@@ -418,6 +466,7 @@ export const ProjectsView: React.FC = () => {
                           <span className="material-symbols-outlined text-lg">add</span>
                           Thêm dự án đầu tiên
                         </button>
+                        ) : null}
                       </div>
                     ) : (
                       'Không khớp tìm kiếm / bộ lọc.'
@@ -479,6 +528,7 @@ export const ProjectsView: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-5 text-right">
+                        {canEdit ? (
                         <button
                           type="button"
                           title="Sửa"
@@ -490,6 +540,9 @@ export const ProjectsView: React.FC = () => {
                         >
                           <span className="material-symbols-outlined text-xl">edit_square</span>
                         </button>
+                        ) : (
+                          <span className="text-xs text-[var(--ld-on-surface-variant)]">Chỉ xem</span>
+                        )}
                       </td>
                     </tr>
                   );

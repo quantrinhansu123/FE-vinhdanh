@@ -83,7 +83,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
 
   const parsed = parseCrmAdminPath(location.pathname);
 
-  const tier = useMemo(() => crmNavTierFromUser(reportUser ?? null), [reportUser?.role, reportUser?.vi_tri]);
+  const tier = useMemo(() => crmNavTierFromUser(reportUser ?? null), [reportUser?.role, reportUser?.vi_tri, reportUser?.email]);
   const allowedRoles = crmAllowedRolesForTier(tier);
 
   useEffect(() => {
@@ -131,17 +131,17 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'admin-dash': return <AdminDashboardView />;
       case 'burn-detect': return <BurnDetectionView />;
       case 'alerts': return <AlertsView />;
-      case 'projects': return <ProjectsView />;
+      case 'projects': return <ProjectsView viewer={reportUser ?? null} />;
       case 'project-qc-excel': return <ProjectQcExcelView />;
       case 'reports-raw': return <ReportsRawView />;
-      case 'teams': return <TeamsView />;
+      case 'teams': return <TeamsView viewer={reportUser ?? null} />;
       case 'staff':
-        return <StaffView onEmployeesRefresh={onEmployeesRefresh} />;
-      case 'ad-accounts': return <AdAccountsView />;
+        return <StaffView onEmployeesRefresh={onEmployeesRefresh} viewer={reportUser ?? null} />;
+      case 'ad-accounts': return <AdAccountsView viewer={reportUser ?? null} />;
       case 'agencies': return <AgenciesView />;
       case 'products': return <ProductsView />;
       case 'markets': return <MarketsView />;
-      case 'budget': return <BudgetView />;
+      case 'budget': return <BudgetView viewer={reportUser ?? null} />;
       case 'reconcile': return <ReconcileView />;
       case 'upcare-mkt': return <UpcareMktEmployeesView />;
       case 'admin-ranking': return <AdminRankingView />;
@@ -152,7 +152,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'leader-rank': return <LeaderRankingView viewer={reportUser ?? null} />;
       case 'leader-mkt': return <LeaderMktView viewer={reportUser ?? null} />;
       case 'leader-tkqc': return <LeaderTkqcView viewer={reportUser ?? null} />;
-      case 'leader-budget': return <LeaderBudgetView />;
+      case 'leader-budget': return <LeaderBudgetView viewer={reportUser ?? null} />;
       case 'kpi-target': return <KpiTargetView viewer={reportUser ?? null} />;
       case 'heatmap': return <HeatmapView />;
 

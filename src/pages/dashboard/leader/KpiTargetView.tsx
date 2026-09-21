@@ -3,6 +3,7 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import type { AuthUser, Employee } from '../../../types';
+import { isPrivilegedViewer } from '../../../utils/roleScope';
 import { formatNumberDots, formatTypingGroupedInt } from '../mkt/mktDetailReportShared';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
@@ -84,7 +85,8 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
   }, [allStaff]);
 
   const viewerTeam = (viewer?.team || '').trim();
-  const viewerTeamLocked = Boolean(viewerTeam);
+  // Đặc quyền (admin/GĐ/QLDA): được chọn mọi team. Leader/NV bị khóa theo team mình.
+  const viewerTeamLocked = Boolean(viewerTeam) && !isPrivilegedViewer(viewer);
 
   const teamMembers = useMemo(() => {
     if (!teamKey) return [];

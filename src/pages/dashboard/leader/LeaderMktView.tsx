@@ -5,6 +5,7 @@ import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/Shar
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { supabase } from '../../../api/supabase';
 import type { AuthUser, Employee } from '../../../types';
+import { isPrivilegedViewer, scopeBannerText } from '../../../utils/roleScope';
 import {
   REPORTS_TABLE,
 } from '../mkt/mktDetailReportShared';
@@ -103,10 +104,12 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
     }
 
     const { start, end } = monthBounds(ym);
+    const privileged = isPrivilegedViewer(viewer);
 
-    // Ưu tiên team leader đang phụ trách từ CRM teams, fallback về viewer.team
+    // Ưu tiên team leader đang phụ trách từ CRM teams, fallback về viewer.team.
+    // GĐ/QLDA/admin (privileged): bỏ lọc team → xem toàn bộ MKT
     let teamKeys: string[] = [];
-    if (viewerName) {
+    if (!privileged && viewerName) {
       const teamRes = await supabase
         .from(TEAMS_TABLE)
         .select('ten_team, leader')
@@ -119,21 +122,23 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
         console.warn('leader-mkt teams:', teamRes.error);
       }
     }
-    if (!teamKeys.length && fallbackTeam) teamKeys = [fallbackTeam];
+    if (!privileged && !teamKeys.length && fallbackTeam) teamKeys = [fallbackTeam];
     teamKeys = [...new Set(teamKeys.map((x) => x.trim()).filter(Boolean))];
-    setManagedTeams(teamKeys);
+    setManagedTeams(privileged ? [] : teamKeys);
 
-    if (!teamKeys.length) {
+    if (!privileged && !teamKeys.length) {
       setError('Không xác định được team phụ trách của tài khoản leader.');
       setLoading(false);
       return;
     }
 
-    const empRes = await supabase
+    let empQuery = supabase
       .from(EMPLOYEES_TABLE)
       .select('id, name, email, team, ma_ns, ngay_bat_dau, du_an_ten, vi_tri, trang_thai')
-      .in('team', teamKeys)
       .order('name', { ascending: true });
+    const empRes = privileged
+      ? await empQuery
+      : await empQuery.in('team', teamKeys);
 
     if (empRes.error) {
       console.error('leader-mkt employees:', empRes.error);
