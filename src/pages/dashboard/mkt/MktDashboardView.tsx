@@ -6,6 +6,7 @@ import { supabase } from '../../../api/supabase';
 import type { AuthUser, Employee, TkqcAdListRow } from '../../../types';
 import { crmNavTierFromUser } from '../../../utils/crmNavAccess';
 import { REPORTS_TABLE, formatCompactVnd, formatKpiMoney, formatNumberDots, formatReportDateVi, toLocalYyyyMmDd } from './mktDetailReportShared';
+import { isMissingTienVietError } from '../../../utils/detailReportsVnd';
 
 const KPI_STAFF_TARGETS_TABLE =
   import.meta.env.VITE_SUPABASE_KPI_STAFF_MONTHLY_TARGETS_TABLE?.trim() || 'kpi_staff_monthly_targets';
@@ -222,6 +223,28 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
 
     const REPORT_ROW_SELECT =
       'report_date, revenue, tien_viet, ad_cost, tong_lead, order_count, email, code';
+    const REPORT_ROW_SELECT_NO_VND =
+      'report_date, revenue, ad_cost, tong_lead, order_count, email, code';
+
+    const fetchReportRange = async (from: string, to: string, limit: number) => {
+      const first = await supabase
+        .from(REPORTS_TABLE)
+        .select(REPORT_ROW_SELECT)
+        .gte('report_date', from)
+        .lte('report_date', to)
+        .order('report_date', { ascending: false })
+        .limit(limit);
+      if (first.error && isMissingTienVietError(first.error)) {
+        return supabase
+          .from(REPORTS_TABLE)
+          .select(REPORT_ROW_SELECT_NO_VND)
+          .gte('report_date', from)
+          .lte('report_date', to)
+          .order('report_date', { ascending: false })
+          .limit(limit);
+      }
+      return first;
+    };
 
     const targetPromise =
       tier === 'admin'
@@ -288,19 +311,8 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
     })();
 
     const [last7Res, monthRes, targetRes, accountsRes] = await Promise.all([
-      supabase
-        .from(REPORTS_TABLE)
-        .select(REPORT_ROW_SELECT)
-        .gte('report_date', last7From)
-        .lte('report_date', last7To)
-        .order('report_date', { ascending: false })
-        .limit(15000),
-      supabase
-        .from(REPORTS_TABLE)
-        .select(REPORT_ROW_SELECT)
-        .gte('report_date', monthStart)
-        .lte('report_date', monthEnd)
-        .limit(20000),
+      fetchReportRange(last7From, last7To, 15000),
+      fetchReportRange(monthStart, monthEnd, 20000),
       targetPromise,
       accountsPromise,
     ]);

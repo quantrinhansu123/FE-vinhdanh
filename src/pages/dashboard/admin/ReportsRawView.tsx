@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import type { ReportRow } from '../../../types';
+import { isMissingTienVietError, reportRevenueVndFallback } from '../../../utils/detailReportsVnd';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 const PAGE_SIZE = 50;
@@ -45,7 +46,7 @@ export const ReportsRawView: React.FC = () => {
     for (const r of rows) {
       mess += Number(r.mess_comment_count || 0);
       ads += Number(r.ad_cost || 0);
-      vnd += Number(r.tien_viet || 0);
+      vnd += reportRevenueVndFallback(r);
     }
     return { mess, ads, vnd };
   }, [rows]);
@@ -53,35 +54,50 @@ export const ReportsRawView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    let q = supabase
-      .from(REPORTS_TABLE)
-      .select(
-        'id, report_date, name, email, team, product, market, page, ma_tkqc, ad_account, ad_cost, revenue, tien_viet, mess_comment_count, order_count, tong_lead, tong_data_nhan, code'
-      )
-      .gte('report_date', applied.from)
-      .lte('report_date', applied.to)
-      .order('report_date', { ascending: false })
-      .limit(5000);
-    if (applied.email) q = q.ilike('email', `%${applied.email}%`);
-    if (applied.code) q = q.ilike('code', `%${applied.code}%`);
-    if (applied.q) {
-      q = q.or(
-        [
-          `name.ilike.%${applied.q}%`,
-          `product.ilike.%${applied.q}%`,
-          `market.ilike.%${applied.q}%`,
-          `page.ilike.%${applied.q}%`,
-          `ad_account.ilike.%${applied.q}%`,
-          `team.ilike.%${applied.q}%`,
-        ].join(',')
-      );
+    const baseSelect =
+      'id, report_date, name, email, team, product, market, page, ma_tkqc, ad_account, ad_cost, revenue, tien_viet, mess_comment_count, order_count, tong_lead, tong_data_nhan, code';
+    const fallbackSelect =
+      'id, report_date, name, email, team, product, market, page, ma_tkqc, ad_account, ad_cost, revenue, mess_comment_count, order_count, tong_lead, tong_data_nhan, code';
+    const buildQuery = (select: string) => {
+      let qq = supabase
+        .from(REPORTS_TABLE)
+        .select(select)
+        .gte('report_date', applied.from)
+        .lte('report_date', applied.to)
+        .order('report_date', { ascending: false })
+        .limit(5000);
+      if (applied.email) qq = qq.ilike('email', `%${applied.email}%`);
+      if (applied.code) qq = qq.ilike('code', `%${applied.code}%`);
+      if (applied.q) {
+        qq = qq.or(
+          [
+            `name.ilike.%${applied.q}%`,
+            `product.ilike.%${applied.q}%`,
+            `market.ilike.%${applied.q}%`,
+            `page.ilike.%${applied.q}%`,
+            `ad_account.ilike.%${applied.q}%`,
+            `team.ilike.%${applied.q}%`,
+          ].join(',')
+        );
+      }
+      return qq;
+    };
+    let { data, error: qErr } = await buildQuery(baseSelect);
+    let warnMsg: string | null = null;
+    if (qErr && isMissingTienVietError(qErr)) {
+      const retry = await buildQuery(fallbackSelect);
+      data = retry.data;
+      qErr = retry.error;
+      if (!qErr) {
+        warnMsg = 'Thiếu cột tien_viet — đang hiển thị tạm bằng revenue*25,000. Hãy chạy supabase/alter_detail_reports_tien_viet.sql.';
+      }
     }
-    const { data, error: qErr } = await q;
     if (qErr) {
       setError(qErr.message || 'Không tải được dữ liệu.');
       setRows([]);
     } else {
-      setRows((data || []) as ReportRow[]);
+      setRows((data || []) as unknown as ReportRow[]);
+      setError(warnMsg);
     }
     setLoading(false);
     setPage(1);
@@ -238,8 +254,11 @@ export const ReportsRawView: React.FC = () => {
       window.alert(`Đã cập nhật tien_viet cho ${done} dòng.`);
       await load();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      window.alert(`Lỗi backfill tien_viet: ${msg}`);
+      const raw = e instanceof Error ? e.message : String(e);
+      const hint = isMissingTienVietError(raw)
+        ? `${raw} — Hãy chạy supabase/alter_detail_reports_tien_viet.sql trong Supabase SQL Editor để tạo cột.`
+        : raw;
+      window.alert(`Lỗi backfill tien_viet: ${hint}`);
     } finally {
       setBackfilling(false);
     }
@@ -392,7 +411,7 @@ export const ReportsRawView: React.FC = () => {
                   <td className="p-2 max-w-[220px] truncate" title={r.email || ''}>{r.email || '—'}</td>
                   <td className="p-2">{(r as any).code || '—'}</td>
                   <td className="p-2 text-right">{Number(r.ad_cost || 0).toLocaleString('vi-VN')}</td>
-                  <td className="p-2 text-right">{Number(r.tien_viet || 0).toLocaleString('vi-VN')}</td>
+                  <td className="p-2 text-right">{Number(reportRevenueVndFallback(r)).toLocaleString('vi-VN')}</td>
                   <td className="p-2 text-right">{r.mess_comment_count ?? '—'}</td>
                   <td className="p-2 text-right">{r.order_count ?? '—'}</td>
                   <td className="p-2 text-right">{r.tong_lead ?? r.tong_data_nhan ?? '—'}</td>

@@ -5,6 +5,7 @@ import { supabase } from '../../../api/supabase';
 import type { Employee, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { formatCompactVnd } from '../mkt/mktDetailReportShared';
+import { isMissingTienVietError, stripTienVietFromSelect } from '../../../utils/detailReportsVnd';
 
 const REPORTS_TABLE = 'detail_reports';
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
@@ -21,18 +22,29 @@ async function fetchAllAdminDetailReports(
 ): Promise<{ data: ReportRow[]; error: { message: string } | null }> {
   const all: ReportRow[] = [];
   let lastId: string | null = null;
+  let select = ADMIN_DASH_DETAIL_SELECT;
+  let fellBack = false;
   for (let p = 0; p < ADMIN_DASH_MAX_PAGES; p++) {
     let q = supabase
       .from(REPORTS_TABLE)
-      .select(ADMIN_DASH_DETAIL_SELECT)
+      .select(select)
       .gte('report_date', start)
       .lte('report_date', end)
       .order('id', { ascending: true })
       .limit(ADMIN_DASH_PAGE_SIZE);
     if (lastId) q = q.gt('id', lastId);
     const { data, error } = await q;
-    if (error) return { data: [], error: { message: error.message } };
-    const batch = (data || []) as ReportRow[];
+    if (error) {
+      // DB chưa chạy migration alter_detail_reports_tien_viet.sql -> query lại không có cột tien_viet
+      if (!fellBack && isMissingTienVietError(error)) {
+        select = stripTienVietFromSelect(select);
+        fellBack = true;
+        p -= 1;
+        continue;
+      }
+      return { data: [], error: { message: error.message } };
+    }
+    const batch = (data || []) as unknown as ReportRow[];
     if (!batch.length) break;
     all.push(...batch);
     const raw = batch[batch.length - 1]?.id;

@@ -5,6 +5,7 @@ import { supabase } from '../../../api/supabase';
 import type { AuthUser, Employee } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { formatCompactVnd, formatKpiMoney, toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
+import { isMissingTienVietError, stripTienVietFromSelect } from '../../../utils/detailReportsVnd';
 
 /** Hiệu suất Marketing (leader): luôn lấy từ bảng này, không dùng VITE_SUPABASE_REPORTS_TABLE */
 const DETAIL_REPORTS_TABLE = 'detail_reports';
@@ -23,21 +24,31 @@ async function fetchAllLeaderDetailReportsForRange(
 ): Promise<{ data: Record<string, unknown>[]; error: { message: string } | null }> {
   const all: Record<string, unknown>[] = [];
   let lastId: string | null = null;
+  let select = LEADER_DETAIL_REPORTS_SELECT;
+  let fellBack = false;
   for (let p = 0; p < DETAIL_REPORT_MAX_PAGES; p++) {
     let q = supabase
       .from(DETAIL_REPORTS_TABLE)
-      .select(LEADER_DETAIL_REPORTS_SELECT)
+      .select(select)
       .gte('report_date', start)
       .lte('report_date', end)
       .order('id', { ascending: true })
       .limit(DETAIL_REPORTS_PAGE_SIZE);
     if (lastId) q = q.gt('id', lastId);
     const { data, error } = await q;
-    if (error) return { data: [], error };
-    const batch = data || [];
+    if (error) {
+      if (!fellBack && isMissingTienVietError(error)) {
+        select = stripTienVietFromSelect(select);
+        fellBack = true;
+        p -= 1;
+        continue;
+      }
+      return { data: [], error };
+    }
+    const batch = (data || []) as unknown as Record<string, unknown>[];
     if (batch.length === 0) break;
     all.push(...batch);
-    const raw = batch[batch.length - 1]?.id;
+    const raw = (batch[batch.length - 1] as { id?: unknown })?.id;
     const next = raw == null ? '' : String(raw);
     if (!next) break;
     lastId = next;

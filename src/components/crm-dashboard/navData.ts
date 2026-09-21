@@ -44,7 +44,7 @@ export const LEADER_NAV: NavGroup[] = [
   {
     label: 'Dashboard',
     items: [
-      { id: 'leader-dash', label: 'Team Overview', icon: '📊' },
+      { id: 'leader-dash', label: 'MAP - Marketing Analytics Platform', icon: '📊' },
       { id: 'leader-rank', label: 'Xếp hạng', icon: '🏆' },
       { id: 'heatmap', label: 'Heatmap Ads/DT', icon: '🌡️' },
     ]

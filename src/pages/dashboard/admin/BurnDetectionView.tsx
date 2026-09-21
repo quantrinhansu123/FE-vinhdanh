@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import type { ReportRow } from '../../../types';
+import { isMissingTienVietError } from '../../../utils/detailReportsVnd';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
@@ -161,23 +162,32 @@ export const BurnDetectionView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-  let q = supabase
-      .from(REPORTS_TABLE)
-      .select(
-        'name, email, code, team, ad_cost, revenue, tien_viet, mess_comment_count, tong_lead, order_count, tong_data_nhan, report_date, ma_tkqc'
-      )
-      .limit(120000);
-    if (!allDates) {
-      q = q.gte('report_date', bounds.start).lte('report_date', bounds.end);
+    const baseSelect =
+      'name, email, code, team, ad_cost, revenue, tien_viet, mess_comment_count, tong_lead, order_count, tong_data_nhan, report_date, ma_tkqc';
+    const fallbackSelect =
+      'name, email, code, team, ad_cost, revenue, mess_comment_count, tong_lead, order_count, tong_data_nhan, report_date, ma_tkqc';
+    const runQuery = async (select: string) => {
+      let qq = supabase.from(REPORTS_TABLE).select(select).limit(120000);
+      if (!allDates) {
+        qq = qq.gte('report_date', bounds.start).lte('report_date', bounds.end);
+      }
+      return qq;
+    };
+    let { data, error: qErr } = await runQuery(baseSelect);
+
+    // DB chưa có cột tien_viet -> query lại không có cột này, logic fallback revenue*25k bên dưới vẫn đúng
+    if (qErr && isMissingTienVietError(qErr)) {
+      const retry = await runQuery(fallbackSelect);
+      data = retry.data;
+      qErr = retry.error;
     }
-    const { data, error: qErr } = await q;
 
     if (qErr) {
       console.error('burn-detect:', qErr);
       setError(qErr.message || 'Không tải được báo cáo.');
       setRows([]);
     } else {
-      setRows((data || []) as ReportRow[]);
+      setRows((data || []) as unknown as ReportRow[]);
     }
     setLoading(false);
   }, [bounds.start, bounds.end]);

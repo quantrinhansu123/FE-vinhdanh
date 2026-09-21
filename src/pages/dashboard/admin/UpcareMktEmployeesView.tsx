@@ -10,6 +10,7 @@ import {
 } from '../../../api/upcareCrm';
 import { supabase } from '../../../api/supabase';
 import { REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboard/mkt/mktDetailReportShared';
+import { isMissingTienVietError } from '../../../utils/detailReportsVnd';
 
 /** Upcare MKT → detail_reports: chỉ cập nhật revenue + tien_viet (không đụng name/email/code/report_date). */
 type UpcareReportsPatch = { revenue: number; tien_viet: number };
@@ -218,7 +219,21 @@ export const UpcareMktEmployeesView: React.FC = () => {
             supabase.from(REPORTS_TABLE).update(patch).eq('id', id)
           )
         );
-        const err = results.find((x) => x.error)?.error;
+        let err = results.find((x) => x.error)?.error;
+        // DB chưa có cột tien_viet -> thử lại chỉ với revenue
+        if (err && isMissingTienVietError(err)) {
+          const retry = await Promise.all(
+            part.map(({ id, patch }) =>
+              supabase.from(REPORTS_TABLE).update({ revenue: patch.revenue }).eq('id', id)
+            )
+          );
+          err = retry.find((x) => x.error)?.error;
+          if (!err) {
+            setError(
+              'Đã lưu revenue (thiếu cột tien_viet nên chưa lưu VND). Hãy chạy supabase/alter_detail_reports_tien_viet.sql.'
+            );
+          }
+        }
         if (err) throw err;
       }
       setError(null);
@@ -238,8 +253,12 @@ export const UpcareMktEmployeesView: React.FC = () => {
       // Ẩn dữ liệu source sau khi đẩy
       setRows([]);
     } catch (e) {
-      const msg = e && typeof e === 'object' && 'message' in e ? String((e as any).message) : 'Ghi dữ liệu thất bại.';
-      setError(msg);
+      const raw = e && typeof e === 'object' && 'message' in e ? String((e as any).message) : 'Ghi dữ liệu thất bại.';
+      setError(
+        isMissingTienVietError(raw)
+          ? `${raw} — Hãy chạy supabase/alter_detail_reports_tien_viet.sql để tạo cột tien_viet.`
+          : raw
+      );
     } finally {
       setSaving(false);
     }
