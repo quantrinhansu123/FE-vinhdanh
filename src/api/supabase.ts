@@ -1,8 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
-const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
+// Vite chỉ expose biến có prefix trong envPrefix (mặc định VITE_).
+// .env hiện tại dùng NEXT_PUBLIC_SUPABASE_URL nên cần đọc cả 2 để tránh rơi vào fallback example.supabase.co -> "Failed to fetch".
+const supabaseUrl =
+	import.meta.env.VITE_SUPABASE_URL?.trim() ||
+	(import.meta.env as Record<string, string | undefined>).NEXT_PUBLIC_SUPABASE_URL?.trim();
+const supabaseAnonKey =
+	import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ||
+	(import.meta.env as Record<string, string | undefined>).NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+const hasSupabaseConfig = isSupabaseConfigured;
 
 if (!hasSupabaseConfig) {
 	console.warn(

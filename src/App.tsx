@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { supabase } from './api/supabase';
+import { supabase, isSupabaseConfigured } from './api/supabase';
 import {
   defaultUpcareMktDateRange,
   fetchUpcareMktEmployees,
@@ -166,19 +166,11 @@ function AppRoutes() {
   };
 
   const handleLogin = async (email: string, password: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const { data, error } = await supabase
-      .from(EMPLOYEES_TABLE)
-      .select('id, name, email, pass, team, avatar_url, vi_tri, ma_ns')
-      .ilike('email', normalizedEmail)
-      .eq('pass', password)
-      .limit(1);
-
-    if (error) {
-      throw new Error(error.message || 'Không thể đăng nhập');
+    if (!isSupabaseConfigured) {
+      throw new Error('Thiếu cấu hình Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY). Kiểm tra file .env.local và restart dev server.');
     }
-
-    const user = (data || [])[0] as {
+    const normalizedEmail = email.trim().toLowerCase();
+    let data: Array<{
       id?: string;
       email?: string;
       name?: string;
@@ -186,7 +178,25 @@ function AppRoutes() {
       avatar_url?: string | null;
       vi_tri?: string | null;
       ma_ns?: string | null;
-    } | undefined;
+    }> | null = null;
+    try {
+      const res = await supabase
+        .from(EMPLOYEES_TABLE)
+        .select('id, name, email, pass, team, avatar_url, vi_tri, ma_ns')
+        .ilike('email', normalizedEmail)
+        .eq('pass', password)
+        .limit(1);
+      if (res.error) throw res.error;
+      data = res.data;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/failed to fetch/i.test(msg)) {
+        throw new Error('Không thể kết nối Supabase (Failed to fetch). Kiểm tra mạng, VITE_SUPABASE_URL, và project Supabase có bị pause không.');
+      }
+      throw e instanceof Error ? e : new Error('Không thể đăng nhập');
+    }
+
+    const user = (data || [])[0];
     if (!user?.email) {
       throw new Error('Sai email hoặc mật khẩu');
     }
