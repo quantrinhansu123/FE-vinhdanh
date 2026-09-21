@@ -1,6 +1,7 @@
 import React from 'react';
 import { Role, NavGroup, UserInfo, ViewId } from './types';
 import { LogOut } from 'lucide-react';
+import fabicoLogo from '../../assets/fabico-logo.png';
 
 interface SidebarProps {
   currentRole: Role;
@@ -32,9 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className="w-[var(--sw)] shrink-0 bg-[var(--bg1)] border-r border-[var(--border)] flex flex-col overflow-hidden z-20">
       <div className="p-[14px_14px_10px] border-b border-[var(--border)] shrink-0">
         <div className="flex items-center gap-[9px] mb-[12px]">
-          <div className="w-[30px] h-[30px] rounded-[7px] bg-gradient-to-br from-[var(--accent)] to-[#5b4dff] flex items-center justify-center text-[13px] font-extrabold text-[#fff] shrink-0">
-            M
-          </div>
+          <img src={fabicoLogo} alt="Fabico" className="w-[30px] h-[30px] rounded-[7px] object-contain bg-white shrink-0" />
           <div>
             <div className="text-[13px] font-extrabold tracking-[0.3px]">
               CRM <em className="text-[var(--accent)] not-italic">Mini Ads</em>
