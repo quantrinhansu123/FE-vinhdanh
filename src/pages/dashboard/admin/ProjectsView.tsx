@@ -160,28 +160,32 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
     void load();
   }, [load]);
 
+  const scopeRows = useMemo(() => {
+    // Tổng quan scope (chưa gồm search/tab): Leader/NV chỉ tính dự án team mình
+    if (canViewAll || !scopedProjectIds) return rows;
+    return rows.filter((p) => scopedProjectIds.includes(p.id));
+  }, [rows, canViewAll, scopedProjectIds]);
+
   const marketsCount = useMemo(() => {
     const s = new Set<string>();
-    for (const p of rows) {
+    for (const p of scopeRows) {
       const t = p.thi_truong?.trim();
       if (t) s.add(t);
     }
     return s.size;
-  }, [rows]);
+  }, [scopeRows]);
 
-  const revenueSum = useMemo(() => rows.reduce((a, p) => a + safeNum(p.doanh_thu_thang ?? p.tong_doanh_so), 0), [rows]);
+  const revenueSum = useMemo(() => scopeRows.reduce((a, p) => a + safeNum(p.doanh_thu_thang ?? p.tong_doanh_so), 0), [scopeRows]);
 
-  const runningCount = useMemo(() => rows.filter((p) => p.trang_thai === 'dang_chay').length, [rows]);
+  const runningCount = useMemo(() => scopeRows.filter((p) => p.trang_thai === 'dang_chay').length, [scopeRows]);
   const runningPct = useMemo(
-    () => (rows.length ? Math.round((runningCount / rows.length) * 100) : 0),
-    [rows.length, runningCount]
+    () => (scopeRows.length ? Math.round((runningCount / scopeRows.length) * 100) : 0),
+    [scopeRows.length, runningCount]
   );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rows.filter((p) => {
-      // Phân cấp: Leader/NV chỉ thấy dự án thuộc team mình
-      if (!canViewAll && scopedProjectIds && !scopedProjectIds.includes(p.id)) return false;
+    return scopeRows.filter((p) => {
       if (tab === 'dang_chay' && p.trang_thai !== 'dang_chay') return false;
       if (tab === 'tam_dung' && p.trang_thai !== 'tam_dung') return false;
       if (!q) return true;
@@ -192,7 +196,7 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
         (p.leader || '').toLowerCase().includes(q)
       );
     });
-  }, [rows, search, tab, canViewAll, scopedProjectIds]);
+  }, [scopeRows, search, tab, canViewAll, scopedProjectIds]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -251,7 +255,7 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
           {scopeBanner ? (
             <p className="mt-2 inline-flex items-center gap-2 rounded-lg border border-[var(--ld-primary)]/25 bg-[color-mix(in_srgb,var(--ld-primary)_10%,transparent)] px-3 py-1.5 text-xs font-semibold text-[var(--ld-primary)]">
               <span className="material-symbols-outlined text-sm">visibility</span>
-              {scopeBanner} · {filtered.length}/{rows.length} dự án
+              {scopeBanner} · {scopeRows.length}/{rows.length} dự án
             </p>
           ) : null}
         </div>

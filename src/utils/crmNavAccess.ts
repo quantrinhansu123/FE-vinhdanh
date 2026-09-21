@@ -90,7 +90,15 @@ export function tierAllowsRole(tier: CrmNavTier, role: Role): boolean {
   return crmAllowedRolesForTier(tier).includes(role);
 }
 
+/**
+ * Admin views mở read-only cho mọi tier (dữ liệu đã scope theo team + nút sửa ẩn):
+ * Leader/NV gõ URL /crm-admin/projects|teams|staff|ad-accounts vẫn xem được phần của team mình.
+ * Các view admin còn lại (budget duyệt, reconcile, alerts...) giữ nguyên theo tier.
+ */
+const READONLY_ADMIN_VIEWS: ReadonlySet<string> = new Set(['projects', 'teams', 'staff', 'ad-accounts']);
+
 export function tierAllowsView(tier: CrmNavTier, view: ViewId): boolean {
+  if (READONLY_ADMIN_VIEWS.has(view)) return true;
   return tierAllowsRole(tier, viewToRole(view));
 }
 
