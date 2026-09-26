@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/crm-dashboard/Sidebar';
 import { Topbar } from '../components/crm-dashboard/Topbar';
 import { NotificationPanel } from '../components/crm-dashboard/NotificationPanel';
-import { Role, ViewId, UserInfo } from '../components/crm-dashboard/types';
-import { ADMIN_NAV, LEADER_NAV, MKT_NAV, VIEW_TITLES } from '../components/crm-dashboard/navData';
+import { ViewId, UserInfo } from '../components/crm-dashboard/types';
+import { ADMIN_NAV, MAP_NAV, VIEW_TITLES } from '../components/crm-dashboard/navData';
 
 // Admin Views
 import { AdminDashboardView } from './dashboard/admin/AdminDashboardView';
@@ -45,14 +45,11 @@ import type { Employee, AuthUser as ReportAuthUser } from '../types';
 import {
   CRM_ADMIN_BASE,
   crmAdminPathForView,
-  defaultViewForRole,
   parseCrmAdminPath,
 } from '../utils/crmAdminRoutes';
 import {
-  crmAllowedRolesForTier,
   crmNavTierFromUser,
   defaultViewForTier,
-  tierAllowsRole,
   tierAllowsView,
 } from '../utils/crmNavAccess';
 
@@ -83,9 +80,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
 
   const parsed = parseCrmAdminPath(location.pathname);
 
-  const tier = useMemo(() => crmNavTierFromUser(reportUser ?? null), [reportUser?.role, reportUser?.vi_tri, reportUser?.email]);
-  const allowedRoles = crmAllowedRolesForTier(tier);
-
+  const tier = useMemo(() => crmNavTierFromUser(reportUser ?? null), [reportUser?.role, reportUser?.vi_tri]);
   useEffect(() => {
     const p = parseCrmAdminPath(location.pathname);
     if (p.ok === false) {
@@ -104,16 +99,16 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
   const currentRole = parsed.ok ? parsed.role : 'admin';
   const currentView = parsed.ok ? parsed.view : 'admin-dash';
 
-  const handleRoleChange = (role: Role) => {
-    if (!tierAllowsRole(tier, role)) return;
-    navigate(crmAdminPathForView(defaultViewForRole(role)));
-  };
-
   const handleViewChange = (view: ViewId) => {
     navigate(crmAdminPathForView(view));
   };
 
-  const navGroups = currentRole === 'admin' ? ADMIN_NAV : currentRole === 'leader' ? LEADER_NAV : MKT_NAV;
+  const navGroups = currentRole === 'admin'
+    ? ADMIN_NAV
+    : MAP_NAV.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => tierAllowsView(tier, item.id)),
+      })).filter((group) => group.items.length > 0);
 
   // Adapt passed props to UserInfo type
   const userInfo: UserInfo = {
@@ -128,20 +123,20 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
   const renderContent = () => {
     switch (currentView) {
       // Admin Views
-      case 'admin-dash': return <AdminDashboardView />;
+      case 'admin-dash': return <AdminDashboardView viewer={reportUser ?? null} />;
       case 'burn-detect': return <BurnDetectionView />;
       case 'alerts': return <AlertsView />;
-      case 'projects': return <ProjectsView viewer={reportUser ?? null} />;
+      case 'projects': return <ProjectsView />;
       case 'project-qc-excel': return <ProjectQcExcelView />;
       case 'reports-raw': return <ReportsRawView />;
-      case 'teams': return <TeamsView viewer={reportUser ?? null} />;
+      case 'teams': return <TeamsView />;
       case 'staff':
-        return <StaffView onEmployeesRefresh={onEmployeesRefresh} viewer={reportUser ?? null} />;
-      case 'ad-accounts': return <AdAccountsView viewer={reportUser ?? null} />;
+        return <StaffView onEmployeesRefresh={onEmployeesRefresh} />;
+      case 'ad-accounts': return <AdAccountsView />;
       case 'agencies': return <AgenciesView />;
       case 'products': return <ProductsView />;
       case 'markets': return <MarketsView />;
-      case 'budget': return <BudgetView viewer={reportUser ?? null} />;
+      case 'budget': return <BudgetView />;
       case 'reconcile': return <ReconcileView />;
       case 'upcare-mkt': return <UpcareMktEmployeesView />;
       case 'admin-ranking': return <AdminRankingView />;
@@ -152,7 +147,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'leader-rank': return <LeaderRankingView viewer={reportUser ?? null} />;
       case 'leader-mkt': return <LeaderMktView viewer={reportUser ?? null} />;
       case 'leader-tkqc': return <LeaderTkqcView viewer={reportUser ?? null} />;
-      case 'leader-budget': return <LeaderBudgetView viewer={reportUser ?? null} />;
+      case 'leader-budget': return <LeaderBudgetView />;
       case 'kpi-target': return <KpiTargetView viewer={reportUser ?? null} />;
       case 'heatmap': return <HeatmapView />;
 
@@ -176,9 +171,6 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
   return (
     <div className="dash-theme flex h-screen w-full overflow-hidden font-sans antialiased">
       <Sidebar
-        allowedRoles={allowedRoles}
-        currentRole={currentRole}
-        onRoleChange={handleRoleChange}
         currentView={currentView}
         onViewChange={handleViewChange}
         user={userInfo}

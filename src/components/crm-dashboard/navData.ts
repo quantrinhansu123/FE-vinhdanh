@@ -44,7 +44,7 @@ export const LEADER_NAV: NavGroup[] = [
   {
     label: 'Dashboard',
     items: [
-      { id: 'leader-dash', label: 'MAP - Marketing Analytics Platform', icon: '📊' },
+      { id: 'leader-dash', label: 'Team Overview', icon: '📊' },
       { id: 'leader-rank', label: 'Xếp hạng', icon: '🏆' },
       { id: 'heatmap', label: 'Heatmap Ads/DT', icon: '🌡️' },
     ]
@@ -58,6 +58,18 @@ export const LEADER_NAV: NavGroup[] = [
       { id: 'kpi-target', label: 'KPI Mục tiêu', icon: '🎯' },
     ]
   }
+];
+
+/** Menu MAP gọn cho khu vực marketing và quản lý team. */
+export const MAP_NAV: NavGroup[] = [
+  {
+    label: 'Dashboard',
+    items: [
+      { id: 'mkt-dash', label: 'Dashboard cá nhân', icon: '' },
+      { id: 'leader-dash', label: 'Dashboard team', icon: '' },
+      { id: 'heatmap', label: 'Chỉ số bán hàng', icon: '' },
+    ],
+  },
 ];
 
 export const MKT_NAV: NavGroup[] = [
@@ -79,7 +91,7 @@ export const MKT_NAV: NavGroup[] = [
 ];
 
 export const VIEW_TITLES: Record<string, string> = {
-  'admin-dash': 'Dashboard Toàn Hệ Thống',
+  'admin-dash': 'Dashboard cá nhân',
   'burn-detect': 'Phát hiện Đốt tiền',
   'alerts': 'Cảnh báo Hệ thống',
   'projects': 'Dự án (Module 1)',
@@ -95,14 +107,14 @@ export const VIEW_TITLES: Record<string, string> = {
   'upcare-mkt': 'MKT Upcare (API)',
   'admin-ranking': 'Bảng xếp hạng',
   'compare': 'So sánh tuần/tháng',
-  'leader-dash': 'Dashboard Team A',
+  'leader-dash': 'Dashboard team',
   'leader-rank': 'Xếp hạng Marketing',
-  'heatmap': 'Heatmap Ads/DT',
+  'heatmap': 'Chỉ số bán hàng',
   'leader-mkt': 'Danh sách Marketing',
   'leader-tkqc': 'Quản lý TKQC',
   'leader-budget': 'Xin Ngân sách',
   'kpi-target': 'KPI Mục tiêu',
-  'mkt-dash': 'Dashboard Cá nhân',
+  'mkt-dash': 'Dashboard cá nhân',
   'mkt-report': 'Nhập Báo cáo · Module 7',
   'mkt-bill': 'Bill Hiệu suất',
   'mkt-history': 'Lịch sử Báo cáo',

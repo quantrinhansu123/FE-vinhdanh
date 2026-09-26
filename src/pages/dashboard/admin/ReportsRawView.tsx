@@ -1,11 +1,66 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import type { ReportRow } from '../../../types';
-import { isMissingTienVietError, reportRevenueVndFallback } from '../../../utils/detailReportsVnd';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 const PAGE_SIZE = 50;
+
+/** Bỏ ký tự [ ] ở hai đầu (lặp) rồi trim — vd [FBC.HuyNN] → FBC.HuyNN, [FBC → FBC. */
+function stripOuterBrackets(raw: string): string {
+  const edge = new Set(['[', ']']);
+  let t = raw.trim();
+  let changed = true;
+  while (changed && t.length) {
+    changed = false;
+    while (t.length && edge.has(t[0])) {
+      t = t.slice(1);
+      changed = true;
+    }
+    while (t.length && edge.has(t[t.length - 1])) {
+      t = t.slice(0, -1);
+      changed = true;
+    }
+    t = t.trim();
+  }
+  return t;
+}
+
+/**
+ * Ưu tiên các khối `[...]` trong chuỗi: tiền tố trước `.` đầu tiên bên trong
+ * (vd `Chạy thiếu[FBC.ChayPhu] - …[FBC.HaiLe] …` → FBC).
+ * Không có `[...]` hoặc không có `.` trong khối → fallback bỏ ngoặc hai đầu cả chuỗi rồi tách `.`.
+ */
+function maDuAnFromPage(page: string | null | undefined): string | null {
+  if (page == null) return null;
+  const raw = page.replace(/\u00a0/g, ' ');
+  const bracketInners = [...raw.matchAll(/\[[^\]]+\]/g)]
+    .map((m) => m[0].slice(1, -1).trim())
+    .filter((s) => s.length > 0);
+  for (const inner of bracketInners) {
+    const dot = inner.indexOf('.');
+    if (dot !== -1) {
+      const prefix = inner.slice(0, dot).trim();
+      if (prefix.length) return prefix;
+    }
+  }
+  if (bracketInners.length > 0) {
+    const s = bracketInners[0].trim();
+    return s.length ? s : null;
+  }
+  const t = stripOuterBrackets(raw.trim());
+  if (!t) return null;
+  const dot = t.indexOf('.');
+  const prefix = dot === -1 ? t : t.slice(0, dot);
+  const s = prefix.trim();
+  return s.length ? s : null;
+}
+
+function normMaDuAnStored(v: string | null | undefined): string | null {
+  if (v == null) return null;
+  const t = String(v).trim();
+  return t.length ? t : null;
+}
 
 function formatVndDots(n: number): string {
   if (!Number.isFinite(n)) return '0';
@@ -38,6 +93,7 @@ export const ReportsRawView: React.FC = () => {
   const [deleting, setDeleting] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
+  const [fillingMaDuAn, setFillingMaDuAn] = useState(false);
 
   const totals = useMemo(() => {
     let mess = 0;
@@ -46,7 +102,7 @@ export const ReportsRawView: React.FC = () => {
     for (const r of rows) {
       mess += Number(r.mess_comment_count || 0);
       ads += Number(r.ad_cost || 0);
-      vnd += reportRevenueVndFallback(r);
+      vnd += Number(r.tien_viet || 0);
     }
     return { mess, ads, vnd };
   }, [rows]);
@@ -54,50 +110,34 @@ export const ReportsRawView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const baseSelect =
-      'id, report_date, name, email, team, product, market, page, ma_tkqc, ad_account, ad_cost, revenue, tien_viet, mess_comment_count, order_count, tong_lead, tong_data_nhan, code';
-    const fallbackSelect =
-      'id, report_date, name, email, team, product, market, page, ma_tkqc, ad_account, ad_cost, revenue, mess_comment_count, order_count, tong_lead, tong_data_nhan, code';
-    const buildQuery = (select: string) => {
-      let qq = supabase
-        .from(REPORTS_TABLE)
-        .select(select)
-        .gte('report_date', applied.from)
-        .lte('report_date', applied.to)
-        .order('report_date', { ascending: false })
-        .limit(5000);
-      if (applied.email) qq = qq.ilike('email', `%${applied.email}%`);
-      if (applied.code) qq = qq.ilike('code', `%${applied.code}%`);
-      if (applied.q) {
-        qq = qq.or(
-          [
-            `name.ilike.%${applied.q}%`,
-            `product.ilike.%${applied.q}%`,
-            `market.ilike.%${applied.q}%`,
-            `page.ilike.%${applied.q}%`,
-            `ad_account.ilike.%${applied.q}%`,
-            `team.ilike.%${applied.q}%`,
-          ].join(',')
-        );
-      }
-      return qq;
-    };
-    let { data, error: qErr } = await buildQuery(baseSelect);
-    let warnMsg: string | null = null;
-    if (qErr && isMissingTienVietError(qErr)) {
-      const retry = await buildQuery(fallbackSelect);
-      data = retry.data;
-      qErr = retry.error;
-      if (!qErr) {
-        warnMsg = 'Thiếu cột tien_viet — đang hiển thị tạm bằng revenue*25,000. Hãy chạy supabase/alter_detail_reports_tien_viet.sql.';
-      }
+    let q = supabase
+      .from(REPORTS_TABLE)
+      .select(
+        'id, report_date, team, product, market, page, ma_du_an, ma_tkqc, ad_account, ad_cost, revenue, tien_viet, mess_comment_count, order_count, tong_lead, tong_data_nhan, code'
+      )
+      .gte('report_date', applied.from)
+      .lte('report_date', applied.to)
+      .order('report_date', { ascending: false })
+      .limit(5000);
+    if (applied.email) q = q.ilike('email', `%${applied.email}%`);
+    if (applied.code) q = q.ilike('code', `%${applied.code}%`);
+    if (applied.q) {
+      q = q.or(
+        [
+          `product.ilike.%${applied.q}%`,
+          `market.ilike.%${applied.q}%`,
+          `page.ilike.%${applied.q}%`,
+          `ad_account.ilike.%${applied.q}%`,
+          `team.ilike.%${applied.q}%`,
+        ].join(',')
+      );
     }
+    const { data, error: qErr } = await q;
     if (qErr) {
       setError(qErr.message || 'Không tải được dữ liệu.');
       setRows([]);
     } else {
-      setRows((data || []) as unknown as ReportRow[]);
-      setError(warnMsg);
+      setRows((data || []) as ReportRow[]);
     }
     setLoading(false);
     setPage(1);
@@ -185,7 +225,6 @@ export const ReportsRawView: React.FC = () => {
       if (applied.q) {
         q = q.or(
           [
-            `name.ilike.%${applied.q}%`,
             `product.ilike.%${applied.q}%`,
             `market.ilike.%${applied.q}%`,
             `page.ilike.%${applied.q}%`,
@@ -254,13 +293,58 @@ export const ReportsRawView: React.FC = () => {
       window.alert(`Đã cập nhật tien_viet cho ${done} dòng.`);
       await load();
     } catch (e) {
-      const raw = e instanceof Error ? e.message : String(e);
-      const hint = isMissingTienVietError(raw)
-        ? `${raw} — Hãy chạy supabase/alter_detail_reports_tien_viet.sql trong Supabase SQL Editor để tạo cột.`
-        : raw;
-      window.alert(`Lỗi backfill tien_viet: ${hint}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      window.alert(`Lỗi backfill tien_viet: ${msg}`);
     } finally {
       setBackfilling(false);
+    }
+  };
+
+  const backfillMaDuAnFromPage = async () => {
+    if (!rows.length) return;
+    const updates: { id: string; ma_du_an: string | null }[] = [];
+    for (const r of rows) {
+      if (!r.id) continue;
+      const next = maDuAnFromPage(r.page);
+      const cur = normMaDuAnStored(r.ma_du_an);
+      if (cur !== next) updates.push({ id: r.id, ma_du_an: next });
+    }
+    if (updates.length === 0) {
+      window.alert('Không có dòng nào cần đổi ma_du_an (đã khớp page hoặc thiếu id).');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Điền ma_du_an từ page (ưu tiên nội dung trong [...] có dấu "." — vd Chạy thiếu[FBC.ChayPhu]… → FBC) cho ${updates.length} dòng (trong ${rows.length} dòng lọc)? Dòng không có page → ma_du_an trống.`
+      )
+    )
+      return;
+    setFillingMaDuAn(true);
+    try {
+      const chunk = 200;
+      let done = 0;
+      for (let i = 0; i < updates.length; i += chunk) {
+        const part = updates.slice(i, i + chunk);
+        const results = await Promise.all(
+          part.map((u) =>
+            supabase.from(REPORTS_TABLE).update({ ma_du_an: u.ma_du_an }).eq('id', u.id)
+          )
+        );
+        const err = results.find((x) => x.error)?.error;
+        if (err) throw err;
+        done += part.length;
+      }
+      window.alert(`Đã cập nhật ma_du_an cho ${done} dòng.`);
+      await load();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const hint =
+        msg.includes('ma_du_an') || msg.includes('column')
+          ? ' Chạy supabase/alter_detail_reports_ma_du_an.sql trên database.'
+          : '';
+      window.alert(`Lỗi điền ma_du_an: ${msg}${hint}`);
+    } finally {
+      setFillingMaDuAn(false);
     }
   };
 
@@ -308,7 +392,7 @@ export const ReportsRawView: React.FC = () => {
           <input
             value={draftSearch}
             onChange={(e) => setDraftSearch(e.target.value)}
-            placeholder="name / product / market / page / ad_account / team…"
+            placeholder="product / market / page / ad_account / team…"
             className="bg-[var(--ld-surface-container-highest)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] px-3 py-2"
           />
         </label>
@@ -346,6 +430,15 @@ export const ReportsRawView: React.FC = () => {
         >
           {backfilling ? 'Đang đồng bộ VND…' : 'Đồng bộ tiền Việt (lọc)'}
         </button>
+        <button
+          type="button"
+          onClick={() => void backfillMaDuAnFromPage()}
+          disabled={loading || fillingMaDuAn || rows.length === 0}
+          className="rounded-lg border border-[var(--ld-outline-variant)]/25 bg-[var(--ld-surface-container)] text-[var(--ld-on-surface-variant)] px-3 py-2 text-sm font-bold"
+          title="ma_du_an: tìm [CODE.tên] trong page, lấy CODE trước .; không có thì như cũ ([FBC.x] hoặc FBC.x)"
+        >
+          {fillingMaDuAn ? 'Đang điền mã DA…' : 'Điền mã DA từ page (lọc)'}
+        </button>
       </div>
 
       {/* Summary totals */}
@@ -372,7 +465,7 @@ export const ReportsRawView: React.FC = () => {
         ) : rows.length === 0 ? (
           <div className="p-6 text-[var(--ld-on-surface-variant)]">Không có dòng nào.</div>
         ) : (
-          <table className="w-full border-collapse min-w-[1400px] text-left">
+          <table className="w-full border-collapse min-w-[1280px] text-left">
             <thead>
               <tr className="border-b border-[var(--ld-outline-variant)]/15 text-[10px] font-extrabold uppercase tracking-widest text-[var(--ld-on-surface-variant)]">
                 <th className="p-2 w-[36px]">
@@ -385,9 +478,9 @@ export const ReportsRawView: React.FC = () => {
                   />
                 </th>
                 <th className="p-2">Ngày</th>
-                <th className="p-2">Name</th>
-                <th className="p-2">Email</th>
                 <th className="p-2">Code</th>
+                <th className="p-2 max-w-[140px]">Page</th>
+                <th className="p-2">Mã DA</th>
                 <th className="p-2 text-right">Ads chi</th>
                 <th className="p-2 text-right">Doanh thu (VNĐ)</th>
                 <th className="p-2 text-right">Mess</th>
@@ -407,11 +500,13 @@ export const ReportsRawView: React.FC = () => {
                     />
                   </td>
                   <td className="p-2">{r.report_date?.slice(0, 10)}</td>
-                  <td className="p-2 max-w-[200px] truncate" title={r.name || ''}>{r.name || '—'}</td>
-                  <td className="p-2 max-w-[220px] truncate" title={r.email || ''}>{r.email || '—'}</td>
-                  <td className="p-2">{(r as any).code || '—'}</td>
+                  <td className="p-2">{(r as { code?: string | null }).code || '—'}</td>
+                  <td className="p-2 max-w-[140px] truncate" title={r.page || undefined}>
+                    {r.page?.trim() ? r.page : '—'}
+                  </td>
+                  <td className="p-2 font-semibold">{r.ma_du_an?.trim() ? r.ma_du_an : '—'}</td>
                   <td className="p-2 text-right">{Number(r.ad_cost || 0).toLocaleString('vi-VN')}</td>
-                  <td className="p-2 text-right">{Number(reportRevenueVndFallback(r)).toLocaleString('vi-VN')}</td>
+                  <td className="p-2 text-right">{Number(r.tien_viet || 0).toLocaleString('vi-VN')}</td>
                   <td className="p-2 text-right">{r.mess_comment_count ?? '—'}</td>
                   <td className="p-2 text-right">{r.order_count ?? '—'}</td>
                   <td className="p-2 text-right">{r.tong_lead ?? r.tong_data_nhan ?? '—'}</td>

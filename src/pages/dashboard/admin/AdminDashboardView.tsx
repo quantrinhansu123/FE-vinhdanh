@@ -1,20 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Eye, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { supabase } from '../../../api/supabase';
 import type { Employee, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
-import { formatCompactVnd } from '../mkt/mktDetailReportShared';
-import { isMissingTienVietError, stripTienVietFromSelect } from '../../../utils/detailReportsVnd';
+import { formatCompactVnd, formatReportDateVi } from '../mkt/mktDetailReportShared';
 
 const REPORTS_TABLE = 'detail_reports';
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
-const STAFF_FOR_DASH_SELECT = 'name, email, team, ma_ns';
+const STAFF_FOR_DASH_SELECT = 'name, team, ma_ns';
 
 const ADMIN_DASH_PAGE_SIZE = 1000;
 const ADMIN_DASH_MAX_PAGES = 500;
 const ADMIN_DASH_DETAIL_SELECT =
-  'id, report_date, name, email, team, code, ad_cost, revenue, tien_viet, order_count, tong_lead, tong_data_nhan';
+  'id, report_date, name, team, code, ad_cost, tien_viet, order_count, tong_lead, tong_data_nhan, mess_comment_count';
 
 async function fetchAllAdminDetailReports(
   start: string,
@@ -22,29 +22,18 @@ async function fetchAllAdminDetailReports(
 ): Promise<{ data: ReportRow[]; error: { message: string } | null }> {
   const all: ReportRow[] = [];
   let lastId: string | null = null;
-  let select = ADMIN_DASH_DETAIL_SELECT;
-  let fellBack = false;
   for (let p = 0; p < ADMIN_DASH_MAX_PAGES; p++) {
     let q = supabase
       .from(REPORTS_TABLE)
-      .select(select)
+      .select(ADMIN_DASH_DETAIL_SELECT)
       .gte('report_date', start)
       .lte('report_date', end)
       .order('id', { ascending: true })
       .limit(ADMIN_DASH_PAGE_SIZE);
     if (lastId) q = q.gt('id', lastId);
     const { data, error } = await q;
-    if (error) {
-      // DB chưa chạy migration alter_detail_reports_tien_viet.sql -> query lại không có cột tien_viet
-      if (!fellBack && isMissingTienVietError(error)) {
-        select = stripTienVietFromSelect(select);
-        fellBack = true;
-        p -= 1;
-        continue;
-      }
-      return { data: [], error: { message: error.message } };
-    }
-    const batch = (data || []) as unknown as ReportRow[];
+    if (error) return { data: [], error: { message: error.message } };
+    const batch = (data || []) as ReportRow[];
     if (!batch.length) break;
     all.push(...batch);
     const raw = batch[batch.length - 1]?.id;
@@ -71,11 +60,22 @@ function endOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
 
-function prevMonthBounds(ref: Date): { start: string; end: string } {
-  const d = new Date(ref.getFullYear(), ref.getMonth() - 1, 1);
+function previousPeriodBounds(start: string, end: string): { start: string; end: string } {
+  const startDate = new Date(`${start}T00:00:00`);
+  const endDate = new Date(`${end}T00:00:00`);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || startDate > endDate) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return { start: toLocalYyyyMmDd(startOfMonth(d)), end: toLocalYyyyMmDd(endOfMonth(d)) };
+  }
+  const days = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+  const previousEnd = new Date(startDate);
+  previousEnd.setDate(previousEnd.getDate() - 1);
+  const previousStart = new Date(previousEnd);
+  previousStart.setDate(previousStart.getDate() - days + 1);
   return {
-    start: toLocalYyyyMmDd(startOfMonth(d)),
-    end: toLocalYyyyMmDd(endOfMonth(d)),
+    start: toLocalYyyyMmDd(previousStart),
+    end: toLocalYyyyMmDd(previousEnd),
   };
 }
 
@@ -91,6 +91,29 @@ function safeNum(v: unknown): number {
   const s = String(v).trim().replace(/[\$,]/g, '').replace(/\s+/g, '');
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Admin dashboard: doanh thu VND chỉ từ cột tien_viet.
+ * Không cộng/quy đổi từ revenue (tránh lẫn tổng doanh số theo đơn / USD trên báo cáo).
+ */
+function adminRevenueVnd(r: Pick<ReportRow, 'tien_viet'>): number {
+  if (r.tien_viet == null) return 0;
+  return Math.round(safeNum(r.tien_viet));
+}
+
+/** Chuẩn hóa mã trên detail_reports / ma_ns: trim, NBSP → space, gộp khoảng trắng liên tiếp. */
+function normalizeDetailCode(raw: string | null | undefined): string {
+  return String(raw ?? '')
+    .replace(/\u00a0/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+/** Key gom nhóm + khớp nhân sự: chữ thường sau normalize; rỗng → null. */
+function codeKey(raw: string | null | undefined): string | null {
+  const n = normalizeDetailCode(raw);
+  return n ? n.toLowerCase() : null;
 }
 
 function tyLeChot(tongData: number, orders: number, tongLead: number): number | null {
@@ -122,30 +145,36 @@ type MarketerAgg = {
 
 type StaffLite = { name: string; team: string };
 
-function buildStaffMaps(rows: Employee[]): { byCode: Map<string, StaffLite>; byEmail: Map<string, StaffLite> } {
+function buildStaffMaps(rows: Employee[]): { byCode: Map<string, StaffLite> } {
   const byCode = new Map<string, StaffLite>();
-  const byEmail = new Map<string, StaffLite>();
   for (const e of rows) {
     const name = (e.name || '').trim();
     const team = (e.team || '').trim();
     const lite: StaffLite = { name, team };
-    const c = e.ma_ns?.trim().toLowerCase();
-    if (c) byCode.set(c, lite);
-    const em = e.email?.trim().toLowerCase();
-    if (em) byEmail.set(em, lite);
+    const k = codeKey(e.ma_ns);
+    if (k) byCode.set(k, lite);
   }
-  return { byCode, byEmail };
+  return { byCode };
 }
 
-function resolveStaffFromMaps(
-  code: string | null,
-  emailLower: string,
-  maps: { byCode: Map<string, StaffLite>; byEmail: Map<string, StaffLite> }
-): StaffLite | null {
-  const c = code?.trim().toLowerCase();
-  if (c && maps.byCode.has(c)) return maps.byCode.get(c)!;
-  if (emailLower && maps.byEmail.has(emailLower)) return maps.byEmail.get(emailLower)!;
+/** Khớp employees.ma_ns ↔ detail_reports.code (cùng normalize + không phân biệt hoa thường). */
+function resolveStaffFromMaps(code: string | null, maps: { byCode: Map<string, StaffLite> }): StaffLite | null {
+  const k = codeKey(code);
+  if (k && maps.byCode.has(k)) return maps.byCode.get(k)!;
   return null;
+}
+
+/** Gom dòng theo code đã chuẩn hóa; bỏ dòng không có code. */
+function groupRowsByMarketerKey(rows: ReportRow[]): Map<string, ReportRow[]> {
+  const map = new Map<string, ReportRow[]>();
+  for (const r of rows) {
+    const k = codeKey(r.code);
+    if (!k) continue;
+    const list = map.get(k);
+    if (list) list.push(r);
+    else map.set(k, [r]);
+  }
+  return map;
 }
 
 const ADS_DT_WARN = 45;
@@ -154,39 +183,94 @@ const ADS_DT_MED = 30;
 const iconFill: React.CSSProperties = { fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" };
 
 function aggregateRows(rows: ReportRow[]) {
-  // Doanh thu quy đổi VND: ưu tiên tien_viet; nếu thiếu, quy đổi từ revenue * 25,000
   let revenue = 0;
   let adCost = 0;
   let tongLead = 0;
   let orders = 0;
   let tongData = 0;
+  let mess = 0;
   for (const r of rows) {
-    const vnd = r.tien_viet != null ? safeNum(r.tien_viet) : Math.round(safeNum(r.revenue) * 25000);
-    revenue += vnd;
+    revenue += adminRevenueVnd(r);
     adCost += safeNum(r.ad_cost);
     tongLead += safeNum(r.tong_lead);
     orders += safeNum(r.order_count);
     tongData += safeNum(r.tong_data_nhan);
+    mess += safeNum(r.mess_comment_count);
   }
   const adsDtPct = revenue > 0 ? (adCost / revenue) * 100 : null;
   const chotPct = tyLeChot(tongData, orders, tongLead);
-  return { revenue, adCost, tongLead, orders, tongData, adsDtPct, chotPct };
+  return { revenue, adCost, tongLead, orders, tongData, mess, adsDtPct, chotPct };
 }
 
-function buildDailySeries(rows: ReportRow[]): { date: string; spend: number; rev: number }[] {
-  const map = new Map<string, { spend: number; rev: number }>();
+type DailyPoint = {
+  date: string;
+  spend: number;
+  rev: number;
+  leads: number;
+  data: number;
+  orders: number;
+  mess: number;
+  adsPct: number;
+};
+
+function buildDailySeries(rows: ReportRow[], from: string, to: string): DailyPoint[] {
+  const map = new Map<string, Omit<DailyPoint, 'date' | 'adsPct'>>();
   for (const r of rows) {
     const d = r.report_date?.slice(0, 10);
     if (!d) continue;
-    const cur = map.get(d) || { spend: 0, rev: 0 };
+    const cur = map.get(d) || { spend: 0, rev: 0, leads: 0, data: 0, orders: 0, mess: 0 };
     cur.spend += safeNum(r.ad_cost);
-    cur.rev += r.tien_viet != null ? safeNum(r.tien_viet) : Math.round(safeNum(r.revenue) * 25000);
+    cur.rev += adminRevenueVnd(r);
+    cur.leads += safeNum(r.tong_lead);
+    cur.data += safeNum(r.tong_data_nhan);
+    cur.orders += safeNum(r.order_count);
+    cur.mess += safeNum(r.mess_comment_count);
     map.set(d, cur);
   }
-  return [...map.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, v]) => ({ date, spend: v.spend, rev: v.rev }));
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, v]) => ({ ...v, date, adsPct: v.rev > 0 ? (v.spend / v.rev) * 100 : 0 }));
+  }
+  const points: DailyPoint[] = [];
+  const cursor = new Date(start);
+  for (let i = 0; cursor <= end && i < 370; i += 1, cursor.setDate(cursor.getDate() + 1)) {
+    const date = toLocalYyyyMmDd(cursor);
+    const value = map.get(date) || { spend: 0, rev: 0, leads: 0, data: 0, orders: 0, mess: 0 };
+    points.push({ ...value, date, adsPct: value.rev > 0 ? (value.spend / value.rev) * 100 : 0 });
+  }
+  return points;
 }
+
+type AdminDashboardProps = { viewer?: { name?: string; email?: string; team?: string; avatar_url?: string | null; vi_tri?: string | null } | null };
+
+const MetricCard: React.FC<{
+  title: string;
+  value: string;
+  detail: string;
+  icon: string;
+  color: string;
+  badge?: string;
+}> = ({ title, value, detail, icon, color, badge }) => (
+  <article className="personal-kpi-card">
+    <div className="flex items-start justify-between gap-3">
+      <div className="personal-kpi-icon" style={{ background: `${color}1a`, color }}>
+        <span className="material-symbols-outlined">{icon}</span>
+      </div>
+      {badge && <span className="personal-kpi-badge" style={{ color, borderColor: `${color}55`, background: `${color}15` }}>{badge}</span>}
+    </div>
+    <div className="relative z-[1] mt-4">
+      <p className="personal-kpi-title">{title}</p>
+      <p className="personal-kpi-value">{value}</p>
+      <p className="personal-kpi-detail">{detail}</p>
+    </div>
+    <div className="personal-kpi-bars" aria-hidden="true">
+      {[22, 35, 27, 48, 40, 68, 54, 78].map((height, index) => (
+        <span key={index} style={{ height: `${height}%`, background: color }} />
+      ))}
+    </div>
+  </article>
+);
 
 function svgPathLine(pts: { x: number; y: number }[]): string {
   if (!pts.length) return '';
@@ -203,7 +287,7 @@ function svgPathArea(pts: { x: number; y: number }[], bottomY: number): string {
   return `${line} L ${last.x} ${bottomY} L ${first.x} ${bottomY} Z`;
 }
 
-export const AdminDashboardView: React.FC = () => {
+export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) => {
   const chartId = React.useId().replace(/:/g, '');
   const navigate = useNavigate();
   const [rows, setRows] = useState<ReportRow[]>([]);
@@ -212,26 +296,41 @@ export const AdminDashboardView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState(false);
+  const [mktDetailKey, setMktDetailKey] = useState<string | null>(null);
 
   const monthRef = useMemo(() => new Date(), []);
   const monthStart = useMemo(() => toLocalYyyyMmDd(startOfMonth(monthRef)), [monthRef]);
   const monthEnd = useMemo(() => toLocalYyyyMmDd(endOfMonth(monthRef)), [monthRef]);
-  const monthLabel = useMemo(
-    () =>
-      monthRef.toLocaleDateString('vi-VN', {
-        month: '2-digit',
-        year: 'numeric',
-      }),
-    [monthRef]
-  );
-  const prevBounds = useMemo(() => prevMonthBounds(monthRef), [monthRef]);
+  const today = useMemo(() => toLocalYyyyMmDd(monthRef), [monthRef]);
+  const [rangeStart, setRangeStart] = useState(monthStart);
+  const [rangeEnd, setRangeEnd] = useState(today);
+  const [rangePreset, setRangePreset] = useState<'yesterday' | '7days' | 'month' | 'custom'>('month');
+  const monthLabel = `${formatReportDateVi(rangeStart)} – ${formatReportDateVi(rangeEnd)}`;
+  const prevBounds = useMemo(() => previousPeriodBounds(rangeStart, rangeEnd), [rangeStart, rangeEnd]);
+
+  const setQuickRange = (preset: 'yesterday' | '7days' | 'month') => {
+    const now = new Date();
+    const end = new Date(now);
+    let start = new Date(now);
+    if (preset === 'yesterday') {
+      start.setDate(start.getDate() - 1);
+      end.setDate(end.getDate() - 1);
+    } else if (preset === '7days') {
+      start.setDate(start.getDate() - 6);
+    } else {
+      start = startOfMonth(now);
+    }
+    setRangeStart(toLocalYyyyMmDd(start));
+    setRangeEnd(toLocalYyyyMmDd(end));
+    setRangePreset(preset);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     const [curFull, prevFull, empRes] = await Promise.all([
-      fetchAllAdminDetailReports(monthStart, monthEnd),
+      fetchAllAdminDetailReports(rangeStart, rangeEnd),
       fetchAllAdminDetailReports(prevBounds.start, prevBounds.end),
       supabase.from(EMPLOYEES_TABLE).select(STAFF_FOR_DASH_SELECT).limit(8000),
     ]);
@@ -264,7 +363,7 @@ export const AdminDashboardView: React.FC = () => {
     setRows(curFull.data);
     setPrevRows(prevRowsData);
     setLoading(false);
-  }, [monthStart, monthEnd, prevBounds.start, prevBounds.end]);
+  }, [rangeStart, rangeEnd, prevBounds.start, prevBounds.end]);
 
   useEffect(() => {
     void load();
@@ -275,9 +374,10 @@ export const AdminDashboardView: React.FC = () => {
 
   const spendDelta = pctChange(totals.adCost, prevTotals.adCost);
   const revDelta = pctChange(totals.revenue, prevTotals.revenue);
-  const roiNow = roiPct(totals.revenue, totals.adCost);
-  const roiPrev = roiPct(prevTotals.revenue, prevTotals.adCost);
-  const roiDelta = roiNow != null && roiPrev != null ? roiNow - roiPrev : null;
+  const cpaMessNow = totals.mess > 0 ? totals.adCost / totals.mess : null;
+  const cpaMessPrev = prevTotals.mess > 0 ? prevTotals.adCost / prevTotals.mess : null;
+  const cpaMessDeltaPct =
+    cpaMessNow != null && cpaMessPrev != null ? pctChange(cpaMessNow, cpaMessPrev) : null;
   // Tổng doanh thu (VND) đã quy đổi
 
   // Bộ lọc ngày cho danh sách code
@@ -302,7 +402,7 @@ export const AdminDashboardView: React.FC = () => {
       }
       const s = new Set<string>();
       for (const r of (data as { code?: string | null }[]) || []) {
-        const c = r.code?.trim();
+        const c = normalizeDetailCode(r.code);
         if (c) s.add(c);
       }
       setCodesList([...s].sort((a, b) => a.localeCompare(b)));
@@ -314,46 +414,40 @@ export const AdminDashboardView: React.FC = () => {
   const staffMaps = useMemo(() => buildStaffMaps(employees), [employees]);
 
   const byMarketer = useMemo(() => {
-    type AggBuild = MarketerAgg & { aggCode: string | null; aggEmail: string };
+    type AggBuild = MarketerAgg & { aggCode: string | null };
     const map = new Map<string, AggBuild>();
     for (const r of rows) {
-      const code = r.code?.trim() || null;
-      const email = r.email?.trim().toLowerCase() || '';
-      const nm = (r.name || '').trim();
-      // Ưu tiên gom theo code; nếu thiếu thì theo email, cuối cùng mới theo name
-      const key = (code || email || nm || `anon-${map.size}`).toLowerCase();
-      const displayName = code || nm || email || '—';
+      const k = codeKey(r.code);
+      if (!k) continue;
+      const codeDisplay = normalizeDetailCode(r.code);
       const cur =
-        map.get(key) ||
+        map.get(k) ||
         ({
-          key,
-          displayName,
+          key: k,
+          displayName: codeDisplay,
           team: r.team?.trim() || null,
-          aggCode: null,
-          aggEmail: '',
+          aggCode: codeDisplay,
           revenue: 0,
           adCost: 0,
           tongLead: 0,
           orders: 0,
           tongData: 0,
         } satisfies AggBuild);
-      // Doanh thu VNĐ: ưu tiên tien_viet; nếu thiếu, quy đổi từ revenue * 25,000
-      cur.revenue += r.tien_viet != null ? safeNum(r.tien_viet) : Math.round(safeNum(r.revenue) * 25000);
+      cur.revenue += adminRevenueVnd(r);
       cur.adCost += safeNum(r.ad_cost);
       cur.tongLead += safeNum(r.tong_lead);
       cur.orders += safeNum(r.order_count);
       cur.tongData += safeNum(r.tong_data_nhan);
-      if (code && !cur.aggCode) cur.aggCode = code;
-      if (email && !cur.aggEmail) cur.aggEmail = email;
+      if (!cur.aggCode && codeDisplay) cur.aggCode = codeDisplay;
       if (!cur.team && r.team?.trim()) cur.team = r.team.trim();
-      if (cur.displayName === '—' && nm) cur.displayName = displayName;
-      map.set(key, cur);
+      map.set(k, cur);
     }
 
     const out: MarketerAgg[] = [];
     for (const m of map.values()) {
-      const staff = resolveStaffFromMaps(m.aggCode, m.aggEmail, staffMaps);
-      const displayName = staff?.name?.trim() ? staff.name.trim() : m.displayName;
+      const staff = resolveStaffFromMaps(m.aggCode, staffMaps);
+      /** Tên MKT chỉ từ nhân sự (ma_ns ↔ code); không dùng email / name trên dòng báo cáo. */
+      const displayName = staff?.name?.trim() || m.aggCode?.trim() || '—';
       const team = staff?.team?.trim() ? staff.team.trim() : m.team || null;
       out.push({
         key: m.key,
@@ -398,7 +492,7 @@ export const AdminDashboardView: React.FC = () => {
     });
   }, [byMarketer]);
 
-  const daily = useMemo(() => buildDailySeries(rows), [rows]);
+  const daily = useMemo(() => buildDailySeries(rows, rangeStart, rangeEnd), [rows, rangeStart, rangeEnd]);
 
   const chartModel = useMemo(() => {
     const W = 700;
@@ -447,6 +541,28 @@ export const AdminDashboardView: React.FC = () => {
     return base.filter((r) => r.status !== 'good');
   }, [rankRows, filterStatus]);
 
+  const rowsByMktKey = useMemo(() => groupRowsByMarketerKey(rows), [rows]);
+
+  const mktDetailRows = useMemo(
+    () => (mktDetailKey ? rowsByMktKey.get(mktDetailKey) ?? [] : []),
+    [mktDetailKey, rowsByMktKey]
+  );
+
+  const mktDetailTitle = useMemo(() => {
+    if (!mktDetailKey) return '';
+    const hit = byMarketer.find((x) => x.key === mktDetailKey);
+    return hit?.displayName || mktDetailKey;
+  }, [mktDetailKey, byMarketer]);
+
+  useEffect(() => {
+    if (!mktDetailKey) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMktDetailKey(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mktDetailKey]);
+
   const exportCsv = useCallback(() => {
     const headers = ['Hạng', 'Tên', 'Team', 'Doanh thu', 'Chi phí', 'Ads/DT%', 'Trạng thái'];
     const lines = [
@@ -470,6 +586,43 @@ export const AdminDashboardView: React.FC = () => {
     a.click();
     URL.revokeObjectURL(a.href);
   }, [tableRows, monthStart]);
+
+  const leadCount = totals.tongLead || totals.tongData;
+  const previousLeadCount = prevTotals.tongLead || prevTotals.tongData;
+  const closeRate = tyLeChot(totals.tongData, totals.orders, totals.tongLead);
+  const costPerLead = leadCount > 0 ? totals.adCost / leadCount : null;
+  const costPerOrder = totals.orders > 0 ? totals.adCost / totals.orders : null;
+  const averageOrderValue = totals.orders > 0 ? totals.revenue / totals.orders : null;
+  const adsRevenuePct = totals.revenue > 0 ? (totals.adCost / totals.revenue) * 100 : null;
+  const deltaText = (delta: number | null) => delta == null ? 'Chưa có kỳ so sánh' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}% so kỳ trước`;
+  const dailyRows = daily.filter((point) => point.spend || point.rev || point.leads || point.data || point.orders || point.mess);
+  const displayName = viewer?.name?.trim() || viewer?.email?.trim() || 'Tài khoản';
+  const displayRole = viewer?.vi_tri?.trim() || viewer?.team?.trim() || 'Marketing';
+  const avatarInitials = displayName.split(/\s+/).filter(Boolean).slice(-2).map((part) => part[0]).join('').toUpperCase();
+
+  const exportDailyCsv = () => {
+    const headers = ['Ngày', 'Tin nhắn', 'Lead', 'Data nhận', 'Đơn', 'Tỷ lệ chốt (%)', 'Doanh số (VND)', 'Chi phí quảng cáo (VND)', 'CP/DT (%)'];
+    const lines = [headers.join(','), ...dailyRows.map((point) => {
+      const close = tyLeChot(point.data, point.orders, point.leads);
+      return [
+        point.date,
+        point.mess,
+        point.leads,
+        point.data,
+        point.orders,
+        close == null ? '' : close.toFixed(2),
+        point.rev,
+        point.spend,
+        point.adsPct.toFixed(2),
+      ].join(',');
+    })];
+    const blob = new Blob(['\ufeff', lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `dashboard-ca-nhan-${rangeStart}-${rangeEnd}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
 
   const TrendPill: React.FC<{
     delta: number | null;
@@ -507,456 +660,195 @@ export const AdminDashboardView: React.FC = () => {
   }
 
   return (
-    <div className="leader-dash-obsidian dash-fade-up text-[var(--ld-on-surface)] -m-[12px] p-6 sm:p-8 space-y-8 pb-12">
-      {error ? (
-        <div className="text-[12px] text-[var(--ld-error)] border border-[var(--ld-error)]/25 rounded-xl px-4 py-3 bg-[color-mix(in_srgb,var(--ld-error)_12%,transparent)] flex flex-wrap items-center gap-3">
+    <div className="leader-dash-obsidian admin-personal-dashboard dash-fade-up -m-[12px] min-h-full px-4 py-4 sm:px-6 sm:py-5">
+      <header className="personal-dashboard-header">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="personal-dashboard-avatar">
+            {viewer?.avatar_url ? <img src={viewer.avatar_url} alt="" className="h-full w-full object-cover" /> : avatarInitials || 'U'}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-white">{displayName}</p>
+            <p className="truncate text-xs text-slate-400">{displayRole}</p>
+          </div>
+          <div className="mx-1 hidden h-10 w-px bg-slate-700 sm:block" />
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-[28px]">Dashboard cá nhân</h1>
+            <p className="mt-0.5 text-xs text-slate-400 sm:text-sm">Tổng quan hiệu quả công việc trong kỳ</p>
+          </div>
+        </div>
+        <div className="personal-period-toolbar">
+          <div className="personal-period-presets" role="group" aria-label="Chọn khoảng thời gian">
+            <CalendarDays size={16} className="mx-1 text-slate-400" />
+            <button type="button" onClick={() => setQuickRange('yesterday')} className={rangePreset === 'yesterday' ? 'active' : ''}>Hôm qua</button>
+            <button type="button" onClick={() => setQuickRange('7days')} className={rangePreset === '7days' ? 'active' : ''}>7 ngày</button>
+            <button type="button" onClick={() => setQuickRange('month')} className={rangePreset === 'month' ? 'active' : ''}>Tháng này</button>
+            <button type="button" onClick={() => setRangePreset('custom')} className={rangePreset === 'custom' ? 'active' : ''}>Tùy chọn</button>
+          </div>
+          <div className="personal-date-range">
+            <CalendarDays size={16} className="shrink-0 text-slate-400" />
+            <input aria-label="Từ ngày" type="date" value={rangeStart} max={rangeEnd || undefined} onChange={(event) => { setRangeStart(event.target.value); setRangePreset('custom'); }} />
+            <span>–</span>
+            <input aria-label="Đến ngày" type="date" value={rangeEnd} min={rangeStart || undefined} max={today} onChange={(event) => { setRangeEnd(event.target.value); setRangePreset('custom'); }} />
+          </div>
+        </div>
+      </header>
+
+      {error && (
+        <div className="my-4 flex flex-wrap items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--ld-primary)] hover:underline"
-          >
-            <RefreshCw size={12} /> Thử lại
-          </button>
+          <button type="button" onClick={() => void load()} className="inline-flex items-center gap-2 font-semibold hover:text-white"><RefreshCw size={14} /> Thử lại</button>
         </div>
-      ) : null}
+      )}
 
-      <p className="text-[10px] text-[var(--ld-on-surface-variant)] leading-relaxed max-w-3xl">
-        <strong className="text-[var(--ld-on-surface)]">Nguồn:</strong>{' '}
-        <code className="text-[var(--ld-primary)]/90">{REPORTS_TABLE}</code> · tháng {monthLabel}. So sánh % là tháng trước (
-        {prevBounds.start.slice(0, 7)}). Tab Admin chỉ dành cho nhân sự có quyền (theo{' '}
-        <code className="text-[var(--ld-primary)]/90">vi_tri</code> / đăng nhập); dữ liệu tải theo lô, không giới hạn 8k dòng.
-      </p>
+      <section className={`personal-alert-banner ${burnMarketers.length ? 'is-alert' : 'is-clear'}`}>
+        <div className="personal-alert-icon">
+          {burnMarketers.length ? <TriangleAlert size={22} /> : <CheckCircle2 size={22} />}
+        </div>
+        <div className="min-w-0">
+          <h2>{burnMarketers.length ? `${burnMarketers.length} chỉ số đang vượt ngưỡng theo dõi` : 'Các chỉ số quảng cáo đang trong ngưỡng theo dõi'}</h2>
+          <p>{burnMarketers.length
+            ? `CP/DT từ ${ADS_DT_WARN}% trở lên ở ${burnMarketers.slice(0, 4).map((item) => item.displayName).join(', ')}${burnMarketers.length > 4 ? ` và ${burnMarketers.length - 4} nhân sự khác` : ''}.`
+            : `Chưa ghi nhận nhân sự có CP/DT từ ${ADS_DT_WARN}% trong khoảng ${monthLabel}.`}</p>
+          <p>{rows.length ? `${rows.length.toLocaleString('vi-VN')} dòng báo cáo · ${activeCampaigns} nhân sự có dữ liệu` : 'Chưa có dữ liệu báo cáo trong khoảng thời gian đã chọn.'}</p>
+        </div>
+      </section>
 
-      {/* Summary metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-[var(--ld-surface-container-low)] p-6 rounded-xl flex flex-col justify-between hover:bg-[var(--ld-surface-container-high)] transition-all border border-[var(--ld-outline-variant)]/10">
-          <div className="flex justify-between items-start mb-4 gap-2">
-            <div className="p-2 bg-[color-mix(in_srgb,var(--ld-error-container)_20%,transparent)] rounded-lg">
-              <span className="material-symbols-outlined text-[var(--ld-error)]" style={iconFill}>
-                payments
-              </span>
-            </div>
-            <TrendPill delta={spendDelta} invert />
-          </div>
+      <section className="personal-kpi-grid" aria-label="Chỉ số tổng quan">
+        <MetricCard title="Doanh số" value={formatCompactVnd(totals.revenue)} detail={deltaText(revDelta)} icon="bar_chart" color="#09c987" badge="Doanh thu" />
+        <MetricCard title="Chi phí quảng cáo" value={formatCompactVnd(totals.adCost)} detail={deltaText(spendDelta)} icon="database" color="#1688ff" badge="Chi phí" />
+        <MetricCard title="CP/DT" value={adsRevenuePct == null ? '—' : `${adsRevenuePct.toFixed(1)}%`} detail={`Ngưỡng theo dõi: ${ADS_DT_WARN}%`} icon="pie_chart" color={adsRevenuePct != null && adsRevenuePct >= ADS_DT_WARN ? '#ff4f63' : '#ff9d17'} badge={adsRevenuePct == null ? 'Chưa có dữ liệu' : adsRevenuePct >= ADS_DT_WARN ? 'Cần chú ý' : 'Trong ngưỡng'} />
+        <MetricCard title="Tin nhắn" value={Math.round(totals.mess).toLocaleString('vi-VN')} detail={`${deltaText(pctChange(totals.mess, prevTotals.mess))} · theo báo cáo`} icon="forum" color="#7963ff" badge="Tương tác" />
+        <MetricCard title="Lead" value={Math.round(leadCount).toLocaleString('vi-VN')} detail={deltaText(pctChange(leadCount, previousLeadCount))} icon="groups" color="#1389f5" badge="Khách hàng tiềm năng" />
+        <MetricCard title="Đơn hàng" value={Math.round(totals.orders).toLocaleString('vi-VN')} detail={averageOrderValue == null ? 'Chưa có đơn hàng trong kỳ' : `Giá trị TB ${formatCompactVnd(averageOrderValue)}`} icon="shopping_cart" color="#ffb321" badge="Chuyển đổi" />
+        <MetricCard title="Tỷ lệ chốt" value={closeRate == null ? '—' : `${closeRate.toFixed(1)}%`} detail={`${Math.round(totals.orders).toLocaleString('vi-VN')} đơn / ${Math.round(totals.tongData || totals.tongLead).toLocaleString('vi-VN')} data`} icon="track_changes" color="#14c5c9" badge="Hiệu quả" />
+        <MetricCard title="CPL" value={costPerLead == null ? '—' : formatCompactVnd(costPerLead)} detail="Chi phí quảng cáo / lead" icon="person_search" color="#37a7ff" badge="Chi phí / lead" />
+      </section>
+
+      <section className="personal-panel">
+        <div className="personal-panel-heading">
           <div>
-            <p className="leader-dash-label text-xs text-[var(--ld-on-surface-variant)] uppercase tracking-wider mb-1">Tổng chi tiêu</p>
-            <h3 className="text-2xl font-extrabold text-[var(--ld-on-surface)]" style={{ fontFamily: '"Inter", sans-serif' }}>
-              {formatVndDots(totals.adCost)} <span className="text-sm font-medium text-[var(--ld-on-surface-variant)]">VND</span>
-            </h3>
-            {totals.adsDtPct != null ? (
-              <p className="text-[10px] text-[var(--ld-on-surface-variant)] mt-1">Ads/DT: {totals.adsDtPct.toFixed(1)}%</p>
-            ) : null}
+            <h2>Doanh thu, chi phí và tỷ lệ CP/DT theo ngày</h2>
+            <p>{monthLabel} · {dailyRows.length} ngày có dữ liệu</p>
+          </div>
+          <div className="personal-chart-legend">
+            <span><i className="legend-revenue" />Doanh thu</span>
+            <span><i className="legend-spend" />Chi phí quảng cáo</span>
+            <span><i className="legend-ratio" />CP/DT</span>
           </div>
         </div>
-
-        <div className="bg-[var(--ld-surface-container-low)] p-6 rounded-xl flex flex-col justify-between hover:bg-[var(--ld-surface-container-high)] transition-all border border-[var(--ld-outline-variant)]/10">
-          <div className="flex justify-between items-start mb-4 gap-2">
-            <div className="p-2 bg-[color-mix(in_srgb,var(--ld-secondary-container)_20%,transparent)] rounded-lg">
-              <span className="material-symbols-outlined text-[var(--ld-secondary)]" style={iconFill}>
-                account_balance_wallet
-              </span>
-            </div>
-            <TrendPill delta={revDelta} goodUp />
-          </div>
-          <div>
-            <p className="leader-dash-label text-xs text-[var(--ld-on-surface-variant)] uppercase tracking-wider mb-1">Tổng doanh thu</p>
-            <h3 className="text-2xl font-extrabold text-[var(--ld-on-surface)]" style={{ fontFamily: '"Inter", sans-serif' }}>
-              {formatVndDots(totals.revenue)} <span className="text-sm font-medium text-[var(--ld-on-surface-variant)]">VNĐ</span>
-            </h3>
-          </div>
-        </div>
-
-        <div className="bg-[var(--ld-surface-container-low)] p-6 rounded-xl flex flex-col justify-between hover:bg-[var(--ld-surface-container-high)] transition-all border border-[var(--ld-outline-variant)]/10">
-          <div className="flex justify-between items-start mb-4 gap-2">
-            <div className="p-2 bg-[color-mix(in_srgb,var(--ld-tertiary-container)_20%,transparent)] rounded-lg">
-              <span className="material-symbols-outlined text-[var(--ld-tertiary)]" style={iconFill}>
-                analytics
-              </span>
-            </div>
-            {roiDelta != null && Number.isFinite(roiDelta) ? (
-              <span
-                className={`leader-dash-label text-xs font-bold flex items-center px-2 py-1 rounded-full ${
-                  roiDelta >= 0
-                    ? 'text-[var(--ld-secondary)] bg-[color-mix(in_srgb,var(--ld-secondary-container)_10%,transparent)]'
-                    : 'text-[var(--ld-error)] bg-[color-mix(in_srgb,var(--ld-error-container)_10%,transparent)]'
-                }`}
-              >
-                <span className="material-symbols-outlined text-xs mr-1">{roiDelta >= 0 ? 'trending_up' : 'trending_down'}</span>
-                {roiDelta >= 0 ? '+' : ''}
-                {roiDelta.toFixed(2)} điểm %
-              </span>
-            ) : (
-              <span className="leader-dash-label text-xs font-bold text-[var(--ld-on-surface-variant)] bg-[color-mix(in_srgb,var(--ld-on-surface-variant)_8%,transparent)] px-2 py-1 rounded-full">
-                —
-              </span>
-            )}
-          </div>
-          <div>
-            <p className="leader-dash-label text-xs text-[var(--ld-on-surface-variant)] uppercase tracking-wider mb-1">ROI tổng thể</p>
-            <h3 className="text-2xl font-extrabold text-[var(--ld-on-surface)]" style={{ fontFamily: '"Inter", sans-serif' }}>
-              {roiNow != null ? `${roiNow.toFixed(2)}%` : '—'}
-            </h3>
-            <p className="text-[10px] text-[var(--ld-on-surface-variant)] mt-1 italic">(DT − Chi) / Chi · tháng hiện tại</p>
-          </div>
-        </div>
-
-        <div className="bg-[var(--ld-surface-container-low)] p-6 rounded-xl flex flex-col justify-between hover:bg-[var(--ld-surface-container-high)] transition-all border border-[var(--ld-outline-variant)]/10">
-          <div className="flex justify-between items-start mb-4 gap-2">
-            <div className="p-2 bg-[color-mix(in_srgb,var(--ld-primary-container)_20%,transparent)] rounded-lg">
-              <span className="material-symbols-outlined text-[var(--ld-primary)]" style={iconFill}>
-                rocket_launch
-              </span>
-            </div>
-            <span className="leader-dash-label text-xs font-bold text-[var(--ld-primary)] flex items-center bg-[color-mix(in_srgb,var(--ld-primary-container)_10%,transparent)] px-2 py-1 rounded-full border border-[var(--ld-primary)]/20">
-              Active
-            </span>
-          </div>
-          <div>
-            <p className="leader-dash-label text-xs text-[var(--ld-on-surface-variant)] uppercase tracking-wider mb-1">MKT có dữ liệu</p>
-            <h3 className="text-2xl font-extrabold text-[var(--ld-on-surface)]" style={{ fontFamily: '"Inter", sans-serif' }}>
-              {activeCampaigns}
-            </h3>
-            <p className="text-[10px] text-[var(--ld-on-surface-variant)] mt-1">
-              Cảnh báo Ads/DT ≥ {ADS_DT_WARN}%: <span className="text-[var(--ld-error)] font-bold">{burnMarketers.length}</span>
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Danh sách toàn bộ code với bộ lọc theo ngày */}
-      <div className="bg-[var(--ld-surface-container-low)] p-4 rounded-xl border border-[var(--ld-outline-variant)]/10 space-y-3">
-        <div className="flex items-end gap-3 flex-wrap">
-          <label className="flex flex-col gap-1">
-            <span className="leader-dash-label text-[10px] uppercase tracking-widest font-bold text-[var(--ld-on-surface-variant)]">
-              Từ ngày
-            </span>
-            <input
-              type="date"
-              value={codesFrom}
-              onChange={(e) => setCodesFrom(e.target.value || monthStart)}
-              className="bg-[var(--ld-surface-container-highest)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] px-3 py-2"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="leader-dash-label text-[10px] uppercase tracking-widest font-bold text-[var(--ld-on-surface-variant)]">
-              Đến ngày
-            </span>
-            <input
-              type="date"
-              value={codesTo}
-              onChange={(e) => setCodesTo(e.target.value || monthEnd)}
-              className="bg-[var(--ld-surface-container-highest)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] px-3 py-2"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void loadCodes()}
-            disabled={codesLoading}
-            className="rounded-lg bg-[var(--ld-primary)] text-[var(--ld-on-primary)] px-4 py-2 text-sm font-bold uppercase tracking-widest"
-          >
-            {codesLoading ? 'Đang tải…' : 'Lấy danh sách'}
-          </button>
-          <label className="flex items-center gap-2 text-[12px] text-[var(--ld-on-surface-variant)]">
-            <input
-              type="checkbox"
-              checked={codesAll}
-              onChange={(e) => setCodesAll(e.target.checked)}
-              className="accent-[var(--ld-primary)]"
-            />
-            Bỏ lọc ngày (lấy tất cả)
-          </label>
-          <p className="leader-dash-label text-xs text-[var(--ld-on-surface-variant)]">
-            Mã nhân sự (code): {codesList.length}
-          </p>
-        </div>
-        {codesList.length === 0 ? (
-          <p className="text-[12px] text-[var(--ld-on-surface-variant)]">Chưa có mã code trong phạm vi lọc.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {codesList.map((c) => (
-              <span
-                key={c}
-                className="text-[12px] font-bold px-2 py-1 rounded bg-[color-mix(in_srgb,var(--ld-surface-container-highest)_40%,transparent)] text-[var(--ld-on-surface)] border border-[var(--ld-outline-variant)]/20"
-              >
-                {c}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-12 gap-8 items-start">
-        <section className="col-span-12 lg:col-span-8 bg-[var(--ld-surface-container-low)] rounded-xl p-6 sm:p-8 overflow-hidden border border-[var(--ld-outline-variant)]/10">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
-            <div>
-              <h2 className="text-xl font-bold text-[var(--ld-on-surface)]" style={{ fontFamily: '"Inter", sans-serif' }}>
-                Chi tiêu quảng cáo vs Doanh thu theo thời gian
-              </h2>
-              <p className="text-sm text-[var(--ld-on-surface-variant)] leader-dash-label mt-1">
-                Gộp theo ngày trong tháng {monthLabel} · {daily.length} ngày có dữ liệu
-              </p>
-            </div>
-            <div className="flex gap-6 shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-[var(--ld-error)]" />
-                <span className="text-xs text-[var(--ld-on-surface-variant)] leader-dash-label">Chi tiêu</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-[var(--ld-secondary)]" />
-                <span className="text-xs text-[var(--ld-on-surface-variant)] leader-dash-label">Doanh thu</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative h-[320px] w-full flex items-end justify-between px-1">
-            {daily.length === 0 ? (
-              <div className="absolute inset-0 flex items-center justify-center text-sm text-[var(--ld-on-surface-variant)]">
-                Chưa có điểm dữ liệu theo ngày trong tháng.
-              </div>
-            ) : (
-              <>
-                <div className="absolute left-0 top-0 bottom-6 flex flex-col justify-between text-[10px] text-[var(--ld-on-surface-variant)]/50 leader-dash-label w-8 text-right pr-1">
-                  {chartModel.yLabels.map((lb, i) => (
-                    <span key={i}>{lb}</span>
-                  ))}
-                </div>
-                <div className="absolute inset-0 left-8 bottom-6 flex flex-col justify-between pointer-events-none">
-                  {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="border-b border-[var(--ld-outline-variant)]/10 w-full" />
-                  ))}
-                </div>
-                <svg
-                  className="absolute inset-0 left-8 h-[calc(100%-1.5rem)] w-[calc(100%-2rem)]"
-                  viewBox={`0 0 ${chartModel.W} ${chartModel.H}`}
-                  preserveAspectRatio="none"
-                >
-                  <defs>
-                    <linearGradient id={`adminGradSpend-${chartId}`} x1="0%" x2="0%" y1="0%" y2="100%">
-                      <stop offset="0%" stopColor="#ff716c" stopOpacity={1} />
-                      <stop offset="100%" stopColor="#ff716c" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id={`adminGradRev-${chartId}`} x1="0%" x2="0%" y1="0%" y2="100%">
-                      <stop offset="0%" stopColor="#69f6b8" stopOpacity={1} />
-                      <stop offset="100%" stopColor="#69f6b8" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <path
-                    d={svgPathArea(chartModel.spendPts, chartModel.H - chartModel.padB)}
-                    fill={`url(#adminGradSpend-${chartId})`}
-                    opacity={0.12}
-                  />
-                  <path
-                    d={svgPathArea(chartModel.revPts, chartModel.H - chartModel.padB)}
-                    fill={`url(#adminGradRev-${chartId})`}
-                    opacity={0.12}
-                  />
-                  <path
-                    d={svgPathLine(chartModel.spendPts)}
-                    fill="none"
-                    stroke="#ff716c"
-                    strokeWidth={2.5}
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d={svgPathLine(chartModel.revPts)}
-                    fill="none"
-                    stroke="#69f6b8"
-                    strokeWidth={2.5}
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </>
-            )}
-          </div>
-          {daily.length > 0 && (
-            <div className="mt-2 flex justify-between pl-8 pr-2 text-[10px] text-[var(--ld-on-surface-variant)] leader-dash-label uppercase tracking-widest">
-              {chartModel.xTickLabels.map((lb, i) => (
-                <span key={i}>{lb}</span>
-              ))}
-            </div>
+        <div className="personal-chart-wrap">
+          {dailyRows.length === 0 ? (
+            <div className="flex h-full min-h-[260px] items-center justify-center text-sm text-slate-400">Chưa có dữ liệu trong khoảng thời gian này.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={dailyRows} margin={{ top: 12, right: 10, bottom: 4, left: 8 }}>
+                <CartesianGrid stroke="#20324a" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" tickFormatter={(value) => String(value).slice(8, 10)} tick={{ fill: '#a8bad2', fontSize: 11 }} axisLine={{ stroke: '#263a54' }} tickLine={false} />
+                <YAxis yAxisId="money" tickFormatter={(value) => formatCompactVnd(Number(value))} tick={{ fill: '#a8bad2', fontSize: 10 }} axisLine={false} tickLine={false} width={56} />
+                <YAxis yAxisId="ratio" orientation="right" tickFormatter={(value) => `${Number(value).toFixed(0)}%`} tick={{ fill: '#a8bad2', fontSize: 10 }} axisLine={false} tickLine={false} width={42} />
+                <Tooltip
+                  contentStyle={{ background: '#101b2b', border: '1px solid #28405e', borderRadius: 10, color: '#e7efff' }}
+                  labelFormatter={(label) => formatReportDateVi(String(label))}
+                  formatter={(value, name) => [String(name) === 'CP/DT' ? `${Number(value).toFixed(1)}%` : formatCompactVnd(Number(value)), String(name)]}
+                />
+                <Legend wrapperStyle={{ color: '#c6d5eb', fontSize: 12 }} />
+                <ReferenceLine yAxisId="ratio" y={ADS_DT_WARN} stroke="#ff4e87" strokeDasharray="6 5" />
+                <Bar yAxisId="money" dataKey="rev" name="Doanh thu" fill="#1cc98a" radius={[3, 3, 0, 0]} maxBarSize={18} />
+                <Bar yAxisId="money" dataKey="spend" name="Chi phí quảng cáo" fill="#3978ff" radius={[3, 3, 0, 0]} maxBarSize={18} />
+                <Line yAxisId="ratio" type="monotone" dataKey="adsPct" name="CP/DT" stroke="#ff8a13" strokeWidth={2.5} dot={{ r: 3, fill: '#ff8a13', stroke: '#071426', strokeWidth: 1 }} activeDot={{ r: 5 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
           )}
-        </section>
-
-        <aside className="col-span-12 lg:col-span-4 bg-[var(--ld-surface-container-low)] rounded-xl p-6 border border-[var(--ld-outline-variant)]/10">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-lg font-bold text-[var(--ld-on-surface)]" style={{ fontFamily: '"Inter", sans-serif' }}>
-              Hiệu suất MKT
-            </h2>
-            <button
-              type="button"
-              onClick={() => navigate(crmAdminPathForView('admin-ranking'))}
-              className="text-xs text-[var(--ld-primary)] leader-dash-label hover:underline"
-            >
-              Xem tất cả
-            </button>
-          </div>
-          <div className="space-y-4">
-            {topMarketers.length === 0 ? (
-              <p className="text-xs text-[var(--ld-on-surface-variant)]">Chưa có marketer trong tháng.</p>
-            ) : (
-              topMarketers.map((m) => {
-                const roiM = roiPct(m.revenue, m.adCost);
-                const roiLabel = roiM != null ? `${roiM.toFixed(1)}% ROI` : '—';
-                const roiGood = roiM != null && roiM >= 10;
-                const roiBad = roiM != null && roiM < 0;
-                return (
-                  <div
-                    key={m.key}
-                    className="bg-[var(--ld-surface-container)] p-4 rounded-lg flex items-center justify-between hover:bg-[var(--ld-surface-container-highest)] transition-colors cursor-pointer border border-transparent hover:border-[var(--ld-outline-variant)]/20"
-                    onClick={() => navigate(crmAdminPathForView('admin-ranking'))}
-                    onKeyDown={(e) => e.key === 'Enter' && navigate(crmAdminPathForView('admin-ranking'))}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-full bg-[var(--ld-surface-container-low)] flex items-center justify-center overflow-hidden border border-[var(--ld-outline-variant)]/20 shrink-0 text-sm font-bold text-[var(--ld-primary)]">
-                        {(m.displayName || '?').charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-semibold text-[var(--ld-on-surface)] truncate">{m.displayName}</h4>
-                        <p className="text-[10px] text-[var(--ld-on-surface-variant)] leader-dash-label uppercase tracking-tight truncate">
-                          {m.team || 'Marketing'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0 pl-2">
-                      <p className="text-sm font-bold text-[var(--ld-on-surface)]">{formatCompactVnd(m.revenue)}</p>
-                      <span
-                        className={`text-[10px] font-bold leader-dash-label px-1.5 py-0.5 rounded ${
-                          roiBad
-                            ? 'text-[var(--ld-error)] bg-[color-mix(in_srgb,var(--ld-error)_10%,transparent)]'
-                            : roiGood
-                              ? 'text-[var(--ld-secondary)] bg-[color-mix(in_srgb,var(--ld-secondary)_10%,transparent)]'
-                              : 'text-[var(--ld-tertiary)] bg-[color-mix(in_srgb,var(--ld-tertiary)_10%,transparent)]'
-                        }`}
-                      >
-                        {roiLabel}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          <div className="mt-6 p-4 rounded-lg bg-[var(--ld-surface-container-lowest)] border border-[var(--ld-outline-variant)]/10">
-            <h4 className="text-xs font-bold text-[var(--ld-on-surface-variant)] mb-3 uppercase tracking-widest leader-dash-label">
-              Phân bổ hoạt động (14 ngày gần nhất)
-            </h4>
-            <div className="grid grid-cols-7 gap-1">
-              {heatCells.map((intensity, i) => {
-                const tier = intensity < 0.25 ? 0.2 : intensity < 0.5 ? 0.45 : intensity < 0.75 ? 0.7 : 1;
-                const color =
-                  intensity < 0.15
-                    ? 'bg-[var(--ld-surface-container-highest)]'
-                    : intensity < 0.45
-                      ? 'bg-[var(--ld-secondary)]'
-                      : intensity < 0.75
-                        ? 'bg-[var(--ld-tertiary)]'
-                        : 'bg-[var(--ld-error)]';
-                return <div key={i} className={`h-4 rounded-sm ${color}`} style={{ opacity: 0.25 + tier * 0.55 }} />;
-              })}
-            </div>
-          </div>
-        </aside>
-      </div>
-
-      {/* Detail table */}
-      <div className="bg-[var(--ld-surface-container-low)] rounded-xl p-6 sm:p-8 border border-[var(--ld-outline-variant)]/10">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-          <h2 className="text-lg font-bold text-[var(--ld-on-surface)]" style={{ fontFamily: '"Inter", sans-serif' }}>
-            Danh sách chi tiết (theo MKT)
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={exportCsv}
-              disabled={!tableRows.length}
-              className="bg-[var(--ld-surface-container)] px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--ld-on-surface-variant)] hover:text-[var(--ld-on-surface)] border border-[var(--ld-outline-variant)]/10 transition-colors disabled:opacity-40"
-            >
-              Export CSV
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterStatus((v) => !v)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                filterStatus
-                  ? 'bg-[var(--ld-primary-container)]/30 text-[var(--ld-primary)] border-[var(--ld-primary)]/30'
-                  : 'bg-[var(--ld-surface-container)] text-[var(--ld-on-surface-variant)] hover:text-[var(--ld-on-surface)] border-[var(--ld-outline-variant)]/10'
-              }`}
-            >
-              {filterStatus ? 'Hiện tất cả' : 'Lọc cần tối ưu'}
-            </button>
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="inline-flex items-center gap-1 bg-[var(--ld-surface-container)] px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--ld-on-surface-variant)] border border-[var(--ld-outline-variant)]/10 hover:text-[var(--ld-on-surface)]"
-            >
-              <RefreshCw size={12} />
-              Làm mới
-            </button>
-          </div>
         </div>
-        <div className="overflow-x-auto leader-dash-no-scrollbar">
-          <table className="w-full text-left min-w-[720px]">
-            <thead className="border-b border-[var(--ld-outline-variant)]/10">
-              <tr className="text-[10px] font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest leader-dash-label">
-                <th className="pb-4 px-2">Kênh / Team</th>
-                <th className="pb-4 px-2">MKT</th>
-                <th className="pb-4 px-2">Chi phí</th>
-                <th className="pb-4 px-2">Doanh thu</th>
-                <th className="pb-4 px-2">Ads/DT</th>
-                <th className="pb-4 px-2">Trạng thái</th>
+      </section>
+
+      <section className="personal-panel overflow-hidden">
+        <div className="personal-panel-heading">
+          <div>
+            <h2>Chi tiết theo ngày</h2>
+            <p>Dữ liệu tổng hợp từ detail_reports</p>
+          </div>
+          <button type="button" onClick={exportDailyCsv} disabled={!dailyRows.length} className="personal-export-button">Tải CSV</button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="personal-daily-table">
+            <thead>
+              <tr>
+                <th>Ngày</th><th>Tin nhắn</th><th>Lead</th><th>Data</th><th>Đơn</th><th>Tỷ lệ chốt</th><th>Doanh số</th><th>Chi phí</th><th>CP/DT</th>
               </tr>
             </thead>
             <tbody>
-              {tableRows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-10 text-center text-sm text-[var(--ld-on-surface-variant)]">
-                    {filterStatus ? 'Không có MKT nào ngoài mức “Tốt”.' : `Chưa có dòng trong ${REPORTS_TABLE} cho tháng này.`}
-                  </td>
-                </tr>
-              ) : (
-                tableRows.map(({ m, adsPct, status }) => (
-                  <tr
-                    key={m.key}
-                    className="group border-b border-transparent hover:bg-[var(--ld-surface-container-high)] transition-colors"
-                  >
-                    <td className="py-4 px-2">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[var(--ld-primary)] text-sm">social_leaderboard</span>
-                        <span className="text-sm font-semibold text-[var(--ld-on-surface)]">{m.team || '—'}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-2 text-sm text-[var(--ld-on-surface-variant)]">{m.displayName}</td>
-                    <td className="py-4 px-2 text-sm text-[var(--ld-error)] font-semibold tabular-nums">{formatVndDots(m.adCost)}</td>
-                    <td className="py-4 px-2 text-sm text-[var(--ld-secondary)] font-semibold tabular-nums">{formatVndDots(m.revenue)}</td>
-                    <td className="py-4 px-2 text-sm font-medium tabular-nums text-[var(--ld-on-surface)]">
-                      {m.revenue > 0 ? `${adsPct.toFixed(1)}%` : m.adCost > 0 ? '—' : '0%'}
-                    </td>
-                    <td className="py-4 px-2">
-                      {status === 'bad' ? (
-                        <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-error)_10%,transparent)] text-[var(--ld-error)] uppercase leader-dash-label">
-                          Cần tối ưu
-                        </span>
-                      ) : status === 'med' ? (
-                        <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-tertiary)_10%,transparent)] text-[var(--ld-tertiary)] uppercase leader-dash-label">
-                          Theo dõi
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-secondary)_10%,transparent)] text-[var(--ld-secondary)] uppercase leader-dash-label">
-                          Tốt
-                        </span>
-                      )}
-                    </td>
+              {dailyRows.length === 0 ? (
+                <tr><td colSpan={9} className="py-10 text-center text-slate-400">Chưa có dữ liệu để hiển thị.</td></tr>
+              ) : dailyRows.map((point) => {
+                const pointClose = tyLeChot(point.data, point.orders, point.leads);
+                return (
+                  <tr key={point.date}>
+                    <td>{formatReportDateVi(point.date)}</td>
+                    <td>{Math.round(point.mess).toLocaleString('vi-VN')}</td>
+                    <td>{Math.round(point.leads).toLocaleString('vi-VN')}</td>
+                    <td>{Math.round(point.data).toLocaleString('vi-VN')}</td>
+                    <td>{Math.round(point.orders).toLocaleString('vi-VN')}</td>
+                    <td className={pointClose != null && pointClose >= 10 ? 'metric-positive' : ''}>{pointClose == null ? '—' : `${pointClose.toFixed(1)}%`}</td>
+                    <td className="metric-positive">{formatCompactVnd(point.rev)}</td>
+                    <td>{formatCompactVnd(point.spend)}</td>
+                    <td className={point.adsPct >= ADS_DT_WARN ? 'metric-negative' : ''}>{point.rev > 0 ? `${point.adsPct.toFixed(1)}%` : '—'}</td>
                   </tr>
-                ))
-              )}
+                );
+              })}
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
+
+      <details className="personal-secondary-section">
+        <summary>Hiệu suất theo nhân sự · {rankRows.length}</summary>
+        <div className="overflow-x-auto pt-4">
+          <table className="personal-daily-table">
+            <thead><tr><th>Nhân sự</th><th>Team</th><th>Đơn</th><th>Doanh số</th><th>Chi phí</th><th>CP/DT</th><th>Tình trạng</th><th></th></tr></thead>
+            <tbody>
+              {tableRows.map(({ m, adsPct, status }) => (
+                <tr key={m.key}>
+                  <td>{m.displayName}</td><td>{m.team || '—'}</td><td>{m.orders.toLocaleString('vi-VN')}</td>
+                  <td className="metric-positive">{formatCompactVnd(m.revenue)}</td><td>{formatCompactVnd(m.adCost)}</td>
+                  <td className={status === 'bad' ? 'metric-negative' : ''}>{m.revenue > 0 ? `${adsPct.toFixed(1)}%` : '—'}</td>
+                  <td>{status === 'bad' ? 'Cần theo dõi' : status === 'med' ? 'Theo dõi' : 'Tốt'}</td>
+                  <td><button type="button" onClick={() => setMktDetailKey(m.key)} className="text-sky-300 hover:text-white" aria-label={`Chi tiết ${m.displayName}`}><Eye size={16} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={exportCsv} disabled={!tableRows.length} className="personal-export-button">Tải hiệu suất CSV</button>
+            <button type="button" onClick={() => setFilterStatus((value) => !value)} className="personal-export-button">{filterStatus ? 'Hiện tất cả' : 'Chỉ xem cảnh báo'}</button>
+          </div>
+        </div>
+      </details>
+
+      {mktDetailKey != null ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" role="presentation" onClick={() => setMktDetailKey(null)}>
+          <div className="personal-detail-modal" role="dialog" aria-modal="true" aria-labelledby="admin-mkt-detail-title" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 border-b border-slate-700/70 px-5 py-4">
+              <div className="min-w-0">
+                <h3 id="admin-mkt-detail-title" className="truncate text-base font-bold text-white">Chi tiết báo cáo — {mktDetailTitle}</h3>
+                <p className="mt-1 text-xs text-slate-400">{monthLabel} · {mktDetailRows.length} dòng trong {REPORTS_TABLE}</p>
+              </div>
+              <button type="button" onClick={() => setMktDetailKey(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white" aria-label="Đóng"><X size={18} /></button>
+            </div>
+            <div className="overflow-auto p-4">
+              <table className="personal-daily-table min-w-[680px]">
+                <thead><tr><th>Ngày</th><th>Tên</th><th>Code</th><th>Team</th><th>Chi phí</th><th>Doanh số</th><th>Đơn</th><th>Lead / Data</th></tr></thead>
+                <tbody>{mktDetailRows.map((row, index) => (
+                  <tr key={row.id ? String(row.id) : `${index}-${row.report_date}-${row.code}`}>
+                    <td>{formatReportDateVi(row.report_date?.slice(0, 10) || '')}</td><td>{row.name || '—'}</td><td>{row.code || '—'}</td><td>{row.team || '—'}</td>
+                    <td>{formatCompactVnd(safeNum(row.ad_cost))}</td><td className="metric-positive">{formatCompactVnd(adminRevenueVnd(row))}</td><td>{safeNum(row.order_count)}</td><td>{safeNum(row.tong_lead)} / {safeNum(row.tong_data_nhan)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

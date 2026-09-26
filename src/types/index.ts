@@ -36,6 +36,8 @@ export type ReportRow = {
   market?: string | null;
   /** Page / fanpage — migration alter_detail_reports_page_multiline.sql */
   page?: string | null;
+  /** Mã dự án — ưu tiên [CODE.tên] trong page; fallback bỏ [ ] hai đầu rồi tiền tố trước . — alter_detail_reports_ma_du_an.sql */
+  ma_du_an?: string | null;
   /** Mã TKQC — migration alter_detail_reports_ma_tkqc.sql */
   ma_tkqc?: string | null;
   ad_account?: string | null;
@@ -71,41 +73,7 @@ export type ProjectRow = {
 
 export type ChartGranularity = 'day' | 'week' | 'month' | 'year';
 
-/**
- * Vai trò đăng nhập (AuthUser.role) — phân cấp 4 tầng yêu cầu:
- * admin (siêu quản trị) > director (Giám đốc) > project_manager (Quản lý dự án)
- * > leader (Leader team) > mkt (Nhân viên) > user (fallback hạn chế nhất).
- * 'manager' giữ lại làm alias của 'project_manager' để tương thích dữ liệu cũ.
- */
-export type UserRole =
-  | 'admin'
-  | 'director'
-  | 'project_manager'
-  | 'manager'
-  | 'leader'
-  | 'mkt'
-  | 'user';
-
-/** Giá trị employees.vi_tri chuẩn (dropdown StaffFormModal) */
-export const VI_TRI_OPTIONS = [
-  'Admin',
-  'Giám đốc',
-  'Quản lý dự án',
-  'Leader',
-  'Nhân viên MKT',
-] as const;
-export type ViTri = (typeof VI_TRI_OPTIONS)[number];
-
-/** Nhãn hiển thị cho từng role */
-export const USER_ROLE_LABELS: Record<UserRole, string> = {
-  admin: 'Hệ thống cấp cao',
-  director: 'Giám đốc',
-  project_manager: 'Quản lý dự án',
-  manager: 'Quản lý dự án',
-  leader: 'Leader',
-  mkt: 'Nhân viên MKT',
-  user: 'Người dùng',
-};
+export type UserRole = 'admin' | 'manager' | 'director' | 'user';
 
 export interface AuthUser {
   id: string;
@@ -157,19 +125,6 @@ export type BudgetRequestRow = {
   noi_dung_chuyen_khoan?: string | null;
   muc_dich_chi_tiet?: string | null;
   chung_tu_urls?: string[] | null;
-  
-  // Multi-step approval fields
-  giam_doc_da_duyet?: boolean;
-  giam_doc_duyet_boi?: string | null;
-  giam_doc_duyet_at?: string | null;
-  ke_toan_da_duyet?: boolean;
-  ke_toan_duyet_boi?: string | null;
-  ke_toan_duyet_at?: string | null;
-  da_giai_ngan?: boolean;
-  giai_ngan_boi?: string | null;
-  giai_ngan_at?: string | null;
-  anh_giai_ngan_urls?: string[] | null;
-
   tkqc_accounts?: {
     id: string;
     don_vi: string | null;

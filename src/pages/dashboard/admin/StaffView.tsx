@@ -1,34 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Download, Eye, EyeOff, FileSpreadsheet, Loader2, Trash2, Upload } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
-import type { AuthUser, Employee } from '../../../types';
+import type { Employee } from '../../../types';
 import { StaffFormModal } from './StaffFormModal';
 import { StaffDetailModal } from './StaffDetailModal';
-import { canEditProjects, canViewAllTeams, scopeBannerText } from '../../../utils/roleScope';
+import { downloadStaffExcelTemplate, parseStaffExcelFile, type StaffImportRow } from './staffExcel';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const PAGE_SIZE = 10;
 
 const STAFF_SELECT =
-  'id, name, team, score, avatar_url, email, ma_ns, ngay_bat_dau, vi_tri, so_fanpage, trang_thai, leader, du_an_ten';
-
-function formatDateVn(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = iso.slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return '—';
-  const [y, m, day] = d.split('-');
-  return `${day}/${m}/${y}`;
-}
-
-function workDaysSince(iso: string | null | undefined): number | null {
-  if (!iso) return null;
-  const dt = new Date(iso.slice(0, 10));
-  if (Number.isNaN(dt.getTime())) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  dt.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.floor((today.getTime() - dt.getTime()) / 86400000));
-}
+  'id, name, team, score, avatar_url, email, pass, ma_ns, vi_tri, du_an_ten';
 
 function displayMaNs(row: Employee): string {
   const m = row.ma_ns?.trim();
@@ -41,37 +23,6 @@ function initialsFromName(name: string): string {
   if (!p.length) return '?';
   if (p.length === 1) return p[0].slice(0, 2).toUpperCase();
   return (p[0][0] + p[p.length - 1][0]).toUpperCase();
-}
-
-/** Nhãn + class trạng thái nhân sự (Active / On Leave / …) */
-function statusFlux(tt: string | null | undefined): { label: string; cls: string } {
-  switch (tt) {
-    case 'dang_lam':
-      return {
-        label: 'Active',
-        cls:
-          'inline-flex items-center px-2.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--hrm-tertiary-container)_20%,transparent)] text-[var(--hrm-on-tertiary-container)] text-[11px] font-bold border border-[color-mix(in_srgb,var(--hrm-on-tertiary-container)_30%,transparent)]',
-      };
-    case 'tam_nghi':
-    case 'nghi':
-      return {
-        label: 'On Leave',
-        cls:
-          'inline-flex items-center px-2.5 py-0.5 rounded-full bg-[var(--hrm-surface-variant)] text-[var(--hrm-on-variant)] text-[11px] font-bold border border-white/10',
-      };
-    case 'dot_tien':
-      return {
-        label: 'At risk',
-        cls:
-          'inline-flex items-center px-2.5 py-0.5 rounded-full bg-red-500/15 text-red-300 text-[11px] font-bold border border-red-400/25',
-      };
-    default:
-      return {
-        label: tt?.trim() || '—',
-        cls:
-          'inline-flex items-center px-2.5 py-0.5 rounded-full bg-[var(--hrm-surface-highest)] text-[var(--hrm-on-variant)] text-[11px] font-bold border border-white/10',
-      };
-  }
 }
 
 function downloadStaffCsv(rows: Employee[]) {
@@ -105,10 +56,9 @@ function downloadStaffCsv(rows: Employee[]) {
 
 type StaffViewProps = {
   onEmployeesRefresh?: () => void | Promise<void>;
-  viewer?: AuthUser | null;
 };
 
-export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer = null }) => {
+export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
   const [rows, setRows] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +69,15 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [importRows, setImportRows] = useState<StaffImportRow[]>([]);
+  const [importErrors, setImportErrors] = useState<{ row: number; message: string }[]>([]);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(() => new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const selectPageRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const viewingRef = useRef<Employee | null>(null);
   const editingRef = useRef<Employee | null>(null);
   useEffect(() => {
@@ -153,26 +112,13 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    // Phân cấp: GĐ/QLDA/admin xem tất cả; Leader xem team mình; NV chỉ xem bản thân + cùng team (read-only)
-    let scoped = rows;
-    if (!canViewAllTeams(viewer)) {
-      const vTeam = viewer?.team?.trim() || '';
-      const vEmail = viewer?.email?.trim().toLowerCase() || '';
-      const vId = viewer?.id || '';
-      scoped = rows.filter((r) => {
-        if (vId && r.id === vId) return true;
-        if (vEmail && r.email?.trim().toLowerCase() === vEmail) return true;
-        if (vTeam && r.team?.trim() === vTeam) return true;
-        return false;
-      });
-    }
-    if (!q) return scoped;
-    return scoped.filter((r) =>
+    if (!q) return rows;
+    return rows.filter((r) =>
       [r.name, r.team, r.ma_ns, r.email, r.vi_tri, r.leader, r.du_an_ten]
         .map((x) => (x || '').toLowerCase())
         .some((s) => s.includes(q))
     );
-  }, [rows, search, viewer?.email, viewer?.id, viewer?.role, viewer?.team, viewer?.vi_tri]);
+  }, [rows, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -181,6 +127,14 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
     const start = (p - 1) * PAGE_SIZE;
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, page, totalPages]);
+  const allPageSelected = pageRows.length > 0 && pageRows.every((row) => selectedIds.has(row.id));
+  const somePageSelected = pageRows.some((row) => selectedIds.has(row.id));
+
+  useEffect(() => {
+    if (selectPageRef.current) {
+      selectPageRef.current.indeterminate = somePageSelected && !allPageSelected;
+    }
+  }, [somePageSelected, allPageSelected]);
 
   const stats = useMemo(() => {
     const total = filtered.length;
@@ -222,6 +176,76 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
     void onEmployeesRefresh?.();
   };
 
+  const handleExcelSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setImportMessage(null);
+    setImportRows([]);
+    setImportErrors([]);
+    setError(null);
+    setImportBusy(true);
+    try {
+      const parsed = await parseStaffExcelFile(file);
+      setImportRows(parsed.rows);
+      setImportErrors(parsed.errors);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không đọc được file Excel.');
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const commitExcelImport = async () => {
+    if (!importRows.length || importErrors.length || importBusy) return;
+    setImportBusy(true);
+    setError(null);
+    setImportMessage(null);
+    try {
+      const existing: { ma_ns?: string | null; email?: string | null }[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error: readError } = await supabase
+          .from(EMPLOYEES_TABLE)
+          .select('ma_ns, email')
+          .range(from, from + 999);
+        if (readError) throw readError;
+        existing.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+
+      const knownCodes = new Set(existing.map((row) => row.ma_ns?.trim().toLowerCase()).filter(Boolean));
+      const knownEmails = new Set(existing.map((row) => row.email?.trim().toLowerCase()).filter(Boolean));
+      const freshRows = importRows.filter((row) => {
+        const code = row.ma_ns?.trim().toLowerCase();
+        const email = row.email?.trim().toLowerCase();
+        if ((code && knownCodes.has(code)) || (email && knownEmails.has(email))) return false;
+        if (code) knownCodes.add(code);
+        if (email) knownEmails.add(email);
+        return true;
+      });
+      const skipped = importRows.length - freshRows.length;
+
+      if (!freshRows.length) {
+        setImportMessage(`Không có dòng mới để thêm; đã bỏ qua ${skipped} dòng trùng Mã NS hoặc Email.`);
+        setImportRows([]);
+        return;
+      }
+
+      const { error: insertError } = await supabase.from(EMPLOYEES_TABLE).insert(freshRows);
+      if (insertError) throw insertError;
+      setImportMessage(`Đã thêm ${freshRows.length} nhân sự${skipped ? `, bỏ qua ${skipped} dòng trùng` : ''}.`);
+      setImportRows([]);
+      setImportErrors([]);
+      await load();
+      await onEmployeesRefresh?.();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Không thể nhập dữ liệu Excel.';
+      setError(message);
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   const deleteRow = useCallback(
     async (row: Employee) => {
       const label = row.name?.trim() || displayMaNs(row);
@@ -237,6 +261,13 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
         setError(delErr.message || 'Không xoá được nhân sự.');
         return;
       }
+
+      setSelectedIds((current) => {
+        if (!current.has(row.id)) return current;
+        const next = new Set(current);
+        next.delete(row.id);
+        return next;
+      });
 
       if (viewingRef.current?.id === row.id) {
         setViewing(null);
@@ -259,11 +290,58 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
     void deleteRow(row);
   };
 
+  const toggleSelected = (id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const togglePageSelection = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allPageSelected) pageRows.forEach((row) => next.delete(row.id));
+      else pageRows.forEach((row) => next.add(row.id));
+      return next;
+    });
+  };
+
+  const deleteSelected = async () => {
+    const ids = [...selectedIds];
+    if (!ids.length || bulkDeleting) return;
+    if (!window.confirm(`Bạn có chắc muốn xóa ${ids.length} nhân sự đã chọn? Thao tác này không thể hoàn tác.`)) return;
+
+    setBulkDeleting(true);
+    setError(null);
+    const { error: deleteError } = await supabase.from(EMPLOYEES_TABLE).delete().in('id', ids);
+    setBulkDeleting(false);
+    if (deleteError) {
+      console.error('employees bulk delete:', deleteError);
+      setError(deleteError.message || 'Không xóa được các nhân sự đã chọn.');
+      return;
+    }
+
+    if (viewingRef.current && ids.includes(viewingRef.current.id)) {
+      setViewing(null);
+      setDetailOpen(false);
+    }
+    if (editingRef.current && ids.includes(editingRef.current.id)) {
+      setEditing(null);
+      setFormOpen(false);
+    }
+    setSelectedIds(new Set());
+    void load();
+    void onEmployeesRefresh?.();
+  };
+
   const iconBtn =
     'p-2 rounded-lg text-[var(--hrm-on-variant)] transition-colors active:scale-95 disabled:opacity-40';
 
   return (
     <div className="staff-hrm-flux dash-fade-up text-[var(--hrm-on-surface)] selection:bg-[color-mix(in_srgb,var(--hrm-primary)_30%,transparent)] -m-[12px] px-4 sm:px-8 pb-8 pt-2 max-w-[1600px] mx-auto w-full flex flex-col min-h-0">
+      <input ref={importInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => void handleExcelSelected(event)} />
       {/* Sticky mini bar — chỉ nội dung module (shell đã có sidebar) */}
       <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 py-4 -mx-4 px-4 sm:-mx-8 sm:px-8 mb-2 bg-[color-mix(in_srgb,var(--hrm-bg)_92%,transparent)] backdrop-blur-md border-b border-white/[0.06]">
         <div className="flex items-center gap-4 min-w-0">
@@ -286,12 +364,31 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             type="button"
+            title="Tải mẫu Excel nhân sự"
+            onClick={downloadStaffExcelTemplate}
+            className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-[var(--hrm-on-variant)] transition hover:border-[var(--hrm-primary)]/50 hover:text-[var(--hrm-primary)]"
+          >
+            <Download size={15} />
+            <span className="hidden sm:inline">Tải mẫu Excel</span>
+          </button>
+          <button
+            type="button"
+            title="Nhập danh sách nhân sự từ Excel"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importBusy}
+            className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-[var(--hrm-on-variant)] transition hover:border-[var(--hrm-primary)]/50 hover:text-[var(--hrm-primary)] disabled:opacity-50"
+          >
+            {importBusy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+            <span className="hidden sm:inline">Nhập Excel</span>
+          </button>
+          <button
+            type="button"
             title="Tải CSV (bộ lọc hiện tại)"
             onClick={() => downloadStaffCsv(filtered)}
             disabled={filtered.length === 0}
             className={`${iconBtn} hover:bg-[#1c222c] hover:text-[var(--hrm-primary)]`}
           >
-            <span className="material-symbols-outlined text-xl">file_download</span>
+            <FileSpreadsheet size={18} />
           </button>
           <button
             type="button"
@@ -301,7 +398,6 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span className="material-symbols-outlined">refresh</span>}
           </button>
-          {canEditProjects(viewer) ? (
           <button
             type="button"
             onClick={openCreate}
@@ -309,7 +405,6 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
           >
             Thêm nhân sự
           </button>
-          ) : null}
         </div>
       </header>
 
@@ -321,15 +416,55 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
           <p className="text-sm text-[var(--hrm-on-variant)]">
             Tổng quan và quản lý đội ngũ marketing — đồng bộ mã NS, fanpage, trạng thái với báo cáo MKT.
           </p>
-          {scopeBannerText(viewer) ? (
-            <p className="text-xs font-semibold text-[var(--hrm-primary)]">
-              {scopeBannerText(viewer)} · {filtered.length}/{rows.length} nhân sự
-            </p>
-          ) : null}
         </div>
 
         {error && (
           <div className="text-[11px] text-red-300 border border-red-500/25 rounded-xl px-4 py-3 bg-red-500/10">{error}</div>
+        )}
+
+        {importMessage && (
+          <div className="text-sm text-emerald-200 border border-emerald-400/20 rounded-xl px-4 py-3 bg-emerald-400/[0.07]">
+            {importMessage}
+          </div>
+        )}
+        {(importRows.length > 0 || importErrors.length > 0) && (
+          <section className="rounded-xl border border-white/10 bg-[var(--hrm-surface-low)] p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-bold text-[var(--hrm-on-surface)]">Kiểm tra file Excel</h3>
+                <p className="mt-1 text-xs text-[var(--hrm-on-variant)]">
+                  {importRows.length} dòng hợp lệ{importErrors.length ? ` · ${importErrors.length} lỗi` : ''}. Nhân sự trùng Mã NS hoặc Email sẽ được bỏ qua.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setImportRows([]); setImportErrors([]); }}
+                  className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-[var(--hrm-on-variant)] hover:bg-white/5"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void commitExcelImport()}
+                  disabled={!importRows.length || Boolean(importErrors.length) || importBusy}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--hrm-primary)] px-3 py-2 text-xs font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {importBusy && <Loader2 size={14} className="animate-spin" />}
+                  Thêm {importRows.length} nhân sự
+                </button>
+              </div>
+            </div>
+            {importErrors.length > 0 && (
+              <ul className="mt-4 max-h-40 space-y-1 overflow-y-auto border-t border-white/[0.06] pt-3 text-xs text-red-200">
+                {importErrors.slice(0, 8).map((item, index) => (
+                  <li key={`${item.row}-${index}`}>{item.row > 0 ? `Dòng ${item.row}: ` : ''}{item.message}</li>
+                ))}
+                {importErrors.length > 8 && <li>… và {importErrors.length - 8} lỗi khác</li>}
+                <li className="pt-1 text-red-100/70">Sửa các lỗi trong file rồi chọn lại để nhập.</li>
+              </ul>
+            )}
+          </section>
         )}
 
         {/* Stats — 3 ô bento */}
@@ -403,6 +538,27 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
               />
             </div>
             <div className="flex items-center gap-3 shrink-0">
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void deleteSelected()}
+                  disabled={bulkDeleting}
+                  className="inline-flex items-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 disabled:opacity-50"
+                >
+                  {bulkDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  Xóa đã chọn ({selectedIds.size})
+                </button>
+              )}
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  disabled={bulkDeleting}
+                  className="rounded-xl px-2.5 py-2 text-xs font-medium text-[var(--hrm-on-variant)] hover:bg-white/5 disabled:opacity-50"
+                >
+                  Bỏ chọn
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void load()}
@@ -430,36 +586,27 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
                 <span className="text-sm font-medium">Đang tải nhân sự…</span>
               </div>
             ) : (
-              <table className="w-full text-left border-collapse min-w-[1000px]">
+              <table className="w-full text-left border-collapse min-w-[1120px]">
                 <thead>
                   <tr className="bg-[var(--hrm-surface-low)]">
-                    <th className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[var(--hrm-on-variant)] staff-hrm-headline">
-                      Mã NS
+                    <th className="w-12 px-4 py-4 text-center">
+                      <input
+                        ref={selectPageRef}
+                        type="checkbox"
+                        checked={allPageSelected}
+                        onChange={togglePageSelection}
+                        aria-label="Chọn tất cả nhân sự đang hiển thị"
+                        className="h-4 w-4 cursor-pointer accent-[#75a9f5]"
+                      />
                     </th>
-                    <th className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[var(--hrm-on-variant)] staff-hrm-headline">
-                      Họ tên
-                    </th>
-                    <th className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[var(--hrm-on-variant)] staff-hrm-headline">
-                      Vị trí
-                    </th>
-                    <th className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[var(--hrm-on-variant)] staff-hrm-headline">
-                      Ngày bắt đầu
-                    </th>
-                    <th className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[var(--hrm-on-variant)] text-center staff-hrm-headline">
-                      Ngày làm việc
-                    </th>
-                    <th className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[var(--hrm-on-variant)] staff-hrm-headline">
-                      Team
-                    </th>
-                    <th className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[var(--hrm-on-variant)] text-center staff-hrm-headline">
-                      Fanpage
-                    </th>
-                    <th className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[var(--hrm-on-variant)] staff-hrm-headline">
-                      Trạng thái
-                    </th>
-                    <th className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[var(--hrm-on-variant)] text-right staff-hrm-headline">
-                      Thao tác
-                    </th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Mã NS</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Họ tên</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Team</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Vị trí</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Dự án</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Email</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Mật khẩu</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)] text-right">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.05]">
@@ -481,98 +628,75 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh, viewer
                       </td>
                     </tr>
                   ) : (
-                    pageRows.map((row) => {
-                      const days = workDaysSince(row.ngay_bat_dau);
-                      const fp = row.so_fanpage ?? 0;
-                      const st = statusFlux(row.trang_thai);
-                      return (
-                        <tr
-                          key={row.id}
-                          className="group hover:bg-[color-mix(in_srgb,var(--hrm-surface-highest)_30%,transparent)] transition-colors duration-200"
-                        >
-                          <td className="px-6 py-4 text-sm font-medium text-[var(--hrm-primary-dim)] font-mono">{displayMaNs(row)}</td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="h-10 w-10 rounded-full border border-[var(--hrm-outline-variant)]/30 overflow-hidden shrink-0 bg-[var(--hrm-surface-highest)] flex items-center justify-center text-xs font-bold text-[var(--hrm-on-variant)]">
-                                {row.avatar_url ? (
-                                  <img src={row.avatar_url} alt="" className="h-full w-full object-cover" />
-                                ) : (
-                                  initialsFromName(row.name || '?')
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-bold text-[var(--hrm-on-surface)] leading-tight truncate" title={row.name}>
-                                  {row.name}
-                                </p>
-                                <p className="text-[11px] text-[var(--hrm-on-variant)] truncate" title={row.email || ''}>
-                                  {row.email?.trim() || '—'}
-                                </p>
-                              </div>
+                    pageRows.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="group hover:bg-[color-mix(in_srgb,var(--hrm-surface-highest)_30%,transparent)] transition-colors duration-200"
+                      >
+                        <td className="w-12 px-4 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(row.id)}
+                            onChange={() => toggleSelected(row.id)}
+                            aria-label={`Chọn ${row.name || displayMaNs(row)}`}
+                            className="h-4 w-4 cursor-pointer accent-[#75a9f5]"
+                          />
+                        </td>
+                        <td className="px-5 py-4 text-sm font-medium text-[var(--hrm-primary-dim)] font-mono">{displayMaNs(row)}</td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-9 w-9 rounded-full border border-[var(--hrm-outline-variant)]/30 overflow-hidden shrink-0 bg-[var(--hrm-surface-highest)] flex items-center justify-center text-xs font-bold text-[var(--hrm-on-variant)]">
+                              {row.avatar_url ? <img src={row.avatar_url} alt="" className="h-full w-full object-cover" /> : initialsFromName(row.name || '?')}
                             </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-[var(--hrm-on-variant)] max-w-[160px] truncate" title={row.vi_tri || ''}>
-                            {row.vi_tri?.trim() || '—'}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-[var(--hrm-on-variant)] whitespace-nowrap">{formatDateVn(row.ngay_bat_dau)}</td>
-                          <td className="px-6 py-4 text-sm text-[var(--hrm-on-surface)] text-center font-bold tabular-nums">
-                            {days != null ? days : '—'}
-                          </td>
-                          <td className="px-6 py-4 max-w-[200px]">
-                            {row.team?.trim() ? (
-                              <span className="px-3 py-1 rounded-full bg-[var(--hrm-surface-highest)] text-[11px] font-semibold text-[var(--hrm-on-surface)] uppercase tracking-tighter inline-block truncate max-w-full">
-                                {row.team}
-                              </span>
-                            ) : (
-                              <span className="text-[var(--hrm-on-variant)]">—</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-[var(--hrm-on-surface)] text-center font-bold tabular-nums">{fp}</td>
-                          <td className="px-6 py-4">{st.label !== '—' ? <span className={st.cls}>{st.label}</span> : <span className="text-[var(--hrm-on-variant)]">—</span>}</td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex justify-end gap-1">
+                            <span className="text-sm font-semibold text-[var(--hrm-on-surface)] truncate" title={row.name}>{row.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 max-w-[180px]">
+                          {row.team?.trim() ? (
+                            <span className="inline-flex max-w-full truncate rounded-md bg-[var(--hrm-surface-highest)] px-2.5 py-1 text-xs font-medium text-[var(--hrm-on-surface)]">{row.team}</span>
+                          ) : <span className="text-[var(--hrm-on-variant)]">—</span>}
+                        </td>
+                        <td className="px-5 py-4 max-w-[170px] truncate text-sm text-[var(--hrm-on-variant)]" title={row.vi_tri || ''}>{row.vi_tri?.trim() || '—'}</td>
+                        <td className="px-5 py-4 max-w-[200px] truncate text-sm text-[var(--hrm-on-variant)]" title={row.du_an_ten || ''}>{row.du_an_ten?.trim() || '—'}</td>
+                        <td className="px-5 py-4 max-w-[230px] truncate text-sm text-[var(--hrm-on-variant)]" title={row.email || ''}>{row.email?.trim() || '—'}</td>
+                        <td className="px-5 py-4">
+                          {row.pass?.trim() ? (
+                            <div className="flex items-center gap-2">
+                              <code className="max-w-[150px] truncate rounded bg-[var(--hrm-surface-lowest)] px-2 py-1 text-xs text-[var(--hrm-on-variant)]">
+                                {visiblePasswords.has(row.id) ? row.pass : '••••••••'}
+                              </code>
                               <button
                                 type="button"
-                                onClick={(e) => openView(e, row)}
-                                disabled={deletingId === row.id}
-                                className={`${iconBtn} hover:text-[var(--hrm-primary)] hover:bg-[color-mix(in_srgb,var(--hrm-primary)_10%,transparent)]`}
-                                title="Xem"
-                                aria-label="Xem"
+                                onClick={() => setVisiblePasswords((current) => {
+                                  const next = new Set(current);
+                                  if (next.has(row.id)) next.delete(row.id);
+                                  else next.add(row.id);
+                                  return next;
+                                })}
+                                className="rounded p-1 text-[var(--hrm-on-variant)] hover:bg-white/5 hover:text-[var(--hrm-on-surface)]"
+                                title={visiblePasswords.has(row.id) ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                                aria-label={visiblePasswords.has(row.id) ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                               >
-                                <span className="material-symbols-outlined text-lg">visibility</span>
+                                {visiblePasswords.has(row.id) ? <EyeOff size={15} /> : <Eye size={15} />}
                               </button>
-                              {canEditProjects(viewer) ? (
-                              <button
-                                type="button"
-                                onClick={(e) => openEdit(e, row)}
-                                disabled={deletingId === row.id}
-                                className={`${iconBtn} hover:text-[var(--hrm-primary)] hover:bg-[color-mix(in_srgb,var(--hrm-primary)_10%,transparent)]`}
-                                title="Sửa"
-                                aria-label="Sửa"
-                              >
-                                <span className="material-symbols-outlined text-lg">edit</span>
-                              </button>
-                              ) : null}
-                              {canEditProjects(viewer) ? (
-                              <button
-                                type="button"
-                                onClick={(e) => void handleDelete(e, row)}
-                                disabled={deletingId === row.id}
-                                className={`${iconBtn} hover:text-[var(--hrm-error)] hover:bg-[color-mix(in_srgb,var(--hrm-error)_10%,transparent)]`}
-                                title="Xoá"
-                                aria-label="Xoá"
-                              >
-                                {deletingId === row.id ? (
-                                  <Loader2 size={18} className="animate-spin" />
-                                ) : (
-                                  <span className="material-symbols-outlined text-lg">delete</span>
-                                )}
-                              </button>
-                              ) : null}
                             </div>
-                          </td>
-                        </tr>
-                      );
-                    })
+                          ) : <span className="text-xs text-[var(--hrm-on-variant)]">Chưa đặt</span>}
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <div className="flex justify-end gap-1">
+                            <button type="button" onClick={(e) => openView(e, row)} disabled={deletingId === row.id} className={`${iconBtn} hover:text-[var(--hrm-primary)] hover:bg-[color-mix(in_srgb,var(--hrm-primary)_10%,transparent)]`} title="Xem" aria-label="Xem">
+                              <span className="material-symbols-outlined text-lg">visibility</span>
+                            </button>
+                            <button type="button" onClick={(e) => openEdit(e, row)} disabled={deletingId === row.id} className={`${iconBtn} hover:text-[var(--hrm-primary)] hover:bg-[color-mix(in_srgb,var(--hrm-primary)_10%,transparent)]`} title="Sửa" aria-label="Sửa">
+                              <span className="material-symbols-outlined text-lg">edit</span>
+                            </button>
+                            <button type="button" onClick={(e) => void handleDelete(e, row)} disabled={deletingId === row.id} className={`${iconBtn} hover:text-[var(--hrm-error)] hover:bg-[color-mix(in_srgb,var(--hrm-error)_10%,transparent)]`} title="Xóa" aria-label="Xóa">
+                              {deletingId === row.id ? <Loader2 size={18} className="animate-spin" /> : <span className="material-symbols-outlined text-lg">delete</span>}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>

@@ -503,24 +503,47 @@ optgroup {
 /* /crm-admin/staff — Obsidian Flux HRM (Module 3) */
 .staff-hrm-flux {
   font-family: "Inter", "Roboto", sans-serif;
-  --hrm-bg: #10141a;
-  --hrm-surface: #1c2026;
-  --hrm-surface-low: #181c22;
-  --hrm-surface-lowest: #0a0e14;
-  --hrm-surface-high: #262a31;
-  --hrm-surface-highest: #31353c;
-  --hrm-surface-variant: #31353c;
-  --hrm-on-surface: #dfe2eb;
-  --hrm-on-variant: #bac9cc;
-  --hrm-primary: #c3f5ff;
-  --hrm-primary-container: #00e5ff;
-  --hrm-on-primary: #00363d;
-  --hrm-on-primary-container: #00626e;
-  --hrm-primary-dim: #00daf3;
-  --hrm-tertiary-container: #abd5ff;
-  --hrm-on-tertiary-container: #005d92;
+  --hrm-bg: #0c1119;
+  --hrm-surface: #17202c;
+  --hrm-surface-low: #121a25;
+  --hrm-surface-lowest: #0c121b;
+  --hrm-surface-high: #202c3b;
+  --hrm-surface-highest: #29384a;
+  --hrm-surface-variant: #253447;
+  --hrm-on-surface: #e8edf5;
+  --hrm-on-variant: #a8b5c7;
+  --hrm-primary: #c8ddff;
+  --hrm-primary-container: #4f83d1;
+  --hrm-on-primary: #081b35;
+  --hrm-on-primary-container: #ffffff;
+  --hrm-primary-dim: #8ab4f8;
+  --hrm-tertiary-container: #4a78bb;
+  --hrm-on-tertiary-container: #dbeafe;
   --hrm-error: #ffb4ab;
-  --hrm-outline-variant: #3b494c;
+  --hrm-outline-variant: #334257;
+  --hrm-border: rgba(151, 170, 197, 0.13);
+}
+
+.staff-hrm-flux > header {
+  border-color: var(--hrm-border);
+}
+
+.staff-hrm-flux table thead {
+  background: #151e2a;
+}
+
+.staff-hrm-flux table th {
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  border-bottom: 1px solid var(--hrm-border);
+}
+
+.staff-hrm-flux table tbody tr {
+  border-color: var(--hrm-border);
+}
+
+.staff-hrm-flux table tbody tr:hover {
+  background: rgba(124, 164, 222, 0.055);
 }
 
 .staff-hrm-flux .staff-hrm-headline {
@@ -605,4 +628,184 @@ optgroup {
 .ag-prism-scroll {
   scrollbar-width: thin;
   scrollbar-color: #1c253e #070d1f;
+}
+
+/* Personal analytics dashboard based on the supplied HTML reference. */
+.admin-personal-dashboard {
+  --pd-bg: #07111f;
+  --pd-panel: #0b1728;
+  --pd-panel-2: #0e1c30;
+  --pd-border: #1d3857;
+  --pd-text: #eef4ff;
+  --pd-muted: #9bb0ca;
+  color: var(--pd-text);
+  background: radial-gradient(ellipse at 50% -35%, #132b49 0%, var(--pd-bg) 63%);
+  font-family: Inter, Manrope, sans-serif;
+}
+
+.admin-personal-dashboard .personal-dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 64px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(48, 76, 110, .48);
+}
+
+.admin-personal-dashboard .personal-dashboard-avatar {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #3262ac;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #123d87, #071c48);
+  color: white;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.admin-personal-dashboard .personal-period-toolbar,
+.admin-personal-dashboard .personal-period-presets,
+.admin-personal-dashboard .personal-date-range {
+  display: flex;
+  align-items: center;
+}
+
+.admin-personal-dashboard .personal-period-toolbar { gap: 10px; }
+.admin-personal-dashboard .personal-period-presets,
+.admin-personal-dashboard .personal-date-range {
+  min-height: 40px;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 1px solid #203b60;
+  border-radius: 10px;
+  background: rgba(13, 29, 51, .94);
+}
+
+.admin-personal-dashboard .personal-period-presets button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #c4d3e8;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin-personal-dashboard .personal-period-presets button:hover { background: #172c49; color: white; }
+.admin-personal-dashboard .personal-period-presets button.active { background: #087bff; color: white; }
+.admin-personal-dashboard .personal-date-range { gap: 8px; padding-inline: 10px; color: var(--pd-muted); }
+.admin-personal-dashboard .personal-date-range input {
+  width: 125px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #e7efff;
+  color-scheme: dark;
+  font-size: 12px;
+}
+
+.admin-personal-dashboard .personal-alert-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin: 14px 0 12px;
+  padding: 12px 18px;
+  border: 1px solid;
+  border-radius: 11px;
+}
+
+.admin-personal-dashboard .personal-alert-banner.is-alert { border-color: #9d2542; background: linear-gradient(100deg, rgba(105, 20, 44, .45), rgba(48, 18, 37, .45)); }
+.admin-personal-dashboard .personal-alert-banner.is-clear { border-color: #116849; background: linear-gradient(100deg, rgba(8, 82, 61, .32), rgba(11, 38, 47, .42)); }
+.admin-personal-dashboard .personal-alert-icon { padding-top: 1px; color: #ff5964; }
+.admin-personal-dashboard .personal-alert-banner.is-clear .personal-alert-icon { color: #15d792; }
+.admin-personal-dashboard .personal-alert-banner h2 { margin: 0 0 4px; color: #ff6571; font-size: 16px; font-weight: 750; }
+.admin-personal-dashboard .personal-alert-banner.is-clear h2 { color: #48e0a9; }
+.admin-personal-dashboard .personal-alert-banner p { margin: 2px 0; color: #d5c1ce; font-size: 12px; line-height: 1.5; }
+
+.admin-personal-dashboard .personal-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.admin-personal-dashboard .personal-kpi-card {
+  position: relative;
+  min-height: 132px;
+  overflow: hidden;
+  padding: 13px 15px 12px;
+  border: 1px solid var(--pd-border);
+  border-radius: 11px;
+  background: linear-gradient(145deg, rgba(12, 29, 50, .98), rgba(8, 20, 37, .98));
+  box-shadow: inset 0 1px rgba(255,255,255,.025);
+}
+
+.admin-personal-dashboard .personal-kpi-card::after {
+  position: absolute;
+  right: 12px;
+  bottom: 0;
+  width: 82px;
+  height: 52px;
+  background: linear-gradient(90deg, transparent, rgba(34, 115, 201, .16));
+  content: "";
+  clip-path: polygon(0 85%, 13% 72%, 26% 79%, 39% 42%, 52% 57%, 65% 18%, 78% 36%, 91% 0, 100% 5%, 100% 100%, 0 100%);
+}
+
+.admin-personal-dashboard .personal-kpi-icon { display: grid; width: 46px; height: 46px; flex: 0 0 46px; place-items: center; border-radius: 10px; }
+.admin-personal-dashboard .personal-kpi-icon .material-symbols-outlined { font-size: 25px; }
+.admin-personal-dashboard .personal-kpi-badge { padding: 4px 10px; border: 1px solid; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.admin-personal-dashboard .personal-kpi-title { margin: 0; color: #e7efff; font-size: 13px; font-weight: 700; }
+.admin-personal-dashboard .personal-kpi-value { margin: 6px 0 2px; color: #f5f8ff; font-size: 26px; font-weight: 800; letter-spacing: -.035em; line-height: 1.15; }
+.admin-personal-dashboard .personal-kpi-detail { position: relative; z-index: 1; margin: 0; color: #afc0d8; font-size: 11px; }
+.admin-personal-dashboard .personal-kpi-bars { display: flex; height: 4px; gap: 3px; margin-top: 9px; }
+.admin-personal-dashboard .personal-kpi-bars i { flex: 1; border-radius: 4px; background: currentColor; opacity: .42; }
+
+.admin-personal-dashboard .personal-panel {
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid var(--pd-border);
+  border-radius: 11px;
+  background: linear-gradient(145deg, rgba(10, 24, 43, .96), rgba(7, 19, 35, .97));
+}
+
+.admin-personal-dashboard .personal-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 15px 5px; }
+.admin-personal-dashboard .personal-panel-heading h2 { margin: 0; color: #f0f5ff; font-size: 16px; font-weight: 750; }
+.admin-personal-dashboard .personal-panel-heading p { margin: 3px 0 0; color: var(--pd-muted); font-size: 11px; }
+.admin-personal-dashboard .personal-chart-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; color: #cad8ea; font-size: 11px; }
+.admin-personal-dashboard .personal-chart-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.admin-personal-dashboard .personal-chart-legend i { width: 10px; height: 10px; border-radius: 3px; background: #14cf91; }
+.admin-personal-dashboard .personal-chart-legend .legend-spend { background: #3978ff; }
+.admin-personal-dashboard .personal-chart-legend .legend-ratio { width: 17px; height: 2px; border-radius: 0; background: #ff8a13; }
+.admin-personal-dashboard .personal-chart-wrap { height: 265px; padding: 8px 9px 4px; }
+.admin-personal-dashboard .personal-export-button { padding: 7px 11px; border: 1px solid #294a70; border-radius: 7px; background: #102541; color: #d7e8ff; font-size: 11px; font-weight: 700; cursor: pointer; }
+.admin-personal-dashboard .personal-export-button:hover { border-color: #2189ff; background: #12345b; color: white; }
+.admin-personal-dashboard .personal-export-button:disabled { cursor: not-allowed; opacity: .45; }
+.admin-personal-dashboard .personal-daily-table { width: 100%; border-collapse: separate; border-spacing: 0; color: #d8e4f6; font-size: 11px; white-space: nowrap; }
+.admin-personal-dashboard .personal-daily-table th,
+.admin-personal-dashboard .personal-daily-table td { padding: 7px 10px; border-right: 1px solid rgba(39, 61, 88, .56); border-bottom: 1px solid rgba(39, 61, 88, .56); text-align: center; }
+.admin-personal-dashboard .personal-daily-table th { position: sticky; top: 0; background: #0e1d32; color: #cbd9ee; font-size: 10px; font-weight: 700; }
+.admin-personal-dashboard .personal-daily-table tbody tr:nth-child(odd) { background: rgba(18, 37, 61, .4); }
+.admin-personal-dashboard .personal-daily-table tbody tr:hover { background: rgba(35, 76, 121, .32); }
+.admin-personal-dashboard .personal-daily-table .metric-positive { color: #08d897; font-weight: 700; }
+.admin-personal-dashboard .personal-daily-table .metric-negative { color: #ff5a68; font-weight: 700; }
+.admin-personal-dashboard .personal-secondary-section { margin-top: 12px; padding: 13px 15px; border: 1px solid var(--pd-border); border-radius: 11px; background: var(--pd-panel); }
+.admin-personal-dashboard .personal-secondary-section summary { color: #e8f0ff; font-size: 14px; font-weight: 750; cursor: pointer; }
+.admin-personal-dashboard .personal-detail-modal { width: min(1100px, 100%); max-height: 90vh; overflow: hidden; border: 1px solid #294768; border-radius: 12px; background: #0a1729; box-shadow: 0 24px 80px rgba(0,0,0,.5); }
+
+@media (max-width: 1100px) {
+  .admin-personal-dashboard .personal-dashboard-header { align-items: flex-start; flex-direction: column; }
+  .admin-personal-dashboard .personal-period-toolbar { width: 100%; flex-wrap: wrap; }
+  .admin-personal-dashboard .personal-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .admin-personal-dashboard .personal-period-presets { width: 100%; justify-content: space-between; }
+  .admin-personal-dashboard .personal-period-presets button { padding-inline: 6px; font-size: 10px; }
+  .admin-personal-dashboard .personal-date-range { width: 100%; justify-content: space-around; }
+  .admin-personal-dashboard .personal-date-range input { width: 112px; }
+  .admin-personal-dashboard .personal-kpi-grid { grid-template-columns: 1fr; }
+  .admin-personal-dashboard .personal-panel-heading { align-items: flex-start; flex-direction: column; }
+  .admin-personal-dashboard .personal-chart-legend { gap: 8px; }
+  .admin-personal-dashboard .personal-chart-wrap { height: 230px; }
 }
