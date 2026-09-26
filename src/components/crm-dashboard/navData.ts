@@ -5,6 +5,7 @@ export const ADMIN_NAV: NavGroup[] = [
     label: 'Tổng quan',
     items: [
       { id: 'admin-dash', label: 'Dashboard', icon: '📊' },
+      { id: 'leader-dash', label: 'Dashboard team', icon: '' },
       { id: 'burn-detect', label: 'Phát hiện đốt tiền', icon: '🔥' },
       { id: 'alerts', label: 'Cảnh báo hệ thống', icon: '🚨' },
     ]

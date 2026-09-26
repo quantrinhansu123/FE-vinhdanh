@@ -22,7 +22,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-[16px_14px_14px] border-b border-white/[0.07] shrink-0">
         <div className="flex items-center gap-[10px]">
           <div className="w-[34px] h-[34px] rounded-[8px] bg-gradient-to-br from-[#6d9fe5] to-[#3e659a] flex items-center justify-center text-[9px] font-extrabold tracking-[-0.5px] text-white shrink-0">MAP</div>
-          <div className="min-w-0 text-[11px] font-bold leading-tight text-slate-100">MAP - Marketing Analytic Platform</div>
+          <div className="min-w-0 text-[13px] font-bold leading-[1.25] text-slate-100">MAP - Marketing Analytic Platform</div>
         </div>
       </div>
       <nav className="flex-1 overflow-y-auto p-[10px_8px] custom-scrollbar dash-scrollbar">
