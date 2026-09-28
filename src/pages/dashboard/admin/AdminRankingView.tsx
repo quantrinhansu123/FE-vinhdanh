@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
-import { SectionCard, RankItem } from '../../../components/crm-dashboard/atoms/SharedAtoms';
+import { Loader2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import type { Employee } from '../../../types';
+import { REPORTS_TABLE } from '../mkt/mktDetailReportShared';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+const REPORTS_FROM = 'report_date, code, tien_viet';
 
 const AVATAR_BGS = [
   'linear-gradient(135deg, #f59e0b, #ef4444)',
@@ -40,6 +41,10 @@ function teamSubtitle(emp: Employee): string {
   return parts.length ? parts.join(' · ') : '—';
 }
 
+function normalizedCode(value: unknown): string {
+  return String(value ?? '').replace(/\u00a0/g, ' ').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 type RankedEmployee = Employee & { rank: number };
 
 export const AdminRankingView: React.FC = () => {
@@ -56,23 +61,57 @@ export const AdminRankingView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const now = new Date();
+    const dateFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const dateTo = `${dateFrom.slice(0, 7)}-${String(now.getDate()).padStart(2, '0')}`;
+    const { data: reportData, error: reportErr } = await supabase
+      .from(REPORTS_TABLE)
+      .select(REPORTS_FROM)
+      .gte('report_date', dateFrom)
+      .lte('report_date', dateTo)
+      .limit(5000);
+    if (reportErr) {
+      console.error('admin-ranking detail_reports:', reportErr);
+      setError(reportErr.message || 'KhÃ´ng táº£i Ä‘Æ°á»£c detail_reports.');
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
     const { data, error: qErr } = await supabase
       .from(EMPLOYEES_TABLE)
-      .select('id, name, team, score, avatar_url, du_an_ten, trang_thai, ma_ns, ngay_bat_dau')
-      .order('score', { ascending: false });
+      .select('id, name, team, avatar_url, du_an_ten, trang_thai, ma_ns, ngay_bat_dau');
 
     if (qErr) {
       console.error('admin-ranking employees:', qErr);
       setError(qErr.message || 'Không tải được bảng vinh danh.');
       setRows([]);
     } else {
-      const list = (data || []) as Employee[];
-      setRows(
-        list.map((emp, index) => ({
-          ...emp,
-          rank: index + 1,
-        }))
-      );
+      const revenueByCode = new Map<string, number>();
+      const displayCodeByKey = new Map<string, string>();
+      for (const report of reportData || []) {
+        const code = String(report.code || '').replace(/\u00a0/g, ' ').trim().replace(/\s+/g, ' ');
+        const key = normalizedCode(code);
+        if (!key) continue;
+        const revenue = Number(report.tien_viet);
+        if (Number.isFinite(revenue)) revenueByCode.set(key, (revenueByCode.get(key) || 0) + revenue);
+        if (!displayCodeByKey.has(key)) displayCodeByKey.set(key, code);
+      }
+
+      const employees = (data || []) as Employee[];
+      const employeeCodeKeys = new Set<string>();
+      const ranked: Employee[] = employees.map((emp) => {
+        const key = normalizedCode(emp.ma_ns);
+        if (key) employeeCodeKeys.add(key);
+        return { ...emp, score: key ? revenueByCode.get(key) || 0 : 0 };
+      });
+      for (const [key, revenue] of revenueByCode) {
+        if (employeeCodeKeys.has(key)) continue;
+        const code = displayCodeByKey.get(key) || key;
+        ranked.push({ id: `report-${key}`, name: code, team: '', score: revenue, avatar_url: null, ma_ns: code });
+      }
+      ranked.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'vi'));
+      setRows(ranked.map((emp, index) => ({ ...emp, rank: index + 1 })));
     }
     setLoading(false);
   }, []);
@@ -120,7 +159,7 @@ export const AdminRankingView: React.FC = () => {
           <div className="p-4 border-b border-[var(--ld-surface-container-low)] flex justify-between items-center bg-[var(--ld-surface-container-high)]/30">
             <h3 className="text-[var(--ld-on-surface)] font-bold text-base flex items-center gap-2">
               <span className="material-symbols-outlined text-[var(--ld-primary)]">military_tech</span>
-              Top Marketing – theo Bảng vinh danh
+              Top Marketing – doanh số báo cáo tháng này
             </h3>
             <div className="flex gap-2">
               <span className="bg-[var(--ld-primary)]/10 text-[var(--ld-primary)] text-[10px] font-bold px-2 py-1 rounded">24/7 TRACKING</span>
@@ -233,28 +272,27 @@ export const AdminRankingView: React.FC = () => {
 
           <div className="bg-[var(--ld-surface-container)] rounded-2xl p-6 border border-[var(--ld-primary)]/8">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="font-bold text-sm text-[var(--ld-on-surface-variant)]">Tăng trưởng nhanh nhất</h4>
+              <h4 className="font-bold text-sm text-[var(--ld-on-surface-variant)]">Doanh số cao nhất tháng này</h4>
               <span className="material-symbols-outlined text-[var(--ld-primary)] text-sm">trending_up</span>
             </div>
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-[var(--ld-background)]/40 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-[var(--ld-primary-fixed-variant,#3323cc)] flex items-center justify-center text-[10px] font-bold">TM</div>
-                  <span className="text-xs font-semibold">Trần Mạnh</span>
+              {rows.filter((emp) => emp.score > 0).slice(0, 2).map((emp) => (
+                <div key={emp.id} className="flex items-center justify-between p-3 bg-[var(--ld-background)]/40 rounded-xl">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-[var(--ld-primary-fixed-variant,#3323cc)] flex items-center justify-center text-[10px] font-bold shrink-0">{initials(emp.name)}</div>
+                    <span className="text-xs font-semibold truncate">{emp.name}</span>
+                  </div>
+                  <span className="text-[var(--ld-tertiary)] font-bold text-xs whitespace-nowrap">{emp.score.toLocaleString('vi-VN')} ₫</span>
                 </div>
-                <span className="text-[var(--ld-tertiary)] font-bold text-xs">+42%</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-[var(--ld-background)]/40 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-[var(--ld-tertiary-container)] flex items-center justify-center text-[10px] font-bold">LD</div>
-                  <span className="text-xs font-semibold">Lê Đăng</span>
-                </div>
-                <span className="text-[var(--ld-tertiary)] font-bold text-xs">+28%</span>
-              </div>
+              ))}
+              {!rows.some((emp) => emp.score > 0) ? (
+                <p className="text-xs text-[var(--ld-on-surface-variant)]">Chưa có doanh số trong tháng này.</p>
+              ) : null}
             </div>
           </div>
         </section>
       </div>
+
     </div>
   );
 };

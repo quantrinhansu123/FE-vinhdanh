@@ -249,7 +249,7 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
             <span className="text-[var(--ld-primary)]/90">Quản lý dự án</span>
           </nav>
           <h2 className="text-3xl font-extrabold tracking-tight text-[var(--ld-on-surface)]" style={{ fontFamily: '"Inter", sans-serif' }}>
-            Dự án (Module 1)
+            Dự án
           </h2>
           <p className="text-sm text-[var(--ld-on-surface-variant)] mt-1 leader-dash-label">Nguồn: {DU_AN_TABLE}</p>
           {scopeBanner ? (

@@ -13,11 +13,12 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     label: 'Quản lý',
     items: [
-      { id: 'projects', label: 'Dự án (Module 1)', icon: '📁' },
-      { id: 'teams', label: 'Team (Module 2)', icon: '👥' },
-      { id: 'staff', label: 'Nhân sự (Module 3)', icon: '👤' },
-      { id: 'ad-accounts', label: 'TK Ads (Module 4)', icon: '🎯' },
-      { id: 'agencies', label: 'Agency (Module 5)', icon: '🏢' },
+      { id: 'projects', label: 'Dự án', icon: '📁' },
+      { id: 'teams', label: 'Team', icon: '👥' },
+      { id: 'staff', label: 'Nhân sự', icon: '👤' },
+      { id: 'ad-accounts', label: 'TK Ads', icon: '🎯' },
+      { id: 'kpis', label: 'KPIs', icon: '📊' },
+      { id: 'agencies', label: 'Agency', icon: '🏢' },
       { id: 'products', label: 'Sản phẩm', icon: '📦' },
       { id: 'markets', label: 'Thị trường', icon: '🌍' },
     ]
@@ -25,7 +26,7 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     label: 'Tài chính',
     items: [
-      { id: 'budget', label: 'Ngân sách (Module 6)', icon: '💰', badge: { text: '3', type: 'y' } },
+      { id: 'budget', label: 'Ngân sách', icon: '💰', badge: { text: '3', type: 'y' } },
       { id: 'reconcile', label: 'Đối chiếu 3 lớp', icon: '⚖️' },
     ]
   },
@@ -95,15 +96,16 @@ export const VIEW_TITLES: Record<string, string> = {
   'admin-dash': 'Dashboard cá nhân',
   'burn-detect': 'Phát hiện Đốt tiền',
   'alerts': 'Cảnh báo Hệ thống',
-  'projects': 'Dự án (Module 1)',
+  'projects': 'Dự án',
   'project-qc-excel': 'Dữ liệu QC Excel (Mã NV)',
-  'teams': 'Team (Module 2)',
-  'staff': 'Nhân sự (Module 3)',
+  'teams': 'Team',
+  'staff': 'Nhân sự',
   'ad-accounts': 'Agency Control Center',
+  'kpis': 'KPIs',
   'agencies': 'Agency Ecosystem',
   'products': 'Quản lý Sản phẩm',
   'markets': 'Thị trường',
-  'budget': 'Ngân sách (Module 6)',
+  'budget': 'Ngân sách',
   'reconcile': 'Đối chiếu 3 Lớp',
   'upcare-mkt': 'MKT Fabico (API)',
   'admin-ranking': 'Bảng xếp hạng',

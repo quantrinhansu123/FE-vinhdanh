@@ -411,7 +411,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
       <div className="space-y-8 flex-1">
         <div className="flex flex-col gap-1">
           <h2 className="text-2xl font-bold staff-hrm-headline text-[var(--hrm-on-surface)] tracking-tight">
-            Nhân sự (Module 3) — Quản lý Nhân sự Marketing
+            Nhân sự — Quản lý Nhân sự Marketing
           </h2>
           <p className="text-sm text-[var(--hrm-on-variant)]">
             Tổng quan và quản lý đội ngũ marketing — đồng bộ mã NS, fanpage, trạng thái với báo cáo MKT.
