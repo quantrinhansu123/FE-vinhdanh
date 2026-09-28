@@ -14,7 +14,7 @@ export const ADMIN_NAV: NavGroup[] = [
     label: 'Quản lý',
     items: [
       { id: 'projects', label: 'Dự án (Module 1)', icon: '📁' },
-      { id: 'project-qc-excel', label: 'Dữ liệu QC Excel', icon: '📊' },
+      { id: 'project-qc-excel', label: 'Dữ liệu QC Excel (Mã NV)', icon: '📊' },
       { id: 'teams', label: 'Team (Module 2)', icon: '👥' },
       { id: 'staff', label: 'Nhân sự (Module 3)', icon: '👤' },
       { id: 'ad-accounts', label: 'TK Ads (Module 4)', icon: '🎯' },
@@ -33,7 +33,7 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     label: 'Báo cáo',
     items: [
-      { id: 'upcare-mkt', label: 'MKT Upcare (API)', icon: '🌐' },
+      { id: 'upcare-mkt', label: 'MKT Fabico (API)', icon: '🌐' },
       { id: 'reports-raw', label: 'Bảng detail_reports', icon: '🧾' },
       { id: 'admin-ranking', label: 'Bảng xếp hạng', icon: '🏆' },
       { id: 'compare', label: 'So sánh tuần/tháng', icon: '📈' },
@@ -96,7 +96,7 @@ export const VIEW_TITLES: Record<string, string> = {
   'burn-detect': 'Phát hiện Đốt tiền',
   'alerts': 'Cảnh báo Hệ thống',
   'projects': 'Dự án (Module 1)',
-  'project-qc-excel': 'Dữ liệu QC Excel (dự án)',
+  'project-qc-excel': 'Dữ liệu QC Excel (Mã NV)',
   'teams': 'Team (Module 2)',
   'staff': 'Nhân sự (Module 3)',
   'ad-accounts': 'Agency Control Center',
@@ -105,7 +105,7 @@ export const VIEW_TITLES: Record<string, string> = {
   'markets': 'Thị trường',
   'budget': 'Ngân sách (Module 6)',
   'reconcile': 'Đối chiếu 3 Lớp',
-  'upcare-mkt': 'MKT Upcare (API)',
+  'upcare-mkt': 'MKT Fabico (API)',
   'admin-ranking': 'Bảng xếp hạng',
   'compare': 'So sánh tuần/tháng',
   'leader-dash': 'Dashboard team',

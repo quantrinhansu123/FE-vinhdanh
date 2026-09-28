@@ -359,7 +359,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
       return;
     }
     if (!isUpcareMktConfigured()) {
-      window.alert('Chưa cấu hình Upcare (VITE_UPCARE_CRM_BEARER_TOKEN trong .env.local).');
+      window.alert('Chưa cấu hình Fabico (VITE_UPCARE_CRM_BEARER_TOKEN trong .env.local).');
       return;
     }
     if (rows.length === 0) {
@@ -372,7 +372,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
     const warnMulti =
       multiDay &&
       !window.confirm(
-        `Khoảng ngày ${applied.from} → ${applied.to}: API Upcare trả một mức doanh số / nhân viên cho cả khoảng.\n` +
+        `Khoảng ngày ${applied.from} → ${applied.to}: API Fabico trả một mức doanh số / nhân viên cho cả khoảng.\n` +
           `Mọi dòng khớp Mã NV sẽ nhận cùng số đó (có thể trùng nếu nhiều dòng cùng NV).\n\nTiếp tục?`
       );
     if (warnMulti) return;
@@ -408,14 +408,14 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
           `Không có dòng nào khớp.\n` +
             `- Không có […] trong Page: ${skippedNoTag} dòng\n` +
             `- Có […] nhưng không khớp API (ID / tên): ${skippedNoMatch} dòng\n` +
-            `Gợi ý: trong Page dùng [ID_Upcare] (số) hoặc [mã_ns] trùng bảng nhân sự + tên trùng Upcare.`
+            `Gợi ý: trong Page dùng [ID_Upcare] (số) hoặc [mã_ns] trùng bảng nhân sự + tên trùng Fabico.`
         );
         return;
       }
 
       if (
         !window.confirm(
-          `Cập nhật doanh số (revenue) cho ${updates.length} dòng báo cáo theo Upcare CRM?\n` +
+          `Cập nhật doanh số (revenue) cho ${updates.length} dòng báo cáo theo Fabico CRM?\n` +
             `Khoảng API: ${applied.from} … ${applied.to}\n` +
             `Bỏ qua: không [Mã NV] trong Page ${skippedNoTag}, không khớp API ${skippedNoMatch}.`
         )
@@ -443,11 +443,11 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
         }
       }
 
-      setExcelMsg(`Đồng bộ Upcare: đã cập nhật doanh số cho ${ok} dòng (${applied.from} … ${applied.to}).`);
+      setExcelMsg(`Đồng bộ Fabico: đã cập nhật doanh số cho ${ok} dòng (${applied.from} … ${applied.to}).`);
       await load();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Lỗi không xác định';
-      window.alert(`Đồng bộ Upcare thất bại: ${msg}`);
+      window.alert(`Đồng bộ Fabico thất bại: ${msg}`);
     } finally {
       setUpcareSyncBusy(false);
     }
@@ -677,7 +677,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
             title={
               !isUpcareMktConfigured()
                 ? 'Cần VITE_UPCARE_CRM_BEARER_TOKEN'
-                : 'Gọi API Upcare /employee/mkt theo khoảng ngày đang lọc; khớp cột Mã NV với ID hoặc tên nhân viên'
+                : 'Gọi API Fabico /employee/mkt theo khoảng ngày đang lọc; khớp cột Mã NV với ID hoặc tên nhân viên'
             }
             className="flex items-center gap-2 px-4 py-2 bg-[color-mix(in_srgb,var(--ld-primary)_12%,transparent)] text-[var(--ld-primary)] rounded-lg border border-[color-mix(in_srgb,var(--ld-primary)_35%,transparent)] text-xs leader-dash-label font-bold hover:bg-[color-mix(in_srgb,var(--ld-primary)_18%,transparent)] transition-all disabled:opacity-40"
           >
@@ -686,7 +686,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
             ) : (
               <span className="material-symbols-outlined text-sm">cloud_sync</span>
             )}
-            Đồng bộ doanh số (Upcare)
+            Đồng bộ doanh số (Fabico)
           </button>
         </div>
 
@@ -696,11 +696,11 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
           </div>
         )}
         <p className="mt-4 text-[10px] text-[var(--ld-on-surface-variant)] leading-relaxed max-w-[920px]">
-          <span className="text-[var(--ld-on-surface)] font-bold">Đồng bộ doanh số (Upcare):</span> dùng khoảng ngày ở trên, gọi API cùng tham số; điền{' '}
+          <span className="text-[var(--ld-on-surface)] font-bold">Đồng bộ doanh số (Fabico):</span> dùng khoảng ngày ở trên, gọi API cùng tham số; điền{' '}
           <span className="text-[var(--ld-on-surface)] font-bold">Doanh số</span> khi{' '}
           <span className="text-[var(--ld-on-surface)] font-bold">Mã NV</span> khớp —{' '}
-          <span className="text-[var(--ld-on-surface)] font-bold">[số]</span> trong Page = ID nhân viên trên Upcare, hoặc{' '}
-          <span className="text-[var(--ld-on-surface)] font-bold">[mã_ns]</span> khớp nhân sự CRM + tên khớp Upcare. Nhiều ngày: API là tổng khoảng; xác nhận trước khi ghi.
+          <span className="text-[var(--ld-on-surface)] font-bold">[số]</span> trong Page = ID nhân viên trên Fabico, hoặc{' '}
+          <span className="text-[var(--ld-on-surface)] font-bold">[mã_ns]</span> khớp nhân sự CRM + tên khớp Fabico. Nhiều ngày: API là tổng khoảng; xác nhận trước khi ghi.
         </p>
         <p className="mt-2 text-[10px] text-[var(--ld-on-surface-variant)] leading-relaxed max-w-[920px]">
           Hai kiểu file: (1) Mẫu CRM — nút Tải mẫu Excel, cột ngày A–C. (2) Export Ads: chỉ nhập dòng có{' '}

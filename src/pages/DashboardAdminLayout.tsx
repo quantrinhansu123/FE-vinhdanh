@@ -4,7 +4,7 @@ import { Sidebar } from '../components/crm-dashboard/Sidebar';
 import { Topbar } from '../components/crm-dashboard/Topbar';
 import { NotificationPanel } from '../components/crm-dashboard/NotificationPanel';
 import { ViewId, UserInfo } from '../components/crm-dashboard/types';
-import { ADMIN_NAV, MAP_NAV, VIEW_TITLES } from '../components/crm-dashboard/navData';
+import { ADMIN_NAV, LEADER_NAV, MAP_NAV, MKT_NAV, VIEW_TITLES } from '../components/crm-dashboard/navData';
 
 // Admin Views
 import { AdminDashboardView } from './dashboard/admin/AdminDashboardView';
@@ -103,11 +103,17 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
     navigate(crmAdminPathForView(view));
   };
 
-  const navGroups = currentRole === 'admin'
+  const availableNav = tier === 'admin'
     ? ADMIN_NAV
-    : MAP_NAV.map((group) => ({
+    : [...MAP_NAV, ...(tier === 'leader' ? LEADER_NAV : []), ...MKT_NAV];
+  const seenViews = new Set<ViewId>();
+  const navGroups = availableNav.map((group) => ({
         ...group,
-        items: group.items.filter((item) => tierAllowsView(tier, item.id)),
+        items: group.items.filter((item) => {
+          if (!tierAllowsView(tier, item.id) || seenViews.has(item.id)) return false;
+          seenViews.add(item.id);
+          return true;
+        }),
       })).filter((group) => group.items.length > 0);
 
   // Adapt passed props to UserInfo type

@@ -5,14 +5,13 @@ import {
   getUpcareProjectScopeForUi,
   isUpcareMktConfigured,
   isUpcareOauthRefreshConfigured,
-  upcareBearerStatus,
   type UpcareMktEmployeeRow,
 } from '../../../api/upcareCrm';
 import { supabase } from '../../../api/supabase';
 import { REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboard/mkt/mktDetailReportShared';
 import { isMissingTienVietError } from '../../../utils/detailReportsVnd';
 
-/** Upcare MKT → detail_reports: chỉ cập nhật revenue + tien_viet (không đụng name/email/code/report_date). */
+/** Fabico MKT → detail_reports: chỉ cập nhật revenue + tien_viet (không đụng name/email/code/report_date). */
 type UpcareReportsPatch = { revenue: number; tien_viet: number };
 import { downloadMktReportExcelTemplate } from '../../dashboard/mkt/mktHistoryExcel';
 
@@ -55,7 +54,6 @@ export const UpcareMktEmployeesView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const configured = isUpcareMktConfigured();
-  const bearerInfo = upcareBearerStatus();
 
   const load = useCallback(async () => {
     if (!isUpcareMktConfigured()) return;
@@ -78,29 +76,20 @@ export const UpcareMktEmployeesView: React.FC = () => {
 
   useEffect(() => {
     const prev = document.title;
-    document.title = 'MKT Upcare API | CRM';
+    document.title = 'MKT Fabico API | CRM';
     return () => {
       document.title = prev;
     };
   }, []);
 
-  const proxyOn = import.meta.env.VITE_UPCARE_CRM_USE_PROXY === 'true';
+  const proxyOn = true;
   const oauthRefreshOn = useMemo(() => isUpcareOauthRefreshConfigured(), []);
   const { param: projectParam, uuid: projectUuid } = useMemo(() => getUpcareProjectScopeForUi(), []);
 
   const apiUrl = useMemo(() => {
-    const base =
-      import.meta.env.VITE_UPCARE_CRM_USE_PROXY === 'true'
-        ? '/upcare-crm'
-        : (import.meta.env.VITE_UPCARE_CRM_API_BASE?.trim() || 'https://crm.upcare.asia').replace(/\/$/, '');
-    const qs = new URLSearchParams({
-      date_from: dateFrom,
-      date_to: dateTo,
-    });
-    if (projectUuid) {
-      qs.set(projectParam, projectUuid);
-    }
-    return `${base}/api/employee/mkt?${qs.toString()}`;
+    const qs = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+    if (projectUuid) qs.set(projectParam, projectUuid);
+    return `/api/upcare-crm?${qs.toString()}`;
   }, [dateFrom, dateTo, projectParam, projectUuid]);
 
   const currentUserEmail = useMemo(() => {
@@ -205,7 +194,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
       if (toUpdate.length === 0) {
         try {
           window.alert(
-            'Không cập nhật dòng nào: trong detail_reports không có bản ghi trùng Ngày + Mã với dữ liệu Upcare (chỉ cập nhật khi đã tồn tại; không tạo mới).'
+            'Không cập nhật dòng nào: trong detail_reports không có bản ghi trùng Ngày + Mã với dữ liệu Fabico (chỉ cập nhật khi đã tồn tại; không tạo mới).'
           );
         } catch {}
         return;
@@ -269,11 +258,11 @@ export const UpcareMktEmployeesView: React.FC = () => {
       <div className="mx-auto max-w-[1400px] space-y-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-[#dfe4fe] sm:text-3xl">Marketing — Upcare CRM</h2>
+            <h2 className="text-2xl font-bold tracking-tight text-[#dfe4fe] sm:text-3xl">Marketing — Fabico CRM</h2>
             <p className="mt-1 text-sm text-[#a5aac2]">
               GET <code className="rounded bg-[#11192e] px-1.5 py-0.5 text-xs text-[#3bbffa]">/api/employee/mkt</code>
               {proxyOn ? (
-                <span className="ml-2 text-[#69f6b8]">(proxy dev: /upcare-crm)</span>
+                <span className="ml-2 text-[#69f6b8]">(server proxy: /api/upcare-crm)</span>
               ) : null}
             </p>
                 <p className="mt-1 text-xs text-[#a5aac2]">
@@ -347,42 +336,18 @@ export const UpcareMktEmployeesView: React.FC = () => {
 
         {!configured ? (
           <div className="rounded-xl border border-[#f8a010]/30 bg-[#f8a010]/10 p-5 text-sm text-[#ffb148]">
-            <p className="font-semibold">Chưa có Bearer token (hoặc Vite chưa nạp .env)</p>
-            {bearerInfo.ok === false && bearerInfo.hint === 'missing' ? (
-              <p className="mt-2 text-[#dfe4fe]/90">
-                Không thấy biến <code className="text-[#3bbffa]">VITE_UPCARE_CRM_BEARER_TOKEN</code> trong bundle — thường do{' '}
-                <strong className="text-[#ffb148]">thiếu tiền tố VITE_</strong>, sai tên biến, hoặc file{' '}
-                <code className="text-[#3bbffa]">.env</code> không nằm ở thư mục gốc project (cùng cấp{' '}
-                <code className="text-[#3bbffa]">package.json</code>). Sau khi sửa .env:{' '}
-                <strong className="text-[#ffb148]">tắt và chạy lại npm run dev</strong>.
-              </p>
-            ) : (
-              <p className="mt-2 text-[#dfe4fe]/90">
-                Biến đã khai báo nhưng giá trị sau khi xử lý vẫn trống — kiểm tra không để dòng trống, hoặc bỏ dấu{' '}
-                <code className="text-[#3bbffa]">Bearer </code> (app sẽ tự thêm). Có thể dùng{' '}
-                <code className="text-[#3bbffa]">VITE_UPCARE_API_TOKEN</code> thay thế.
-              </p>
-            )}
+            <p className="font-semibold">Upcare server proxy is disabled.</p>
             <p className="mt-2 text-[#dfe4fe]/90">
-              Thêm vào <code className="text-[#3bbffa]">.env.local</code> (một dòng, không cần chữ Bearer):
-            </p>
-            <pre className="mt-3 overflow-x-auto rounded-lg bg-black/40 p-3 text-xs text-[#a5aac2]">
-              {`VITE_UPCARE_CRM_BEARER_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-VITE_UPCARE_CRM_USE_PROXY=true`}
-            </pre>
-            <p className="mt-3 text-xs text-[#a5aac2]">
-              Dự phòng tên biến: <code className="text-[#3bbffa]">VITE_UPCARE_API_TOKEN</code>. Nếu <strong>401</strong>: lấy JWT
-              mới hoặc dán <code className="text-[#3bbffa]">VITE_UPCARE_CRM_COOKIE</code> (full Cookie từ trình duyệt). Production:{' '}
-              <code className="text-[#3bbffa]">npm run build</code> sau khi đặt biến.
+              Enable <code className="text-[#3bbffa]">VITE_UPCARE_CRM_ENABLED=true</code> in .env.local and restart the dev server.
+              Keep credentials in server-only <code className="text-[#3bbffa]">UPCARE_CRM_*</code> variables; do not use a VITE_ prefix for passwords.
             </p>
           </div>
         ) : (
           <p className="text-xs text-[#69f6b8]">
-            Bearer đã cấu hình
-            {bearerInfo.ok ? ` (${bearerInfo.length} ký tự).` : '.'}
+            Upcare server-side proxy is enabled. Credentials stay on the server.
             {oauthRefreshOn ? (
               <span className="ml-2 text-[#a5aac2]">
-                · 401 sẽ thử refresh qua <code className="text-[#3bbffa]">/api/oauth/token</code>
+                Tự động lấy token mới khi sắp hết hạn hoặc khi CRM trả 401.
               </span>
             ) : null}
           </p>
