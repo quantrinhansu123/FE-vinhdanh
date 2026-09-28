@@ -14,7 +14,6 @@ export const ADMIN_NAV: NavGroup[] = [
     label: 'Quản lý',
     items: [
       { id: 'projects', label: 'Dự án (Module 1)', icon: '📁' },
-      { id: 'project-qc-excel', label: 'Dữ liệu QC Excel (Mã NV)', icon: '📊' },
       { id: 'teams', label: 'Team (Module 2)', icon: '👥' },
       { id: 'staff', label: 'Nhân sự (Module 3)', icon: '👤' },
       { id: 'ad-accounts', label: 'TK Ads (Module 4)', icon: '🎯' },
@@ -34,6 +33,7 @@ export const ADMIN_NAV: NavGroup[] = [
     label: 'Báo cáo',
     items: [
       { id: 'upcare-mkt', label: 'MKT Fabico (API)', icon: '🌐' },
+      { id: 'project-qc-excel', label: 'Dữ liệu QC Excel (Mã NV)', icon: '📊' },
       { id: 'reports-raw', label: 'Bảng detail_reports', icon: '🧾' },
       { id: 'admin-ranking', label: 'Bảng xếp hạng', icon: '🏆' },
       { id: 'compare', label: 'So sánh tuần/tháng', icon: '📈' },

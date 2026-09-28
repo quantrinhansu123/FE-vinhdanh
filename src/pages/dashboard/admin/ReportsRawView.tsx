@@ -67,6 +67,24 @@ function formatVndDots(n: number): string {
   return Math.round(n).toLocaleString('vi-VN');
 }
 
+function formatRawMoney(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+}
+
+function reportExchangeRate(r: ReportRow): number | null {
+  const amount = Number(r.revenue);
+  const amountVnd = Number(r.tien_viet);
+  if (!Number.isFinite(amount) || amount === 0 || !Number.isFinite(amountVnd) || r.tien_viet == null) return null;
+  return amountVnd / amount;
+}
+
+function reportCurrencyUnit(r: ReportRow): string {
+  const rate = reportExchangeRate(r);
+  if (rate == null) return r.revenue == null ? '—' : 'USD';
+  return Math.abs(rate - 1) < 0.01 ? 'VND' : 'USD';
+}
+
 function toYmd(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -465,7 +483,7 @@ export const ReportsRawView: React.FC = () => {
         ) : rows.length === 0 ? (
           <div className="p-6 text-[var(--ld-on-surface-variant)]">Không có dòng nào.</div>
         ) : (
-          <table className="w-full border-collapse min-w-[1280px] text-left">
+          <table className="w-full border-collapse min-w-[1320px] text-left">
             <thead>
               <tr className="border-b border-[var(--ld-outline-variant)]/15 text-[10px] font-extrabold uppercase tracking-widest text-[var(--ld-on-surface-variant)]">
                 <th className="p-2 w-[36px]">
@@ -479,12 +497,13 @@ export const ReportsRawView: React.FC = () => {
                 </th>
                 <th className="p-2">Ngày</th>
                 <th className="p-2">Code</th>
-                <th className="p-2 max-w-[140px]">Page</th>
-                <th className="p-2">Mã DA</th>
+                <th className="p-2 text-right">Giá tiền</th>
+                <th className="p-2">Đơn vị</th>
+                <th className="p-2 text-right">Tỉ giá</th>
                 <th className="p-2 text-right">Ads chi</th>
                 <th className="p-2 text-right">Doanh thu (VNĐ)</th>
                 <th className="p-2 text-right">Mess</th>
-                <th className="p-2 text-right">Đơn</th>
+                <th className="p-2 text-right">Giá mess</th>
                 <th className="p-2 text-right">Lead</th>
               </tr>
             </thead>
@@ -501,14 +520,17 @@ export const ReportsRawView: React.FC = () => {
                   </td>
                   <td className="p-2">{r.report_date?.slice(0, 10)}</td>
                   <td className="p-2">{(r as { code?: string | null }).code || '—'}</td>
-                  <td className="p-2 max-w-[140px] truncate" title={r.page || undefined}>
-                    {r.page?.trim() ? r.page : '—'}
-                  </td>
-                  <td className="p-2 font-semibold">{r.ma_du_an?.trim() ? r.ma_du_an : '—'}</td>
+                  <td className="p-2 text-right">{formatRawMoney(r.revenue)}</td>
+                  <td className="p-2">{reportCurrencyUnit(r)}</td>
+                  <td className="p-2 text-right">{formatRawMoney(reportExchangeRate(r))}</td>
                   <td className="p-2 text-right">{Number(r.ad_cost || 0).toLocaleString('vi-VN')}</td>
                   <td className="p-2 text-right">{Number(r.tien_viet || 0).toLocaleString('vi-VN')}</td>
                   <td className="p-2 text-right">{r.mess_comment_count ?? '—'}</td>
-                  <td className="p-2 text-right">{r.order_count ?? '—'}</td>
+                  <td className="p-2 text-right">
+                    {Number(r.mess_comment_count) > 0
+                      ? formatVndDots(Number(r.tien_viet || 0) / Number(r.mess_comment_count))
+                      : '—'}
+                  </td>
                   <td className="p-2 text-right">{r.tong_lead ?? r.tong_data_nhan ?? '—'}</td>
                 </tr>
               ))}

@@ -99,6 +99,17 @@ export function extractMaNvFromBracketPage(text: string | null | undefined): str
 /** Nhân viên khớp khi so sánh nội dung […] với employees.ma_ns (không phân biệt hoa thường). */
 export type MaNsLookupMatch = { id: string; name: string; ma_ns: string };
 
+/** Chuẩn hóa mã nhân sự, không phân biệt hoa/thường và ký tự Unicode tương đương. */
+export function normalizeMaNsCode(raw: string | null | undefined): string {
+  return String(raw ?? '')
+    .normalize('NFKC')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .replace(/\u00a0/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
 export function buildMaNsLookup(
   rows: { id: string; name?: string; ma_ns?: string | null }[]
 ): Map<string, MaNsLookupMatch> {
@@ -106,7 +117,7 @@ export function buildMaNsLookup(
   for (const r of rows) {
     const raw = r.ma_ns?.trim();
     if (!raw) continue;
-    m.set(raw.toLowerCase(), { id: r.id, name: (r.name || '').trim() || '—', ma_ns: raw });
+    m.set(normalizeMaNsCode(raw), { id: r.id, name: (r.name || '').trim() || '—', ma_ns: raw });
   }
   return m;
 }
@@ -116,9 +127,9 @@ export function matchEmployeeByBracketTag(
   tag: string | null | undefined,
   lookup: Map<string, MaNsLookupMatch>
 ): MaNsLookupMatch | null {
-  const t = tag?.trim();
+  const t = normalizeMaNsCode(tag);
   if (!t) return null;
-  return lookup.get(t.toLowerCase()) ?? null;
+  return lookup.get(t) ?? null;
 }
 
 /** Chuẩn hoá tên để khớp lỏng (API Fabico vs employees). */

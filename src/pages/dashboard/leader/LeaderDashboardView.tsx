@@ -5,8 +5,6 @@ import { supabase } from '../../../api/supabase';
 import type { AuthUser, Employee } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import {
-  formatCompactVnd,
-  formatKpiMoney,
   formatReportDateVi,
   toLocalYyyyMmDd,
 } from '../mkt/mktDetailReportShared';
@@ -98,17 +96,19 @@ function monthRangeLocal(ym: string): { start: string; end: string } {
   };
 }
 
-function isActiveStaff(tt: string | null | undefined): boolean {
-  return tt === 'dang_lam' || tt === 'tam_nghi' || tt === 'dot_tien';
-}
-
 function safeTrim(v: unknown): string {
   return String(v ?? '').trim();
+}
+
+function stripFbcNamePrefix(raw: string): string {
+  return raw.replace(/^FBC\s*[-–—:]\s*/i, '').trim();
 }
 
 /** Chuẩn hóa mã: trim, NBSP → space, gộp khoảng trắng — khớp detail_reports.code ↔ employees.ma_ns. */
 function normalizeDetailCode(raw: string | null | undefined): string {
   return String(raw ?? '')
+    .normalize('NFKC')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
     .replace(/\u00a0/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
@@ -165,22 +165,20 @@ function remapDrTeamToKpiNorm(drRaw: string, teamKpiRows: { teamKey: string }[])
   return uniq.length === 1 ? uniq[0] : '';
 }
 
-/** Tên hiển thị kèm mã: ưu tiên tên CRM theo `ma_ns`/`code` (map từ roster), sau đó `m.name`. */
+/** Chỉ hiển thị tên: ưu tiên tên CRM theo `ma_ns`/`code` (map từ roster), sau đó `m.name`. */
 function mktNameWithCode(m: Employee, nameByCode?: Map<string, string>): string {
   const code = safeTrim(m.ma_ns) || safeTrim(m.code);
   const cLc = codeKey(code);
   const fromMap = cLc ? nameByCode?.get(cLc) : undefined;
-  const name = safeTrim(fromMap) || safeTrim(m.name) || '—';
-  if (!code) return name;
-  return `${name} · ${code}`;
+  return stripFbcNamePrefix(safeTrim(fromMap) || safeTrim(m.name) || '—');
 }
 
 /** Một dòng detail_reports: tên MKT ưu tiên theo `code` → roster CRM, không có thì tên trên DR. */
 function leaderDrMktDisplayName(r: Record<string, unknown>, nameByCode: Map<string, string>): string {
   const c = codeKey((r as { code?: string }).code);
-  const drName = safeTrim((r as { name?: string }).name);
+  const drName = stripFbcNamePrefix(safeTrim((r as { name?: string }).name));
   if (!c) return drName || '—';
-  return safeTrim(nameByCode.get(c)) || drName || '—';
+  return stripFbcNamePrefix(safeTrim(nameByCode.get(c))) || drName || '—';
 }
 
 /** Giống admin-dash: tiền từ detail_reports (chuỗi có dấu phẩy / khoảng trắng) */
@@ -194,13 +192,13 @@ function safeNum(v: unknown): number {
 
 function formatVndDots(n: number): string {
   if (!Number.isFinite(n)) return '0';
-  return Math.round(n).toLocaleString('vi-VN');
+  return n.toLocaleString('vi-VN', { maximumFractionDigits: 2 });
 }
 
 /** Doanh thu VND từ detail_reports: ưu tiên tien_viet; không có thì dùng revenue (đã là VND trên bảng, không nhân 25000). */
 function reportRevenueVnd(row: { tien_viet?: unknown; revenue?: unknown }): number {
-  if (row.tien_viet != null) return Math.round(safeNum(row.tien_viet));
-  return Math.round(safeNum(row.revenue));
+  if (row.tien_viet != null) return safeNum(row.tien_viet);
+  return safeNum(row.revenue);
 }
 
 function adsDtPct(ads: number, rev: number): number | null {
@@ -421,9 +419,9 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     const all = (empRes.data || []) as Employee[];
     const teamNormSet = new Set(teamKeys.map((t) => normalizeTeamLookupKey(t)));
     const teamList = isAdminViewer
-      ? all.filter((e) => isActiveStaff(e.trang_thai))
+      ? all
       : teamKeys.length
-        ? all.filter((e) => teamNormSet.has(normalizeTeamLookupKey(e.team)) && isActiveStaff(e.trang_thai))
+        ? all.filter((e) => teamNormSet.has(normalizeTeamLookupKey(e.team)))
         : [];
 
     /** Chỉ gom báo cáo khi detail_reports.code (chuẩn hóa) khớp ma_ns nhân sự trong team. */
@@ -909,8 +907,8 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     );
   }
 
-  const revStr = formatCompactVnd(teamTotals.rev) === '—' ? '0' : formatCompactVnd(teamTotals.rev);
-  const adsStr = formatCompactVnd(teamTotals.ads) === '—' ? '0' : formatCompactVnd(teamTotals.ads);
+  const revStr = formatVndDots(teamTotals.rev) === '—' ? '0' : formatVndDots(teamTotals.rev);
+  const adsStr = formatVndDots(teamTotals.ads) === '—' ? '0' : formatVndDots(teamTotals.ads);
   const rangeDays = Math.max(1, Math.round((new Date(`${end}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime()) / 86400000) + 1);
   const monthDayCount = new Date(Number(selectedYm.slice(0, 4)), Number(selectedYm.slice(5, 7)), 0).getDate();
   const kpiMonthStart = new Date(`${selectedYm}-01T00:00:00`);
@@ -997,11 +995,11 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       ) : (
         <>
           <section className="team-dashboard-summary-grid" aria-label="Tổng quan team">
-            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Doanh số team</p><strong>{revStr}</strong><p className="td-sub">Mục tiêu kỳ {teamRangeTarget ? formatCompactVnd(teamRangeTarget) : 'chưa thiết lập'} <span className={kpiPctForRange != null && kpiPctForRange >= periodPacePct ? 'td-good' : 'td-warn'}>{kpiPctForRange == null ? '—' : `${kpiPctForRange.toFixed(1)}%`}</span></p></article>
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Doanh số team</p><strong>{revStr}</strong><p className="td-sub">Mục tiêu kỳ {teamRangeTarget ? formatVndDots(teamRangeTarget) : 'chưa thiết lập'} <span className={kpiPctForRange != null && kpiPctForRange >= periodPacePct ? 'td-good' : 'td-warn'}>{kpiPctForRange == null ? '—' : `${kpiPctForRange.toFixed(1)}%`}</span></p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Chi phí quảng cáo</p><strong>{adsStr}</strong><p className="td-sub">CP/DT hiện tại <span className={adsTeamPct != null && adsTeamPct <= 30 ? 'td-good' : adsTeamPct != null && adsTeamPct <= 45 ? 'td-warn' : 'td-bad'}>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</span></p></article>
-            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Tổng Lead</p><strong>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</strong><p className="td-sub">CPL bình quân <span>{cplTeam > 0 ? formatCompactVnd(cplTeam) : '—'}</span></p></article>
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Tổng Lead</p><strong>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</strong><p className="td-sub">CPL bình quân <span>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</span></p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Tổng đơn</p><strong>{teamTotals.orders.toLocaleString('vi-VN')}</strong><p className="td-sub">Tỷ lệ chốt <span className={chotTeam != null && chotTeam >= 15 ? 'td-good' : 'td-warn'}>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</span></p></article>
-            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">AOV bình quân</p><strong>{averageOrderValue > 0 ? formatCompactVnd(averageOrderValue) : '—'}</strong><p className="td-sub">CPA mess <span>{teamCpa > 0 ? formatCompactVnd(teamCpa) : '—'}</span></p></article>
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">AOV bình quân</p><strong>{averageOrderValue > 0 ? formatVndDots(averageOrderValue) : '—'}</strong><p className="td-sub">CPA mess <span>{teamCpa > 0 ? formatVndDots(teamCpa) : '—'}</span></p></article>
           </section>
 
           <section className="team-dashboard-main-grid">
@@ -1011,13 +1009,13 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                 <table className="team-dashboard-table">
                   <thead><tr><th>Nhân sự</th><th>Doanh số</th><th>Chi phí</th><th>CP/DT</th><th>Mess</th><th>CPA</th><th>Lead</th><th>CPL</th><th>Đơn</th><th>CPO</th><th>%CR</th><th>AOV</th></tr></thead>
                   <tbody>
-                    <tr className="team-row"><td className="person team-name">TEAM · {teamName || '—'}</td><td>{formatCompactVnd(teamTotals.rev)}</td><td>{formatCompactVnd(teamTotals.ads)}</td><td>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</td><td>{Math.round(teamMess).toLocaleString('vi-VN')}</td><td>{teamCpa > 0 ? formatCompactVnd(teamCpa) : '—'}</td><td>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</td><td>{cplTeam > 0 ? formatCompactVnd(cplTeam) : '—'}</td><td>{teamTotals.orders.toLocaleString('vi-VN')}</td><td>{teamCpo > 0 ? formatCompactVnd(teamCpo) : '—'}</td><td>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</td><td>{averageOrderValue > 0 ? formatCompactVnd(averageOrderValue) : '—'}</td></tr>
+                    <tr className="team-row"><td className="person team-name">TEAM · {teamName || '—'}</td><td>{formatVndDots(teamTotals.rev)}</td><td>{formatVndDots(teamTotals.ads)}</td><td>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</td><td>{Math.round(teamMess).toLocaleString('vi-VN')}</td><td>{teamCpa > 0 ? formatVndDots(teamCpa) : '—'}</td><td>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</td><td>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</td><td>{teamTotals.orders.toLocaleString('vi-VN')}</td><td>{teamCpo > 0 ? formatVndDots(teamCpo) : '—'}</td><td>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</td><td>{averageOrderValue > 0 ? formatVndDots(averageOrderValue) : '—'}</td></tr>
                     {tableRows.map((row, index) => <tr key={row.m.id}>
                       <td className="person"><span className={`td-rank ${index === 0 ? 'top' : ''}`}>{index + 1}</span>{mktNameWithCode(row.m, mktNameByCode)}</td>
-                      <td className={index === 0 ? 'td-good' : ''}>{formatCompactVnd(row.a.rev)}</td><td>{formatCompactVnd(row.a.ads)}</td>
+                      <td className={index === 0 ? 'td-good' : ''}>{formatVndDots(row.a.rev)}</td><td>{formatVndDots(row.a.ads)}</td>
                       <td className={row.cpdt == null ? '' : row.cpdt <= 30 ? 'td-good' : row.cpdt <= 45 ? 'td-warn' : 'td-bad'}>{row.cpdt == null ? '—' : `${row.cpdt.toFixed(1)}%`}</td>
-                      <td>{Math.round(row.mess).toLocaleString('vi-VN')}</td><td>{row.cpa > 0 ? formatCompactVnd(row.cpa) : '—'}</td><td>{Math.round(row.lead).toLocaleString('vi-VN')}</td><td>{row.cpl > 0 ? formatCompactVnd(row.cpl) : '—'}</td>
-                      <td>{row.a.orders.toLocaleString('vi-VN')}</td><td>{row.cpo > 0 ? formatCompactVnd(row.cpo) : '—'}</td><td>{row.crPct == null ? '—' : `${row.crPct.toFixed(1)}%`}</td><td>{row.aov > 0 ? formatCompactVnd(row.aov) : '—'}</td>
+                      <td>{Math.round(row.mess).toLocaleString('vi-VN')}</td><td>{row.cpa > 0 ? formatVndDots(row.cpa) : '—'}</td><td>{Math.round(row.lead).toLocaleString('vi-VN')}</td><td>{row.cpl > 0 ? formatVndDots(row.cpl) : '—'}</td>
+                      <td>{row.a.orders.toLocaleString('vi-VN')}</td><td>{row.cpo > 0 ? formatVndDots(row.cpo) : '—'}</td><td>{row.crPct == null ? '—' : `${row.crPct.toFixed(1)}%`}</td><td>{row.aov > 0 ? formatVndDots(row.aov) : '—'}</td>
                     </tr>)}
                     {!tableRows.length ? <tr><td colSpan={12} className="td-empty">Chưa có báo cáo của thành viên trong khoảng ngày này.</td></tr> : null}
                   </tbody>
@@ -1042,16 +1040,16 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                 const dailyRevenue = elapsedDays > 0 ? row.a.rev / elapsedDays : 0;
                 const barColor = row.state === 'on' ? 'green' : row.state === 'slow' ? 'orange' : row.state === 'risk' ? 'red' : 'orange';
                 const stateText = row.state === 'on' ? 'Đúng nhịp' : row.state === 'slow' ? 'Chậm nhịp' : row.state === 'risk' ? 'Nguy cơ hụt' : 'Chưa gán KPI';
-                return <tr key={row.m.id}><td className="person">{mktNameWithCode(row.m, mktNameByCode)}</td><td>{formatCompactVnd(row.a.rev)}</td><td>{row.target > 0 ? formatCompactVnd(row.target) : '—'}</td>
+                return <tr key={row.m.id}><td className="person">{mktNameWithCode(row.m, mktNameByCode)}</td><td>{formatVndDots(row.a.rev)}</td><td>{row.target > 0 ? formatVndDots(row.target) : '—'}</td>
                   <td><div className="team-dashboard-track"><i className="team-dashboard-marker" style={{ left: `${periodPacePct}%` }} /><i className={`team-dashboard-fill ${barColor}`} style={{ width: `${Math.min(100, Math.max(0, row.pct || 0))}%` }} /></div></td>
-                  <td className={`td-progress-pct ${row.state === 'on' ? 'td-good' : row.state === 'slow' ? 'td-warn' : row.state === 'risk' ? 'td-bad' : ''}`}>{row.pct == null ? '—' : `${row.pct.toFixed(1)}%`}</td><td>{formatCompactVnd(dailyRevenue)}</td><td className={row.forecastPct != null && row.forecastPct >= 100 ? 'td-good' : row.forecastPct != null && row.forecastPct < 80 ? 'td-bad' : 'td-warn'}>{row.forecastPct == null ? '—' : `${row.forecastPct.toFixed(0)}%`}</td><td><span className={`team-dashboard-status ${row.state}`}>{stateText}</span></td></tr>;
+                  <td className={`td-progress-pct ${row.state === 'on' ? 'td-good' : row.state === 'slow' ? 'td-warn' : row.state === 'risk' ? 'td-bad' : ''}`}>{row.pct == null ? '—' : `${row.pct.toFixed(1)}%`}</td><td>{formatVndDots(dailyRevenue)}</td><td className={row.forecastPct != null && row.forecastPct >= 100 ? 'td-good' : row.forecastPct != null && row.forecastPct < 80 ? 'td-bad' : 'td-warn'}>{row.forecastPct == null ? '—' : `${row.forecastPct.toFixed(0)}%`}</td><td><span className={`team-dashboard-status ${row.state}`}>{stateText}</span></td></tr>;
               })}
               {!progressRows.length ? <tr><td colSpan={8} className="td-empty">Chưa có thành viên có báo cáo trong khoảng ngày này.</td></tr> : null}
             </tbody></table></div>
           </section>
 
           <section className="team-dashboard-mini-grid">
-            <article className="team-dashboard-card team-dashboard-mini"><h3>Top doanh số</h3><strong>{leaderMember ? `${mktNameWithCode(leaderMember.m, mktNameByCode)} · ${formatCompactVnd(leaderMember.a.rev)}` : 'Chưa có dữ liệu'}</strong><p>{leaderMember && teamTotals.rev > 0 ? `Đóng góp ${((leaderMember.a.rev / teamTotals.rev) * 100).toFixed(1)}% doanh số team` : 'Số liệu sẽ hiện khi có báo cáo.'}</p></article>
+            <article className="team-dashboard-card team-dashboard-mini"><h3>Top doanh số</h3><strong>{leaderMember ? `${mktNameWithCode(leaderMember.m, mktNameByCode)} · ${formatVndDots(leaderMember.a.rev)}` : 'Chưa có dữ liệu'}</strong><p>{leaderMember && teamTotals.rev > 0 ? `Đóng góp ${((leaderMember.a.rev / teamTotals.rev) * 100).toFixed(1)}% doanh số team` : 'Số liệu sẽ hiện khi có báo cáo.'}</p></article>
             <article className="team-dashboard-card team-dashboard-mini"><h3>Hiệu suất quảng cáo tốt nhất</h3><strong>{bestEfficiency ? `${mktNameWithCode(bestEfficiency.m, mktNameByCode)} · ${bestEfficiency.cpdt?.toFixed(1)}%` : 'Chưa có dữ liệu'}</strong><p>{bestEfficiency ? 'CP/DT thấp nhất trong các thành viên có doanh thu.' : 'Chưa thể tính CP/DT trong kỳ này.'}</p></article>
             <article className="team-dashboard-card team-dashboard-mini"><h3>Cần ưu tiên hỗ trợ</h3><strong className={supportMember && staffTargets.has(supportMember.m.id) ? 'td-bad' : ''}>{supportMember && staffTargets.has(supportMember.m.id) ? `${mktNameWithCode(supportMember.m, mktNameByCode)} · trễ ${Math.max(0, periodPacePct - (supportMember.pct ?? 0)).toFixed(0)} điểm %` : 'Chưa có KPI để so sánh'}</strong><p>{supportMember && staffTargets.has(supportMember.m.id) ? 'Dựa trên tiến độ KPI so với thời gian đã qua.' : 'Gán KPI tháng cho thành viên để theo dõi nhịp.'}</p></article>
           </section>
@@ -1063,7 +1061,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       {mktDetailCodeKey != null ? <div className="team-dashboard-modal-backdrop" role="presentation" onClick={() => setMktDetailCodeKey(null)}><div className="team-dashboard-modal" role="dialog" aria-modal="true" aria-labelledby="leader-mkt-detail-title" onClick={(event) => event.stopPropagation()}>
         <div className="team-dashboard-modal-head"><div><h3 id="leader-mkt-detail-title">Chi tiết báo cáo — {mktDetailTitle}</h3><p>{monthLabel} · {mktDetailRows.length} dòng · {DETAIL_REPORTS_TABLE}</p></div><button type="button" onClick={() => setMktDetailCodeKey(null)} aria-label="Đóng"><X size={19} /></button></div>
         <div className="team-dashboard-table-wrap"><table className="team-dashboard-table"><thead><tr><th>Ngày</th><th>MKT</th><th>Mã NS</th><th>Tên trên báo cáo</th><th>Team</th><th>Chi phí</th><th>Doanh thu</th><th>Đơn</th><th>Mess</th><th>Lead / Data</th></tr></thead><tbody>
-          {mktDetailRows.map((row, index) => { const date = String((row as { report_date?: string }).report_date || '').slice(0, 10); const revenue = reportRevenueVnd(row as { tien_viet?: unknown; revenue?: unknown }); return <tr key={String((row as { id?: unknown }).id ?? `detail-${index}`)}><td>{date ? formatReportDateVi(date) : '—'}</td><td>{leaderDrMktDisplayName(row, mktNameByCode)}</td><td>{safeTrim((row as { code?: string }).code) || '—'}</td><td>{safeTrim((row as { name?: string }).name) || '—'}</td><td>{safeTrim((row as { team?: string }).team) || '—'}</td><td>{formatCompactVnd(safeNum((row as { ad_cost?: unknown }).ad_cost))}</td><td className="td-good">{formatCompactVnd(revenue)}</td><td>{safeNum((row as { order_count?: unknown }).order_count)}</td><td>{safeNum((row as { mess_comment_count?: unknown }).mess_comment_count)}</td><td>{safeNum((row as { tong_lead?: unknown }).tong_lead)} / {safeNum((row as { tong_data_nhan?: unknown }).tong_data_nhan)}</td></tr>; })}
+          {mktDetailRows.map((row, index) => { const date = String((row as { report_date?: string }).report_date || '').slice(0, 10); const revenue = reportRevenueVnd(row as { tien_viet?: unknown; revenue?: unknown }); return <tr key={String((row as { id?: unknown }).id ?? `detail-${index}`)}><td>{date ? formatReportDateVi(date) : '—'}</td><td>{leaderDrMktDisplayName(row, mktNameByCode)}</td><td>{safeTrim((row as { code?: string }).code) || '—'}</td><td>{safeTrim((row as { name?: string }).name) || '—'}</td><td>{safeTrim((row as { team?: string }).team) || '—'}</td><td>{formatVndDots(safeNum((row as { ad_cost?: unknown }).ad_cost))}</td><td className="td-good">{formatVndDots(revenue)}</td><td>{safeNum((row as { order_count?: unknown }).order_count)}</td><td>{safeNum((row as { mess_comment_count?: unknown }).mess_comment_count)}</td><td>{safeNum((row as { tong_lead?: unknown }).tong_lead)} / {safeNum((row as { tong_data_nhan?: unknown }).tong_data_nhan)}</td></tr>; })}
           {!mktDetailRows.length ? <tr><td colSpan={10} className="td-empty">Không có dòng dữ liệu.</td></tr> : null}
         </tbody></table></div>
       </div></div> : null}

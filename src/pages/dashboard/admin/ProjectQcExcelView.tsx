@@ -3,7 +3,7 @@ import { ChevronDown, Download, FileSpreadsheet, Loader2, RefreshCw, Upload } fr
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import type { DuAnQcExcelRow } from '../../../types';
-import { formatFullVnd, formatReportDateVi, extractMaNvFromBracketPage } from '../mkt/mktDetailReportShared';
+import { REPORTS_TABLE, formatFullVnd, formatReportDateVi, extractMaNvFromBracketPage } from '../mkt/mktDetailReportShared';
 import {
   QC_EXCEL_TABLE,
   MKT_DAILY_DETAILS_TABLE,
@@ -12,6 +12,17 @@ import {
 } from './projectQcExcel';
 
 type RowWithCode = DuAnQcExcelRow;
+const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+
+function normalizeEmployeeCode(value: unknown): string {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .replace(/\u00a0/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleUpperCase();
+}
 
 function addDays(d: Date, n: number): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -193,7 +204,7 @@ export const ProjectQcExcelView: React.FC = () => {
     const prepared = rows
       .map((row) => {
         const report_date = String(row.ngay || '').slice(0, 10);
-        const ma_nv = row.ma_nv || extractMaNvFromBracketPage(row.ten_chien_dich) || '';
+        const ma_nv = normalizeEmployeeCode(row.ma_nv || extractMaNvFromBracketPage(row.ten_chien_dich));
         const ten_chien_dich = row.ten_chien_dich?.trim() || '';
         if (!report_date || !ma_nv || !ten_chien_dich) return null;
         return {
@@ -231,7 +242,7 @@ export const ProjectQcExcelView: React.FC = () => {
       }
     }
     const payload = Array.from(byKey.values());
-    if (!window.confirm(`\u0110\u1ed3ng b\u1ed9 ${payload.length} d\u00f2ng chi ti\u1ebft theo Ng\u00e0y + M\u00e3 NV + chi\u1ebfn d\u1ecbch?`)) return;
+    if (!window.confirm(`\u0110\u1ed3ng b\u1ed9 ${payload.length} d\u00f2ng QC v\u00e0 c\u1eadp nh\u1eadt/t\u1ea1o b\u00e1o c\u00e1o MKT theo Ng\u00e0y + M\u00e3 NV?`)) return;
 
     setPushing(true);
     try {
@@ -239,7 +250,122 @@ export const ProjectQcExcelView: React.FC = () => {
         .from(MKT_DAILY_DETAILS_TABLE)
         .upsert(payload, { onConflict: 'report_date,ma_nv,ten_chien_dich' });
       if (syncError) throw syncError;
-      setExcelMsg(`\u0110\u00e3 \u0111\u1ed3ng b\u1ed9 ${payload.length} d\u00f2ng v\u00e0o ${MKT_DAILY_DETAILS_TABLE}.`);
+
+      // Marketing Report reads detail_reports, so also sync one employee/day summary there.
+      const byEmployeeDay = new Map<string, { report_date: string; code: string; ad_cost: number; mess_comment_count: number }>();
+      for (const row of payload) {
+        const code = String(row.ma_nv).trim();
+        const key = `${row.report_date}\0${normalizeEmployeeCode(code)}`;
+        const current = byEmployeeDay.get(key);
+        if (!current) {
+          byEmployeeDay.set(key, {
+            report_date: row.report_date,
+            code,
+            ad_cost: row.ad_cost_vnd,
+            mess_comment_count: row.message_conversations,
+          });
+        } else {
+          current.ad_cost += row.ad_cost_vnd;
+          current.mess_comment_count += row.message_conversations;
+        }
+      }
+      const summaries = Array.from(byEmployeeDay.values());
+      const reportDates = Array.from(new Set(summaries.map((row) => row.report_date)));
+      const [staffRes, reportRes] = await Promise.all([
+        supabase
+          .from(EMPLOYEES_TABLE)
+          .select('ma_ns, name, email, team')
+          .limit(10000),
+        supabase
+          .from(REPORTS_TABLE)
+          .select('id, report_date, code, email')
+          .in('report_date', reportDates)
+          .limit(10000),
+      ]);
+      if (staffRes.error) throw staffRes.error;
+      if (reportRes.error) throw reportRes.error;
+
+      const staffByCode = new Map<string, { name: string; email: string; team: string | null }>();
+      for (const staff of staffRes.data || []) {
+        const key = normalizeEmployeeCode(staff.ma_ns);
+        if (!key || staffByCode.has(key)) continue;
+        const email = String(staff.email || '').trim().toLowerCase();
+        if (!email) continue;
+        staffByCode.set(key, {
+          name: String(staff.name || email).trim() || email,
+          email,
+          team: staff.team?.trim() || null,
+        });
+      }
+
+      const reportIdByCodeKey = new Map<string, string>();
+      const reportIdByEmailKey = new Map<string, string>();
+      for (const report of reportRes.data || []) {
+        const day = String(report.report_date).slice(0, 10);
+        const codeKey = `${day}\0${normalizeEmployeeCode(report.code)}`;
+        const emailKey = `${day}\0${String(report.email || '').trim().toLowerCase()}`;
+        if (report.id && normalizeEmployeeCode(report.code) && !reportIdByCodeKey.has(codeKey)) {
+          reportIdByCodeKey.set(codeKey, report.id);
+        }
+        if (report.id && String(report.email || '').trim() && !reportIdByEmailKey.has(emailKey)) {
+          reportIdByEmailKey.set(emailKey, report.id);
+        }
+      }
+
+      let updatedReports = 0;
+      let createdReports = 0;
+      let skippedNoEmployee = 0;
+      const reportChunk = 60;
+      const reportUpdates: { id: string; patch: { ad_cost: number; mess_comment_count: number; code: string } }[] = [];
+      const reportInserts: Record<string, unknown>[] = [];
+      for (const row of summaries) {
+        const key = `${row.report_date}\0${normalizeEmployeeCode(row.code)}`;
+        const staff = staffByCode.get(normalizeEmployeeCode(row.code));
+        const id = reportIdByCodeKey.get(key) || (staff ? reportIdByEmailKey.get(`${row.report_date}\0${staff.email}`) : undefined);
+        if (id) {
+          reportUpdates.push({
+            id,
+            patch: { ad_cost: row.ad_cost, mess_comment_count: row.mess_comment_count, code: row.code },
+          });
+          continue;
+        }
+        if (!staff) {
+          skippedNoEmployee++;
+          continue;
+        }
+        reportInserts.push({
+          report_date: row.report_date,
+          code: row.code,
+          name: staff.name,
+          email: staff.email,
+          team: staff.team,
+          ad_cost: row.ad_cost,
+          mess_comment_count: row.mess_comment_count,
+        });
+      }
+
+      for (let i = 0; i < reportUpdates.length; i += reportChunk) {
+        const part = reportUpdates.slice(i, i + reportChunk);
+        const results = await Promise.all(
+          part.map(({ id, patch }) => supabase.from(REPORTS_TABLE).update(patch).eq('id', id))
+        );
+        const updateError = results.find((result) => result.error)?.error;
+        if (updateError) throw updateError;
+        updatedReports += part.length;
+      }
+      for (let i = 0; i < reportInserts.length; i += reportChunk) {
+        const part = reportInserts.slice(i, i + reportChunk);
+        const { error: insertError } = await supabase.from(REPORTS_TABLE).insert(part);
+        if (insertError) throw insertError;
+        createdReports += part.length;
+      }
+
+      const skippedTail = skippedNoEmployee
+        ? ` ${skippedNoEmployee} d\u00f2ng kh\u00f4ng c\u00f3 nh\u00e2n vi\u00ean kh\u1edbp M\u00e3 NV trong employees n\u00ean b\u1ecb b\u1ecf qua.`
+        : '';
+      setExcelMsg(
+        `\u0110\u00e3 \u0111\u1ed3ng b\u1ed9 ${payload.length} chi ti\u1ebft QC; Marketing Report: c\u1eadp nh\u1eadt ${updatedReports}, t\u1ea1o m\u1edbi ${createdReports} d\u00f2ng.${skippedTail}`
+      );
       await loadDailyDetails();
     } catch (e) {
       const msg = e && typeof e === 'object' && 'message' in e ? String((e as any).message) : '\u0110\u1ed3ng b\u1ed9 th\u1ea5t b\u1ea1i.';

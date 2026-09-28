@@ -8,7 +8,7 @@ import {
   type UpcareMktEmployeeRow,
 } from '../../../api/upcareCrm';
 import { supabase } from '../../../api/supabase';
-import { REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboard/mkt/mktDetailReportShared';
+import { normalizeMaNsCode, REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboard/mkt/mktDetailReportShared';
 import { isMissingTienVietError } from '../../../utils/detailReportsVnd';
 
 /** Fabico MKT → detail_reports: chỉ cập nhật revenue + tien_viet (không đụng name/email/code/report_date). */
@@ -20,12 +20,13 @@ function aggregateUpcareRowsBySameCode(list: UpcareMktEmployeeRow[]): UpcareMktE
   const m = new Map<string, UpcareMktEmployeeRow>();
   for (const r of list) {
     const c = String(r.code).trim();
-    const prev = m.get(c);
+    const key = normalizeMaNsCode(c);
+    const prev = m.get(key);
     if (prev) {
       prev.amount = (Number(prev.amount) || 0) + (Number(r.amount) || 0);
       if (!prev.name?.trim() && r.name?.trim()) prev.name = r.name;
     } else {
-      m.set(c, { ...r, code: c, amount: Number(r.amount) || 0 });
+      m.set(key, { ...r, code: c, amount: Number(r.amount) || 0 });
     }
   }
   return Array.from(m.values());
@@ -151,21 +152,17 @@ export const UpcareMktEmployeesView: React.FC = () => {
       const rowsAggregated = aggregateUpcareRowsBySameCode(rowsWithCode);
       const mergedSameCodeOnPage = rowsWithCode.length - rowsAggregated.length;
 
-      const codes = Array.from(
-        new Set(rowsAggregated.map((r) => String(r.code).trim()))
-      );
-
       // Lấy các bản ghi đã có trong DB theo (report_date, code)
       const { data: existing, error: selErr } = await supabase
         .from(REPORTS_TABLE)
         .select('id, report_date, code')
         .in('report_date', dayKeys)
-        .in('code', codes);
+        .limit(10000);
       if (selErr) throw selErr;
 
       const idByKey = new Map<string, string>();
       for (const row of existing || []) {
-        const k = `${row.report_date}\0${(row as any).code}`;
+        const k = `${row.report_date}\0${normalizeMaNsCode((row as any).code)}`;
         idByKey.set(k, (row as any).id);
       }
 
@@ -177,7 +174,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
       for (const ymd of dayKeys) {
         for (const r of rowsAggregated) {
           const c = String(r.code).trim();
-          const k = `${ymd}\0${c}`;
+          const k = `${ymd}\0${normalizeMaNsCode(c)}`;
           const id = idByKey.get(k);
           if (!id) {
             skippedNoDbRow += 1;
