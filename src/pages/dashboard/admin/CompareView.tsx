@@ -99,11 +99,11 @@ const CmpCard: React.FC<CmpCardProps> = ({ label, value, sub, subTone = 'neutral
         : 'bg-[#f0f4f1] text-[#476355] border border-[#e2e8e5]';
 
   return (
-    <div className="bg-[#f8faf9] rounded-xl border border-[#e2e8e5] p-4 transition-all hover:shadow-xs">
-      <div className="text-[11px] font-bold tracking-wider uppercase text-[#476355] mb-2">{label}</div>
-      <div className={`font-mono text-xl font-extrabold text-[#191c1b] ${valueClassName || ''}`}>{value}</div>
-      <div className="mt-2.5">
-        <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full ${tonePill}`}>
+    <div className="bg-[#f8faf9] rounded-lg border border-[#e2e8e5] p-3 transition-all hover:shadow-xs">
+      <div className="text-[10px] font-bold tracking-wider uppercase text-[#476355] mb-1.5">{label}</div>
+      <div className={`font-mono text-lg font-extrabold text-[#191c1b] ${valueClassName || ''}`}>{value}</div>
+      <div className="mt-2">
+        <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ${tonePill}`}>
           {sub}
         </span>
       </div>
@@ -113,8 +113,8 @@ const CmpCard: React.FC<CmpCardProps> = ({ label, value, sub, subTone = 'neutral
 
 function StitchCompareSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="bg-white rounded-2xl border border-[#e2e8e5] p-5 sm:p-6 shadow-xs">
-      <h2 className="text-sm font-bold uppercase tracking-wider text-[#191c1b] mb-4 flex items-center gap-2">
+    <section className="bg-white rounded-xl border border-[#e2e8e5] p-3.5 sm:p-4 shadow-xs">
+      <h2 className="text-xs font-bold uppercase tracking-wider text-[#191c1b] mb-3 flex items-center gap-2">
         {title}
       </h2>
       {children}
@@ -221,10 +221,10 @@ export const CompareView: React.FC = () => {
     stats.dM == null ? 'neutral' : stats.dM >= 0 ? 'up' : 'down';
 
   return (
-    <div className="dash-fade-up space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-[#e2e8e5]">
+    <div className="dash-fade-up space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-[#e2e8e5]">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#191c1b] tracking-tight">So sánh hiệu suất</h1>
+          <h1 className="text-xl font-extrabold text-[#191c1b] tracking-tight">So sánh hiệu suất</h1>
           <p className="text-xs text-[#476355] mt-1 leading-relaxed max-w-xl">
             Số liệu tổng hợp từ bảng <code className="font-mono text-[#006e51] bg-[#ecfdf5] px-1.5 py-0.5 rounded">{REPORTS_TABLE}</code> (cột <code className="font-mono text-[#006e51] bg-[#ecfdf5] px-1.5 py-0.5 rounded">revenue</code>, <code className="font-mono text-[#006e51] bg-[#ecfdf5] px-1.5 py-0.5 rounded">ad_cost</code>), nhóm theo ngày. Tuần bắt đầu Thứ Hai.
           </p>

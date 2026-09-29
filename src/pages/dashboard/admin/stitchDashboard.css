@@ -99,101 +99,101 @@
 .stitch-topbar-notification { position: relative; display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border: 1px solid rgba(255,255,255,.22); border-radius: 8px; background: rgba(255,255,255,.15); color: #fff; cursor: pointer; }
 .stitch-topbar-notification:hover { background: rgba(255,255,255,.24); }
 .stitch-topbar-notification i { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border: 1.5px solid #166534; border-radius: 50%; background: #fbbf24; }
-.stitch-admin-shell .stitch-admin-main { min-width: 0; padding: 32px; background: var(--stitch-canvas); color: var(--stitch-text); }
+.stitch-admin-shell .stitch-admin-main { min-width: 0; padding: 16px 20px 24px; background: var(--stitch-canvas); color: var(--stitch-text); }
 
 .admin-personal-dashboard.stitch-dashboard { min-height: 100%; color: #1f2937; background: transparent; font-family: 'Plus Jakarta Sans', sans-serif; }
-.admin-personal-dashboard.stitch-dashboard .personal-dashboard-header { display: flex; min-height: 64px; align-items: center; justify-content: space-between; gap: 20px; padding: 0; border: 0; }
-.stitch-dashboard .personal-dashboard-identity { display: flex; min-width: 0; align-items: center; gap: 14px; }
-.admin-personal-dashboard.stitch-dashboard .personal-dashboard-avatar { display: grid; width: 44px; height: 44px; flex: 0 0 44px; place-items: center; overflow: hidden; border: 1px solid #e2e8e5; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.07); color: #15803d; font-size: 14px; font-weight: 800; }
+.admin-personal-dashboard.stitch-dashboard .personal-dashboard-header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 0; border: 0; }
+.stitch-dashboard .personal-dashboard-identity { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.admin-personal-dashboard.stitch-dashboard .personal-dashboard-avatar { display: grid; width: 36px; height: 36px; flex: 0 0 36px; place-items: center; overflow: hidden; border: 1px solid #e2e8e5; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.07); color: #15803d; font-size: 13px; font-weight: 800; }
 .stitch-dashboard .personal-dashboard-identity-copy { min-width: 0; }
-.stitch-dashboard .personal-dashboard-userline { display: flex; align-items: center; gap: 8px; margin: 0 0 3px; color: #4b5563; font-size: 11px; font-weight: 650; }
+.stitch-dashboard .personal-dashboard-userline { display: flex; align-items: center; gap: 6px; margin: 0 0 1px; color: #4b5563; font-size: 10.5px; font-weight: 650; }
 .stitch-dashboard .personal-dashboard-userline span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stitch-dashboard .personal-dashboard-userline i { width: 4px; height: 4px; border-radius: 50%; background: #9ca3af; }
+.stitch-dashboard .personal-dashboard-userline i { width: 3px; height: 3px; border-radius: 50%; background: #9ca3af; }
 .stitch-dashboard .personal-dashboard-userline strong { color: #16a34a; font-weight: 700; }
-.stitch-dashboard .personal-dashboard-identity-copy h2 { margin: 0; color: #1f2937; font-size: 20px; font-weight: 800; line-height: 1.2; letter-spacing: -.03em; }
-.stitch-dashboard .personal-dashboard-subtitle { margin: 3px 0 0; color: #6b7280; font-size: 11px; }
-.admin-personal-dashboard.stitch-dashboard .personal-period-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; }
-.admin-personal-dashboard.stitch-dashboard .personal-period-presets { display: flex; min-height: 39px; align-items: center; gap: 2px; padding: 3px; border: 1px solid #e2e8e5; border-radius: 8px; background: #ecefee; }
-.admin-personal-dashboard.stitch-dashboard .personal-period-presets button { min-height: 31px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: #4b5563; font-size: 11px; font-weight: 600; cursor: pointer; }
+.stitch-dashboard .personal-dashboard-identity-copy h2 { margin: 0; color: #1f2937; font-size: 18px; font-weight: 800; line-height: 1.2; letter-spacing: -.03em; }
+.stitch-dashboard .personal-dashboard-subtitle { margin: 1px 0 0; color: #6b7280; font-size: 11px; }
+.admin-personal-dashboard.stitch-dashboard .personal-period-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.admin-personal-dashboard.stitch-dashboard .personal-period-presets { display: flex; min-height: 32px; align-items: center; gap: 2px; padding: 2px; border: 1px solid #e2e8e5; border-radius: 7px; background: #ecefee; }
+.admin-personal-dashboard.stitch-dashboard .personal-period-presets button { min-height: 26px; padding: 0 9px; border: 0; border-radius: 5px; background: transparent; color: #4b5563; font-size: 11px; font-weight: 600; cursor: pointer; }
 .admin-personal-dashboard.stitch-dashboard .personal-period-presets button:hover { color: #111827; background: #e2e8e5; }
 .admin-personal-dashboard.stitch-dashboard .personal-period-presets button.active { color: #fff; background: #16a34a; box-shadow: 0 1px 3px rgba(22,163,74,.2); font-weight: 800; }
-.admin-personal-dashboard.stitch-dashboard .personal-date-range { display: flex; min-height: 39px; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid #e2e8e5; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.05); color: #6b7280; }
-.admin-personal-dashboard.stitch-dashboard .personal-date-range input { width: 103px; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: #1f2937; color-scheme: light; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+.admin-personal-dashboard.stitch-dashboard .personal-date-range { display: flex; min-height: 32px; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid #e2e8e5; border-radius: 7px; background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.05); color: #6b7280; }
+.admin-personal-dashboard.stitch-dashboard .personal-date-range input { width: 100px; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: #1f2937; color-scheme: light; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
 .stitch-dashboard .personal-date-range input::-webkit-calendar-picker-indicator { width: 12px; margin: 0; opacity: .6; }
-.stitch-data-error { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 20px 0; padding: 12px 16px; border: 1px solid #fca5a5; border-radius: 10px; background: #fef2f2; color: #b91c1c; font-size: 12px; }
+.stitch-data-error { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 14px 0; padding: 10px 14px; border: 1px solid #fca5a5; border-radius: 8px; background: #fef2f2; color: #b91c1c; font-size: 11.5px; }
 .stitch-data-error button { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; text-decoration: underline; cursor: pointer; }
-.stitch-dashboard-loading { display: flex; min-height: 240px; align-items: center; justify-content: center; gap: 12px; color: #4b5563; }
+.stitch-dashboard-loading { display: flex; min-height: 200px; align-items: center; justify-content: center; gap: 10px; color: #4b5563; }
 .stitch-dashboard-loading svg { color: #16a34a; }
 
-.admin-personal-dashboard.stitch-dashboard .personal-alert-banner { display: flex; align-items: flex-start; gap: 14px; min-height: 100px; margin: 24px 0 20px; padding: 15px 16px; border: 1px solid #fca5a5; border-radius: 12px; background: #fef2f2; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+.admin-personal-dashboard.stitch-dashboard .personal-alert-banner { display: flex; align-items: flex-start; gap: 10px; min-height: unset; margin: 12px 0 14px; padding: 10px 14px; border: 1px solid #fca5a5; border-radius: 10px; background: #fef2f2; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
 .admin-personal-dashboard.stitch-dashboard .personal-alert-banner.is-alert { border-color: #fca5a5; background: #fef2f2; }
 .admin-personal-dashboard.stitch-dashboard .personal-alert-banner.is-clear { border-color: #86efac; background: #f0fdf4; }
-.admin-personal-dashboard.stitch-dashboard .personal-alert-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border: 1px solid #fecdd3; border-radius: 8px; background: #ffe4e6; color: #dc2626; }
+.admin-personal-dashboard.stitch-dashboard .personal-alert-icon { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border: 1px solid #fecdd3; border-radius: 6px; background: #ffe4e6; color: #dc2626; }
 .admin-personal-dashboard.stitch-dashboard .personal-alert-banner.is-clear .personal-alert-icon { border-color: #bbf7d0; background: #dcfce7; color: #16a34a; }
 .stitch-dashboard .personal-alert-copy { min-width: 0; flex: 1; }
-.admin-personal-dashboard.stitch-dashboard .personal-alert-banner h2 { margin: 1px 0 5px; color: #991b1b; font-size: 12px; font-weight: 800; }
+.admin-personal-dashboard.stitch-dashboard .personal-alert-banner h2 { margin: 0 0 2px; color: #991b1b; font-size: 12px; font-weight: 800; }
 .admin-personal-dashboard.stitch-dashboard .personal-alert-banner.is-clear h2 { color: #166534; }
-.admin-personal-dashboard.stitch-dashboard .personal-alert-banner p { margin: 0; color: #b91c1c; font-size: 11px; line-height: 1.65; }
+.admin-personal-dashboard.stitch-dashboard .personal-alert-banner p { margin: 0; color: #b91c1c; font-size: 11px; line-height: 1.45; }
 .admin-personal-dashboard.stitch-dashboard .personal-alert-banner.is-clear p { color: #166534; }
-.stitch-dashboard .personal-alert-bottom { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 12px; }
-.stitch-dashboard .personal-alert-bottom p { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 10px; }
-.stitch-dashboard .personal-alert-bottom p::before { width: 6px; height: 6px; border-radius: 50%; background: #fb7185; content: ''; }
+.stitch-dashboard .personal-alert-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+.stitch-dashboard .personal-alert-bottom p { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 10px; }
+.stitch-dashboard .personal-alert-bottom p::before { width: 5px; height: 5px; border-radius: 50%; background: #fb7185; content: ''; }
 .stitch-dashboard .personal-alert-banner.is-clear .personal-alert-bottom p::before { background: #22c55e; }
-.stitch-dashboard .personal-alert-bottom button { flex: 0 0 auto; padding: 0; color: #b91c1c; background: none; font-size: 11px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.stitch-dashboard .personal-alert-bottom button { flex: 0 0 auto; padding: 0; color: #b91c1c; background: none; font-size: 10.5px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .stitch-dashboard .personal-alert-bottom button:hover { color: #7f1d1d; }
 
-.admin-personal-dashboard.stitch-dashboard .personal-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-.admin-personal-dashboard.stitch-dashboard .personal-kpi-card { position: relative; display: flex; min-width: 0; min-height: 200px; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 10px 24px -8px rgba(0,0,0,.03); transition: box-shadow .2s, border-color .2s; }
-.admin-personal-dashboard.stitch-dashboard .personal-kpi-card:hover { border-color: #cbd5e1; box-shadow: 0 7px 20px rgba(15,23,42,.08); }
+.admin-personal-dashboard.stitch-dashboard .personal-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.admin-personal-dashboard.stitch-dashboard .personal-kpi-card { position: relative; display: flex; min-width: 0; min-height: 116px; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 6px 16px -6px rgba(0,0,0,.03); transition: box-shadow .2s, border-color .2s; }
+.admin-personal-dashboard.stitch-dashboard .personal-kpi-card:hover { border-color: #cbd5e1; box-shadow: 0 4px 12px rgba(15,23,42,.07); }
 .admin-personal-dashboard.stitch-dashboard .personal-kpi-card.is-warning { border-color: #fecdd3; }
 .admin-personal-dashboard.stitch-dashboard .personal-kpi-card::before { position: absolute; top: 0; right: 0; left: 0; height: 2px; background: var(--metric-accent); opacity: .65; content: ''; }
 .admin-personal-dashboard.stitch-dashboard .personal-kpi-card::after { display: none; }
-.stitch-dashboard .personal-kpi-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.admin-personal-dashboard.stitch-dashboard .personal-kpi-icon { display: grid; width: 33px; height: 33px; flex: 0 0 33px; place-items: center; border: 1px solid color-mix(in srgb, var(--metric-accent) 18%, white); border-radius: 8px; background: color-mix(in srgb, var(--metric-accent) 7%, white); color: var(--metric-accent); }
-.admin-personal-dashboard.stitch-dashboard .personal-kpi-badge { max-width: 56%; padding: 3px 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f1f5f9; color: #475569; font-size: 10px; font-weight: 650; line-height: 1.15; }
+.stitch-dashboard .personal-kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.admin-personal-dashboard.stitch-dashboard .personal-kpi-icon { display: grid; width: 26px; height: 26px; flex: 0 0 26px; place-items: center; border: 1px solid color-mix(in srgb, var(--metric-accent) 18%, white); border-radius: 6px; background: color-mix(in srgb, var(--metric-accent) 7%, white); color: var(--metric-accent); }
+.admin-personal-dashboard.stitch-dashboard .personal-kpi-badge { max-width: 56%; padding: 1.5px 6px; border: 1px solid #e2e8f0; border-radius: 4px; background: #f1f5f9; color: #475569; font-size: 10px; font-weight: 650; line-height: 1.15; }
 .admin-personal-dashboard.stitch-dashboard .personal-kpi-card.is-warning .personal-kpi-badge { border-color: #fecdd3; background: #fff1f2; color: #be123c; }
-.stitch-dashboard .personal-kpi-main { min-width: 0; margin-top: 16px; }
-.admin-personal-dashboard.stitch-dashboard .personal-kpi-title { margin: 0; color: #64748b; font-size: 11px; font-weight: 700; letter-spacing: .055em; text-transform: uppercase; }
+.stitch-dashboard .personal-kpi-main { min-width: 0; margin-top: 6px; }
+.admin-personal-dashboard.stitch-dashboard .personal-kpi-title { margin: 0; color: #64748b; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .admin-personal-dashboard.stitch-dashboard .personal-kpi-card.is-warning .personal-kpi-title { color: #be123c; }
-.stitch-dashboard .personal-kpi-value-row { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 6px; margin-top: 7px; }
-.admin-personal-dashboard.stitch-dashboard .personal-kpi-value { min-width: 0; overflow: hidden; margin: 0; color: #0f172a; font-size: 26px; font-weight: 800; line-height: 1.1; letter-spacing: -.045em; text-overflow: ellipsis; white-space: nowrap; }
+.stitch-dashboard .personal-kpi-value-row { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 4px; margin-top: 2px; }
+.admin-personal-dashboard.stitch-dashboard .personal-kpi-value { min-width: 0; overflow: hidden; margin: 0; color: #0f172a; font-size: 21px; font-weight: 800; line-height: 1.15; letter-spacing: -.04em; text-overflow: ellipsis; white-space: nowrap; }
 .admin-personal-dashboard.stitch-dashboard .personal-kpi-card.is-warning .personal-kpi-value { color: #be123c; }
-.stitch-dashboard .personal-kpi-delta { flex: 0 0 auto; padding: 3px 5px; border: 1px solid #a7f3d0; border-radius: 5px; background: #ecfdf5; color: #047857; font-size: 10px; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+.stitch-dashboard .personal-kpi-delta { flex: 0 0 auto; padding: 1.5px 5px; border: 1px solid #a7f3d0; border-radius: 4px; background: #ecfdf5; color: #047857; font-size: 10px; font-weight: 700; line-height: 1.2; white-space: nowrap; }
 .stitch-dashboard .personal-kpi-delta.is-warning { border-color: #fde68a; background: #fffbeb; color: #b45309; }
 .stitch-dashboard .personal-kpi-delta.is-danger { border-color: #fecdd3; background: #fff1f2; color: #be123c; }
 .stitch-dashboard .personal-kpi-delta.is-muted { border-color: #e2e8f0; background: #f1f5f9; color: #64748b; }
-.stitch-dashboard .personal-kpi-footer { display: flex; min-height: 24px; align-items: center; justify-content: space-between; gap: 8px; margin-top: 17px; padding-top: 14px; border-top: 1px solid #f1f5f9; }
+.stitch-dashboard .personal-kpi-footer { display: flex; min-height: 18px; align-items: center; justify-content: space-between; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #f1f5f9; }
 .admin-personal-dashboard.stitch-dashboard .personal-kpi-detail { min-width: 0; overflow: hidden; margin: 0; color: #94a3b8; font-size: 10px; line-height: 1.3; text-overflow: ellipsis; }
 .admin-personal-dashboard.stitch-dashboard .personal-kpi-card.is-warning .personal-kpi-detail { color: #e11d48; font-weight: 650; }
-.stitch-dashboard .personal-kpi-sparkline { width: 64px; height: 20px; flex: 0 0 64px; color: var(--metric-accent); opacity: .65; }
+.stitch-dashboard .personal-kpi-sparkline { width: 52px; height: 16px; flex: 0 0 52px; color: var(--metric-accent); opacity: .65; }
 .stitch-dashboard .personal-kpi-sparkline.is-empty { color: #cbd5e1; }
 .stitch-dashboard .personal-kpi-sparkline.is-empty polyline { stroke-dasharray: 3 3; }
 
-.admin-personal-dashboard.stitch-dashboard .personal-panel, .admin-personal-dashboard.stitch-dashboard .personal-secondary-section { margin-top: 24px; overflow: hidden; border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.06); }
-.admin-personal-dashboard.stitch-dashboard .personal-kpi-grid + .personal-panel { margin-top: 20px; }
-.admin-personal-dashboard.stitch-dashboard .personal-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 24px; padding: 25px 0 20px; border-bottom: 1px solid #e5e7eb; }
-.admin-personal-dashboard.stitch-dashboard .personal-panel-heading h2 { margin: 0; color: #1f2937; font-size: 16px; font-weight: 800; letter-spacing: -.02em; }
-.admin-personal-dashboard.stitch-dashboard .personal-panel-heading p { margin: 4px 0 0; color: #6b7280; font-size: 11px; }
-.admin-personal-dashboard.stitch-dashboard .personal-chart-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; color: #4b5563; font-size: 11px; font-weight: 600; }
-.admin-personal-dashboard.stitch-dashboard .personal-chart-legend span { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-.admin-personal-dashboard.stitch-dashboard .personal-chart-legend i { width: 12px; height: 12px; border-radius: 2px; background: #16a34a; }
+.admin-personal-dashboard.stitch-dashboard .personal-panel, .admin-personal-dashboard.stitch-dashboard .personal-secondary-section { margin-top: 14px; overflow: hidden; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.05); }
+.admin-personal-dashboard.stitch-dashboard .personal-kpi-grid + .personal-panel { margin-top: 12px; }
+.admin-personal-dashboard.stitch-dashboard .personal-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 16px; padding: 12px 0 10px; border-bottom: 1px solid #e5e7eb; }
+.admin-personal-dashboard.stitch-dashboard .personal-panel-heading h2 { margin: 0; color: #1f2937; font-size: 14px; font-weight: 800; letter-spacing: -.02em; }
+.admin-personal-dashboard.stitch-dashboard .personal-panel-heading p { margin: 2px 0 0; color: #6b7280; font-size: 11px; }
+.admin-personal-dashboard.stitch-dashboard .personal-chart-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; color: #4b5563; font-size: 10.5px; font-weight: 600; }
+.admin-personal-dashboard.stitch-dashboard .personal-chart-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.admin-personal-dashboard.stitch-dashboard .personal-chart-legend i { width: 10px; height: 10px; border-radius: 2px; background: #16a34a; }
 .admin-personal-dashboard.stitch-dashboard .personal-chart-legend .legend-spend { background: #0284c7; }
-.admin-personal-dashboard.stitch-dashboard .personal-chart-legend .legend-ratio { width: 16px; height: 5px; border-radius: 999px; background: #f59e0b; }
-.admin-personal-dashboard.stitch-dashboard .personal-chart-wrap { height: 320px; margin: 14px 20px 20px; padding: 0; }
-.admin-personal-dashboard.stitch-dashboard .personal-export-button { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; color: #166534; font-size: 11px; font-weight: 700; cursor: pointer; }
+.admin-personal-dashboard.stitch-dashboard .personal-chart-legend .legend-ratio { width: 14px; height: 4px; border-radius: 999px; background: #f59e0b; }
+.admin-personal-dashboard.stitch-dashboard .personal-chart-wrap { height: 240px; margin: 8px 14px 14px; padding: 0; }
+.admin-personal-dashboard.stitch-dashboard .personal-export-button { padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; color: #166534; font-size: 10.5px; font-weight: 700; cursor: pointer; }
 .admin-personal-dashboard.stitch-dashboard .personal-export-button:hover { border-color: #16a34a; background: #f0fdf4; }
 .admin-personal-dashboard.stitch-dashboard .personal-export-button:disabled { cursor: not-allowed; opacity: .45; }
 .admin-personal-dashboard.stitch-dashboard .personal-daily-table { width: 100%; border-collapse: collapse; color: #374151; font-size: 11px; white-space: nowrap; }
-.admin-personal-dashboard.stitch-dashboard .personal-daily-table th, .admin-personal-dashboard.stitch-dashboard .personal-daily-table td { padding: 10px 12px; border-right: 0; border-bottom: 1px solid #e5e7eb; text-align: center; }
+.admin-personal-dashboard.stitch-dashboard .personal-daily-table th, .admin-personal-dashboard.stitch-dashboard .personal-daily-table td { padding: 6px 10px; border-right: 0; border-bottom: 1px solid #e5e7eb; text-align: center; }
 .admin-personal-dashboard.stitch-dashboard .personal-daily-table th { position: sticky; top: 0; background: #f8faf8; color: #4b5563; font-size: 10px; font-weight: 800; }
 .admin-personal-dashboard.stitch-dashboard .personal-daily-table tbody tr:nth-child(odd) { background: #fff; }
 .admin-personal-dashboard.stitch-dashboard .personal-daily-table tbody tr:hover { background: #f0fdf4; }
 .admin-personal-dashboard.stitch-dashboard .personal-daily-table .metric-positive { color: #15803d; font-weight: 800; }
 .admin-personal-dashboard.stitch-dashboard .personal-daily-table .metric-negative { color: #be123c; font-weight: 800; }
 .admin-personal-dashboard.stitch-dashboard .personal-daily-table button.text-sky-300 { color: #15803d; }
-.admin-personal-dashboard.stitch-dashboard .personal-secondary-section { padding: 18px 20px; }
-.admin-personal-dashboard.stitch-dashboard .personal-secondary-section summary { color: #1f2937; font-size: 14px; font-weight: 800; cursor: pointer; }
-.admin-personal-dashboard.stitch-dashboard .personal-detail-modal { width: min(1100px,100%); max-height: 90vh; overflow: hidden; border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; box-shadow: 0 24px 80px rgba(0,0,0,.2); }
+.admin-personal-dashboard.stitch-dashboard .personal-secondary-section { padding: 10px 14px; }
+.admin-personal-dashboard.stitch-dashboard .personal-secondary-section summary { color: #1f2937; font-size: 13px; font-weight: 800; cursor: pointer; }
+.admin-personal-dashboard.stitch-dashboard .personal-detail-modal { width: min(1100px,100%); max-height: 90vh; overflow: hidden; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; box-shadow: 0 24px 80px rgba(0,0,0,.2); }
 .admin-personal-dashboard.stitch-dashboard .personal-detail-modal h3 { color: #1f2937; }
 .admin-personal-dashboard.stitch-dashboard .personal-detail-modal p { color: #6b7280; }
 .admin-personal-dashboard.stitch-dashboard .personal-detail-modal > div:first-child { border-color: #e5e7eb; }

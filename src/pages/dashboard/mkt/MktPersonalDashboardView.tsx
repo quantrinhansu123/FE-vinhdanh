@@ -219,17 +219,17 @@ function Card({
     purple: 'bg-purple-600',
   }[tone];
   return (
-    <article className={`group relative min-h-[154px] overflow-hidden rounded-2xl border border-[var(--stitch-border)] border-l-[4px] ${accent.border} bg-white p-4 shadow-[var(--stitch-shadow)] transition duration-200 hover:-translate-y-0.5 hover:shadow-md`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${accent.icon}`}>{icon}</span>
-          <span className="text-xs font-bold leading-4 text-[#64748b]">{label}</span>
+    <article className={`group relative min-h-[112px] overflow-hidden rounded-xl border border-[var(--stitch-border)] border-l-[3px] ${accent.border} bg-white p-3 shadow-[var(--stitch-shadow)] transition duration-200 hover:-translate-y-0.5 hover:shadow-md`}>
+      <div className="flex items-start justify-between gap-1.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${accent.icon}`}>{icon}</span>
+          <span className="text-[11px] font-bold leading-4 text-[#64748b]">{label}</span>
         </div>
-        <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ${accent.badge}`}>{status}</span>
+        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold ${accent.badge}`}>{status}</span>
       </div>
-      <div className={`mt-3 text-[24px] font-extrabold tracking-tight font-mono ${accent.text}`}>{value}</div>
-      <div className="mt-1 min-h-4 text-[11px] text-[#64748b]">{sub}</div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#f1f5f9]">
+      <div className={`mt-2 text-[20px] font-extrabold tracking-tight font-mono ${accent.text}`}>{value}</div>
+      <div className="mt-0.5 min-h-4 text-[10px] text-[#64748b]">{sub}</div>
+      <div className="mt-2 h-1 overflow-hidden rounded-full bg-[#f1f5f9]">
         <div className={`h-full rounded-full ${bar}`} style={{ width: `${Math.max(4, Math.min(progress ?? 42, 100))}%` }} />
       </div>
     </article>
@@ -441,36 +441,36 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[1580px] space-y-5 pb-8 text-[#1f2937]">
-      <header className="relative flex flex-wrap items-center justify-between gap-5 overflow-hidden rounded-2xl border border-[var(--stitch-border)] bg-white p-5 shadow-[var(--stitch-shadow)] sm:p-6">
+    <div className="mx-auto w-full max-w-[1580px] space-y-3.5 pb-6 text-[#1f2937]">
+      <header className="relative flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-xl border border-[var(--stitch-border)] bg-white p-3.5 shadow-[var(--stitch-shadow)] sm:p-4">
         <div>
-          <p className="mb-2 inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[.1em] text-emerald-800"><LockKeyhole size={11} /> Hiệu quả cá nhân · Marketing</p>
-          <h1 className="text-[24px] font-extrabold tracking-tight text-[#1f2937] sm:text-[28px]">{viewerIsAdmin ? 'Báo cáo cá nhân' : 'Báo cáo của tôi'}</h1>
-          <p className="mt-1.5 max-w-2xl text-xs leading-5 text-[#64748b]">{viewerIsAdmin ? 'Chọn nhân sự để xem kết quả, chi phí quảng cáo và chất lượng chuyển đổi.' : 'Theo dõi kết quả, chi phí quảng cáo và chất lượng chuyển đổi của riêng bạn.'}</p>
+          <p className="mb-1 inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[.1em] text-emerald-800"><LockKeyhole size={10} /> Hiệu quả cá nhân · Marketing</p>
+          <h1 className="text-[20px] font-extrabold tracking-tight text-[#1f2937] sm:text-[22px]">{viewerIsAdmin ? 'Báo cáo cá nhân' : 'Báo cáo của tôi'}</h1>
+          <p className="mt-0.5 max-w-2xl text-[11px] leading-4 text-[#64748b]">{viewerIsAdmin ? 'Chọn nhân sự để xem kết quả, chi phí quảng cáo và chất lượng chuyển đổi.' : 'Theo dõi kết quả, chi phí quảng cáo và chất lượng chuyển đổi của riêng bạn.'}</p>
         </div>
         {viewerIsAdmin ? (
-          <label className="grid min-w-[240px] gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[#64748b]">
-            <span className="inline-flex items-center gap-1.5"><Users size={12} className="text-emerald-700" /> Nhân sự đang xem</span>
-            <select value={selectedPersonId} onChange={(event) => setSelectedPersonId(event.target.value)} disabled={peopleLoading} className="stitch-field max-w-[360px] text-xs font-semibold">
+          <label className="grid min-w-[220px] gap-1 text-[9px] font-bold uppercase tracking-wide text-[#64748b]">
+            <span className="inline-flex items-center gap-1"><Users size={11} className="text-emerald-700" /> Nhân sự đang xem</span>
+            <select value={selectedPersonId} onChange={(event) => setSelectedPersonId(event.target.value)} disabled={peopleLoading} className="stitch-field max-w-[340px] text-xs font-semibold">
               <option value="">{peopleLoading ? 'Đang tải danh sách…' : 'Chọn nhân sự cần xem'}</option>
               {people.map((person) => <option key={person.id} value={person.id}>{person.name || person.email} · {person.email}</option>)}
             </select>
           </label>
         ) : (
-          <div className="inline-flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs font-bold text-emerald-900">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-600 text-[10px] font-extrabold text-white">{(selectedPerson?.name || 'T').slice(0, 2).toUpperCase()}</span>
-            <span><span className="block text-[9px] font-semibold uppercase tracking-wider text-emerald-700">Tài khoản cá nhân</span><span className="mt-0.5 block">{selectedPerson?.name || 'Tài khoản của tôi'}</span></span>
-            <LockKeyhole size={13} className="ml-2 text-emerald-600" />
+          <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-900">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-600 text-[10px] font-extrabold text-white">{(selectedPerson?.name || 'T').slice(0, 2).toUpperCase()}</span>
+            <span><span className="block text-[8px] font-semibold uppercase tracking-wider text-emerald-700">Tài khoản cá nhân</span><span className="block">{selectedPerson?.name || 'Tài khoản của tôi'}</span></span>
+            <LockKeyhole size={12} className="ml-1 text-emerald-600" />
           </div>
         )}
       </header>
 
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--stitch-border)] bg-white p-3.5 shadow-[var(--stitch-shadow)] sm:p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="mr-1 hidden text-[10px] font-extrabold uppercase tracking-[.12em] text-[#64748b] lg:inline">Kỳ báo cáo</span>
-          <div className="flex flex-wrap gap-1 rounded-xl border border-[var(--stitch-border)] bg-[#f8faf9] p-1">
+      <section className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-[var(--stitch-border)] bg-white p-2.5 shadow-[var(--stitch-shadow)] sm:p-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 hidden text-[9px] font-extrabold uppercase tracking-[.12em] text-[#64748b] lg:inline">Kỳ báo cáo</span>
+          <div className="flex flex-wrap gap-1 rounded-lg border border-[var(--stitch-border)] bg-[#f8faf9] p-0.5">
           {presets.map((item) => (
-            <button key={item.id} type="button" onClick={() => choosePreset(item.id)} className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${preset === item.id ? 'bg-[var(--stitch-green-600)] text-white shadow-sm' : 'text-[#64748b] hover:bg-white hover:text-[#1f2937]'}`}>
+            <button key={item.id} type="button" onClick={() => choosePreset(item.id)} className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${preset === item.id ? 'bg-[var(--stitch-green-600)] text-white shadow-sm' : 'text-[#64748b] hover:bg-white hover:text-[#1f2937]'}`}>
               {item.label}
             </button>
           ))}
@@ -514,10 +514,10 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
 
       {(!viewerIsAdmin || selectedPerson) && <>
       <div className="flex items-end justify-between gap-3">
-        <div><h2 className="text-base font-extrabold text-[#1f2937]">Chỉ số trọng tâm</h2><p className="mt-1 text-[11px] text-[#64748b]">{daily.length} ngày · {selectedPerson?.name || 'cá nhân'} · {priorCaption}</p></div>
+        <div><h2 className="text-sm font-extrabold text-[#1f2937]">Chỉ số trọng tâm</h2><p className="mt-0.5 text-[10px] text-[#64748b]">{daily.length} ngày · {selectedPerson?.name || 'cá nhân'} · {priorCaption}</p></div>
         <span className="text-[10px] text-[#64748b]">Cập nhật theo khoảng thời gian đã chọn</span>
       </div>
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Các chỉ số cá nhân">
+      <section className="grid grid-cols-2 gap-2.5 xl:grid-cols-4" aria-label="Các chỉ số cá nhân">
         <Card label="Doanh số" value={formatMoney(metrics.revenue)} sub={targetVnd ? `Mục tiêu tháng ${formatKpiMoney(targetVnd)}` : 'Tổng doanh thu trong kỳ'} status={targetVnd && metrics.revenue >= targetVnd ? 'Đạt KPI' : 'Theo dõi'} tone="green" icon={<Target size={12} />} progress={revenueProgress} />
         <Card label="Đơn chốt" value={formatCount(metrics.orders)} sub={`${formatCount(metrics.leads)} data nhận trong kỳ`} status={metrics.closePct >= 32 ? 'Tốt' : 'Theo dõi'} tone={metrics.closePct >= 32 ? 'green' : 'amber'} icon={<ShoppingCart size={12} />} progress={metrics.closePct / 32 * 100} />
         <Card label="%ADS · Chi phí/Doanh thu" value={formatPercent(metrics.adsPct)} sub={`Chi phí Ads ${formatMoney(metrics.adCost)}`} status={metrics.adsPct <= 30 ? 'Trong ngưỡng' : 'Báo động'} tone={metrics.adsPct <= 30 ? 'blue' : 'red'} icon={<TriangleAlert size={12} />} progress={metrics.adsPct / 30 * 100} />
@@ -530,10 +530,10 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
         <Card label="CPO · Chi phí mỗi đơn" value={formatMoney(metrics.cpo)} sub="Chi phí Ads / đơn chốt" status="Theo dõi" tone="purple" icon={<ShoppingCart size={12} />} progress={metrics.cpo ? 100 - Math.min(100, metrics.cpo / 1000000 * 20) : 4} />
       </section>
 
-      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,.82fr)]">
-        <section className="rounded-2xl border border-[var(--stitch-border)] bg-white p-4 shadow-[var(--stitch-shadow)] sm:p-5">
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-sm font-extrabold text-[#1f2937]">Doanh số, chi phí và %ADS theo ngày</h2><p className="mt-1 text-[11px] text-[#64748b]">Xu hướng trong khoảng thời gian đã chọn</p></div><span className="text-[10px] text-[#64748b]">{daily.length} ngày dữ liệu</span></div>
-          <div className="h-[270px] w-full">
+      <div className="grid grid-cols-1 gap-3 2xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,.82fr)]">
+        <section className="rounded-xl border border-[var(--stitch-border)] bg-white p-3.5 shadow-[var(--stitch-shadow)] sm:p-4">
+          <div className="mb-2.5 flex flex-wrap items-start justify-between gap-2"><div><h2 className="text-xs font-extrabold text-[#1f2937]">Doanh số, chi phí và %ADS theo ngày</h2><p className="mt-0.5 text-[10px] text-[#64748b]">Xu hướng trong khoảng thời gian đã chọn</p></div><span className="text-[9px] text-[#64748b]">{daily.length} ngày dữ liệu</span></div>
+          <div className="h-[230px] w-full">
             {loading ? <div className="grid h-full place-items-center text-xs text-[#64748b]">Đang tải dữ liệu…</div> : (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={daily} margin={{ top: 12, right: 8, left: 0, bottom: 4 }}>
@@ -550,54 +550,54 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
               </ResponsiveContainer>
             )}
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-[10px] text-[#64748b]"><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-emerald-600" />Doanh số</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-indigo-500" />Chi phí</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-amber-500" />%ADS thực tế</span><span className="inline-flex items-center gap-1.5"><i className="h-px w-3 bg-rose-500" />Trần %ADS 30%</span></div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[9px] text-[#64748b]"><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-emerald-600" />Doanh số</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-indigo-500" />Chi phí</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-amber-500" />%ADS thực tế</span><span className="inline-flex items-center gap-1.5"><i className="h-px w-3 bg-rose-500" />Trần %ADS 30%</span></div>
         </section>
 
-        <section className="rounded-2xl border border-[var(--stitch-border)] bg-white p-4 shadow-[var(--stitch-shadow)] sm:p-5">
-          <div><h2 className="text-sm font-extrabold text-[#1f2937]">Dự đoán %ADS</h2><p className="mt-1 text-[11px] text-[#64748b]">Ước tính theo dữ liệu trong kỳ đã chọn</p></div>
-          <div className="mt-5 space-y-3">
+        <section className="rounded-xl border border-[var(--stitch-border)] bg-white p-3.5 shadow-[var(--stitch-shadow)] sm:p-4">
+          <div><h2 className="text-xs font-extrabold text-[#1f2937]">Dự đoán %ADS</h2><p className="mt-0.5 text-[10px] text-[#64748b]">Ước tính theo dữ liệu trong kỳ đã chọn</p></div>
+          <div className="mt-3 space-y-2">
             {[
               { label: 'Doanh thu dự kiến', value: forecastRevenue, rate: 100, color: 'bg-purple-600', note: 'Đã trừ dự phòng hoàn hủy 5%' },
               { label: 'Chi phí quảng cáo dự kiến', value: forecastAdCost, rate: forecastRevenue ? forecastAdCost / forecastRevenue * 100 : 0, color: 'bg-sky-600', note: 'Đã cộng dự phòng phí 6%' },
               { label: '%ADS dự kiến', value: forecastAdsPct, rate: forecastAdsPct, color: 'bg-emerald-600', note: 'Chi phí quảng cáo / doanh thu dự kiến' },
             ].map((stage) => (
-              <div key={stage.label} className="rounded-xl border border-[var(--stitch-border)] bg-[#f8faf9] p-3">
-                <div className="flex items-baseline justify-between gap-3"><span className="text-[11px] font-bold text-[#64748b]">{stage.label}</span><strong className="text-lg font-extrabold font-mono text-[#1f2937]">{stage.label.includes('%ADS') ? formatPercent(stage.value) : formatMoney(stage.value)}</strong></div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e2e8e5]"><div className={`h-full rounded-full ${stage.color}`} style={{ width: `${Math.max(stage.value > 0 ? 3 : 0, Math.min(stage.rate, 100))}%` }} /></div>
-                <p className="mt-1.5 text-[10px] text-[#64748b]">{stage.note}</p>
+              <div key={stage.label} className="rounded-lg border border-[var(--stitch-border)] bg-[#f8faf9] p-2.5">
+                <div className="flex items-baseline justify-between gap-2"><span className="text-[10px] font-bold text-[#64748b]">{stage.label}</span><strong className="text-base font-extrabold font-mono text-[#1f2937]">{stage.label.includes('%ADS') ? formatPercent(stage.value) : formatMoney(stage.value)}</strong></div>
+                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#e2e8e5]"><div className={`h-full rounded-full ${stage.color}`} style={{ width: `${Math.max(stage.value > 0 ? 3 : 0, Math.min(stage.rate, 100))}%` }} /></div>
+                <p className="mt-1 text-[9px] text-[#64748b]">{stage.note}</p>
               </div>
             ))}
           </div>
         </section>
       </div>
 
-      <section className="mb-4 overflow-hidden rounded-2xl border border-emerald-900/10 bg-[#f5faf6] p-4 text-slate-800 shadow-[0_12px_32px_rgba(15,80,43,.10)] sm:p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-700 to-green-600 text-white shadow-sm"><BarChart3 size={24} /></span>
-            <div><h2 className="text-lg font-extrabold text-emerald-950 sm:text-xl">Chi tiết theo ngày</h2><p className="text-xs font-medium text-slate-500 sm:text-sm">Dữ liệu tổng hợp trong khoảng thời gian đã chọn</p></div>
+      <section className="mb-4 overflow-hidden rounded-xl border border-emerald-900/10 bg-[#f5faf6] p-3.5 text-slate-800 shadow-[0_12px_32px_rgba(15,80,43,.10)] sm:p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-emerald-700 to-green-600 text-white shadow-sm"><BarChart3 size={18} /></span>
+            <div><h2 className="text-base font-extrabold text-emerald-950 sm:text-lg">Chi tiết theo ngày</h2><p className="text-[11px] font-medium text-slate-500">Dữ liệu tổng hợp trong khoảng thời gian đã chọn</p></div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-emerald-950 shadow-sm"><CalendarDays size={16} className="text-emerald-700" />{formatReportDateVi(range.from)} – {formatReportDateVi(range.to)}</div>
-            <label className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-emerald-950 shadow-sm"><Filter size={16} className="text-emerald-700" /><span className="sr-only">Lọc ngày</span><select aria-label="Lọc ngày" value={dailyFilter} onChange={(event) => setDailyFilter(event.target.value as typeof dailyFilter)} className="max-w-[130px] bg-transparent outline-none"><option value="all">Tất cả ngày</option><option value="active">Có dữ liệu</option><option value="attention">Cần chú ý</option></select></label>
-            <button type="button" onClick={exportCsv} className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-700 px-4 text-xs font-extrabold text-white shadow-sm transition hover:bg-emerald-800"><Download size={16} /> Tải CSV</button>
+            <div className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-[11px] font-bold text-emerald-950 shadow-sm"><CalendarDays size={14} className="text-emerald-700" />{formatReportDateVi(range.from)} – {formatReportDateVi(range.to)}</div>
+            <label className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-[11px] font-bold text-emerald-950 shadow-sm"><Filter size={14} className="text-emerald-700" /><span className="sr-only">Lọc ngày</span><select aria-label="Lọc ngày" value={dailyFilter} onChange={(event) => setDailyFilter(event.target.value as typeof dailyFilter)} className="max-w-[120px] bg-transparent outline-none text-[11px]"><option value="all">Tất cả ngày</option><option value="active">Có dữ liệu</option><option value="attention">Cần chú ý</option></select></label>
+            <button type="button" onClick={exportCsv} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 text-[11px] font-extrabold text-white shadow-sm transition hover:bg-emerald-800"><Download size={14} /> Tải CSV</button>
           </div>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 gap-2 xl:grid-cols-4 2xl:grid-cols-8">
+        <div className="mb-3 grid grid-cols-2 gap-1.5 xl:grid-cols-4 2xl:grid-cols-8">
           {[
-            { label: 'Tổng MESS', value: formatCount(metrics.mess), change: periodDelta(metrics.mess, priorMetrics.mess), icon: <MessageSquareText size={20} />, tone: 'green' },
-            { label: 'Tổng dữ liệu nhận', value: formatCount(metrics.leads), change: periodDelta(metrics.leads, priorMetrics.leads), icon: <FileText size={20} />, tone: 'green' },
-            { label: 'Tỷ lệ nhận TB', value: formatPercent(metrics.leadPct), change: periodDelta(metrics.leadPct, priorMetrics.leadPct), icon: <Percent size={20} />, tone: 'rose' },
-            { label: 'Tổng đơn', value: formatCount(metrics.orders), change: periodDelta(metrics.orders, priorMetrics.orders), icon: <ShoppingCart size={20} />, tone: 'amber' },
-            { label: 'Tỷ lệ chốt TB', value: formatPercent(metrics.closePct), change: periodDelta(metrics.closePct, priorMetrics.closePct), icon: <CheckCircle2 size={20} />, tone: 'amber' },
-            { label: 'Tổng doanh số', value: formatMoney(metrics.revenue), change: periodDelta(metrics.revenue, priorMetrics.revenue), icon: <BarChart3 size={20} />, tone: 'green' },
-            { label: 'Tổng chi phí', value: formatMoney(metrics.adCost), change: periodDelta(metrics.adCost, priorMetrics.adCost), icon: <Coins size={20} />, tone: 'blue' },
-            { label: '% ADS TB', value: formatPercent(metrics.adsPct), change: periodDelta(metrics.adsPct, priorMetrics.adsPct), icon: <Megaphone size={20} />, tone: 'green' },
+            { label: 'Tổng MESS', value: formatCount(metrics.mess), change: periodDelta(metrics.mess, priorMetrics.mess), icon: <MessageSquareText size={16} />, tone: 'green' },
+            { label: 'Tổng dữ liệu nhận', value: formatCount(metrics.leads), change: periodDelta(metrics.leads, priorMetrics.leads), icon: <FileText size={16} />, tone: 'green' },
+            { label: 'Tỷ lệ nhận TB', value: formatPercent(metrics.leadPct), change: periodDelta(metrics.leadPct, priorMetrics.leadPct), icon: <Percent size={16} />, tone: 'rose' },
+            { label: 'Tổng đơn', value: formatCount(metrics.orders), change: periodDelta(metrics.orders, priorMetrics.orders), icon: <ShoppingCart size={16} />, tone: 'amber' },
+            { label: 'Tỷ lệ chốt TB', value: formatPercent(metrics.closePct), change: periodDelta(metrics.closePct, priorMetrics.closePct), icon: <CheckCircle2 size={16} />, tone: 'amber' },
+            { label: 'Tổng doanh số', value: formatMoney(metrics.revenue), change: periodDelta(metrics.revenue, priorMetrics.revenue), icon: <BarChart3 size={16} />, tone: 'green' },
+            { label: 'Tổng chi phí', value: formatMoney(metrics.adCost), change: periodDelta(metrics.adCost, priorMetrics.adCost), icon: <Coins size={16} />, tone: 'blue' },
+            { label: '% ADS TB', value: formatPercent(metrics.adsPct), change: periodDelta(metrics.adsPct, priorMetrics.adsPct), icon: <Megaphone size={16} />, tone: 'green' },
           ].map((item) => {
             const toneClass = item.tone === 'rose' ? 'border-rose-100 bg-rose-50 text-rose-700' : item.tone === 'amber' ? 'border-amber-100 bg-amber-50 text-amber-700' : item.tone === 'blue' ? 'border-sky-100 bg-sky-50 text-sky-700' : 'border-emerald-100 bg-emerald-50 text-emerald-700';
-            return <article key={item.label} className={`min-w-0 rounded-xl border p-3 shadow-[0_3px_10px_rgba(15,80,43,.05)] ${toneClass}`}>
-              <div className="flex items-center gap-2"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/80">{item.icon}</span><span className="truncate text-[10px] font-bold leading-tight text-slate-600">{item.label}</span></div>
+            return <article key={item.label} className={`min-w-0 rounded-lg border p-2 shadow-[0_2px_8px_rgba(15,80,43,.04)] ${toneClass}`}>
+              <div className="flex items-center gap-1.5"><span className="grid h-7 w-7 shrink-0 place-items-center rounded bg-white/80">{item.icon}</span><span className="truncate text-[9px] font-bold leading-tight text-slate-600">{item.label}</span></div>
               <strong className="mt-1 block truncate text-xl font-extrabold text-slate-900">{item.value}</strong>
               <p className="mt-1 truncate text-[9px] font-bold text-emerald-700">↗ {item.change} <span className="font-medium text-slate-500">so với kỳ trước</span></p>
             </article>;

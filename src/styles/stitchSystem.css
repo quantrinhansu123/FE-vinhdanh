@@ -353,23 +353,23 @@
 /* Team dashboard uses an older dedicated stylesheet, so every structural layer is
    restated here with the shared surface, spacing and state tokens. */
 .stitch-data-page .leader-dash-obsidian.team-dashboard-modern {
-  padding: 0 0 56px !important;
+  padding: 0 0 40px !important;
   background: transparent !important;
   color: var(--stitch-text) !important;
   font-family: 'Plus Jakarta Sans', sans-serif !important;
 }
 .stitch-data-page .team-dashboard-topbar {
-  padding: 22px 24px;
+  padding: 12px 16px;
   border: 1px solid var(--stitch-border);
   border-radius: var(--stitch-radius-lg);
   background: #fff;
   box-shadow: var(--stitch-shadow);
 }
-.stitch-data-page .team-dashboard-brand-icon { border-color: #bbf7d0; background: #f0fdf4; color: var(--stitch-green-700); }
-.stitch-data-page .team-dashboard-brand h1,
-.stitch-data-page .team-dashboard-summary strong,
-.stitch-data-page .team-dashboard-panel-title h2,
-.stitch-data-page .team-dashboard-mini strong { color: var(--stitch-text) !important; }
+.stitch-data-page .team-dashboard-brand-icon { width: 38px; height: 38px; flex: 0 0 38px; border-color: #bbf7d0; background: #f0fdf4; color: var(--stitch-green-700); border-radius: 10px; }
+.stitch-data-page .team-dashboard-brand h1 { font-size: 19px !important; color: var(--stitch-text) !important; }
+.stitch-data-page .team-dashboard-summary strong { font-size: 20px !important; color: var(--stitch-text) !important; }
+.stitch-data-page .team-dashboard-panel-title h2 { font-size: 14px !important; color: var(--stitch-text) !important; }
+.stitch-data-page .team-dashboard-mini strong { font-size: 15px !important; color: var(--stitch-text) !important; }
 .stitch-data-page .team-dashboard-brand p,
 .stitch-data-page .team-dashboard-summary .td-label,
 .stitch-data-page .team-dashboard-summary .td-sub,
@@ -377,33 +377,42 @@
 .stitch-data-page .team-dashboard-mini :is(h3, p) { color: var(--stitch-text-muted) !important; }
 .stitch-data-page .team-dashboard-segment,
 .stitch-data-page .team-dashboard-datebox,
-.stitch-data-page .team-dashboard-refresh { border-color: var(--stitch-border); background: var(--stitch-surface-soft); color: #475569; }
-.stitch-data-page .team-dashboard-segment button { color: #64748b; }
+.stitch-data-page .team-dashboard-refresh { min-height: 32px; border-color: var(--stitch-border); background: var(--stitch-surface-soft); color: #475569; }
+.stitch-data-page .team-dashboard-refresh { width: 32px; height: 32px; }
+.stitch-data-page .team-dashboard-segment button { padding: 4px 8px; color: #64748b; font-size: 11px; }
 .stitch-data-page .team-dashboard-segment button:hover { background: #ecfdf5; color: var(--stitch-green-700); }
-.stitch-data-page .team-dashboard-segment button.active { background: var(--stitch-green-600); color: #fff; box-shadow: 0 3px 10px rgba(22,163,74,.18); }
-.stitch-data-page .team-dashboard-datebox input { color: var(--stitch-text) !important; color-scheme: light; }
-.stitch-data-page .team-dashboard-card { border-color: var(--stitch-border); background: #fff; box-shadow: var(--stitch-shadow); }
-.stitch-data-page .team-dashboard-summary { position: relative; overflow: hidden; }
+.stitch-data-page .team-dashboard-segment button.active { background: var(--stitch-green-600); color: #fff; box-shadow: 0 2px 6px rgba(22,163,74,.2); }
+.stitch-data-page .team-dashboard-datebox input { color: var(--stitch-text) !important; color-scheme: light; font-size: 11px; }
+.stitch-data-page .team-dashboard-card { border-color: var(--stitch-border); background: #fff; box-shadow: var(--stitch-shadow); border-radius: 10px; }
+.stitch-data-page .team-dashboard-summary-grid { gap: 10px; margin-top: 12px; }
+.stitch-data-page .team-dashboard-summary { position: relative; overflow: hidden; padding: 11px 13px !important; }
 .stitch-data-page .team-dashboard-summary::before { position: absolute; inset: 0 0 auto; height: 3px; background: var(--stitch-green-600); content: ''; }
-.stitch-data-page .team-dashboard-export { border-color: var(--stitch-border); background: #fff; color: #475569; }
+.stitch-data-page .team-dashboard-export { padding: 4px 8px; border-color: var(--stitch-border); background: #fff; color: #475569; font-size: 11px; }
 .stitch-data-page .team-dashboard-export:hover { border-color: #86efac; background: #f0fdf4; color: var(--stitch-green-700); }
-.stitch-data-page .team-dashboard-table-wrap { border-color: var(--stitch-border); background: #fff; box-shadow: none; }
+.stitch-data-page .team-dashboard-main-grid { gap: 10px; margin-top: 10px; }
+.stitch-data-page .team-dashboard-panel { padding: 12px 14px !important; }
+.stitch-data-page .team-dashboard-table-wrap { border-color: var(--stitch-border); background: #fff; box-shadow: none; border-radius: 8px; }
 .stitch-data-page .team-dashboard-table th,
-.stitch-data-page .team-dashboard-table td { border-color: #eef2ef !important; background: #fff !important; color: #475569 !important; }
-.stitch-data-page .team-dashboard-table th { background: var(--stitch-surface-soft) !important; color: #64748b !important; }
-.stitch-data-page .team-dashboard-table tr:hover td { background: #f8fcf9 !important; }
-.stitch-data-page .team-dashboard-pie { box-shadow: 0 0 0 9px #f8faf9, inset 0 0 24px rgba(15,23,42,.08); }
-.stitch-data-page .team-dashboard-pie span { border-color: var(--stitch-border); background: #fff; color: var(--stitch-text-muted); }
-.stitch-data-page .team-dashboard-legend-item { border-color: var(--stitch-border); background: var(--stitch-surface-soft); }
-.stitch-data-page .team-dashboard-legend-name { color: #475569; }
-.stitch-data-page .team-dashboard-legend-item strong { color: var(--stitch-text); }
-.stitch-data-page .team-dashboard-track { background: #e2e8e5; }
-.stitch-data-page .team-dashboard-marker { background: #64748b; }
+.stitch-data-page .team-dashboard-table td { border-color: #f1f5f9 !important; background: #fff !important; color: #334155 !important; }
+.stitch-data-page .team-dashboard-table th { padding: 7px 8px !important; background: var(--stitch-surface-soft) !important; color: #476355 !important; font-size: 10px !important; }
+.stitch-data-page .team-dashboard-table td { padding: 6px 8px !important; font-size: 11px !important; }
+.stitch-data-page .team-dashboard-table tr:hover td { background: #f0fdf4 !important; }
+.stitch-data-page .team-dashboard-pie { width: 155px; height: 155px; box-shadow: 0 0 0 6px #f8faf9, inset 0 0 16px rgba(15,23,42,.06); }
+.stitch-data-page .team-dashboard-pie span { inset: 34px; border-color: var(--stitch-border); background: #fff; color: var(--stitch-text-muted); font-size: 10.5px; }
+.stitch-data-page .team-dashboard-legend { gap: 6px; }
+.stitch-data-page .team-dashboard-legend-item { padding: 5px 7px; border-color: var(--stitch-border); background: var(--stitch-surface-soft); border-radius: 6px; }
+.stitch-data-page .team-dashboard-legend-name { color: #334155; font-size: 10px; }
+.stitch-data-page .team-dashboard-legend-item strong { color: var(--stitch-text); font-size: 10px; }
+.stitch-data-page .team-dashboard-progress { margin-top: 10px; padding: 12px 14px !important; }
+.stitch-data-page .team-dashboard-mini-grid { gap: 10px; margin-top: 10px; }
+.stitch-data-page .team-dashboard-mini { padding: 11px 13px !important; }
+.stitch-data-page .team-dashboard-track { width: 100px; height: 6px; background: #e2e8e5; }
+.stitch-data-page .team-dashboard-marker { background: #475569; }
 .stitch-data-page .team-dashboard-status.on { border-color: #bbf7d0; background: #f0fdf4; color: #15803d; }
 .stitch-data-page .team-dashboard-status.slow { border-color: #fde68a; background: #fffbeb; color: #b45309; }
 .stitch-data-page .team-dashboard-status.risk { border-color: #fecdd3; background: #fff1f2; color: #be123c; }
 .stitch-data-page .team-dashboard-status.unassigned { border-color: #e2e8f0; background: #f1f5f9; color: #64748b; }
-.stitch-data-page .team-dashboard-kpi-button { border-color: var(--stitch-green-600); background: var(--stitch-green-600); box-shadow: 0 12px 28px rgba(22,163,74,.24); }
+.stitch-data-page .team-dashboard-kpi-button { border-color: var(--stitch-green-600); background: var(--stitch-green-600); box-shadow: 0 8px 24px rgba(22,163,74,.24); }
 .stitch-data-page .team-dashboard-error { border-color: #fecdd3; background: #fff1f2; color: #be123c; }
 
 /* Portal, drawer, notification and dropdown surfaces. */

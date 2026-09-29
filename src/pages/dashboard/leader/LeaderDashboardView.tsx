@@ -943,7 +943,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
           return stop;
         }).join(', ');
       })()
-    : '#1c3450 0% 100%';
+    : '#e2e8e5 0% 100%';
   const progressRows = tableRows.map((row) => {
     const target = (staffTargets.get(row.m.id) || 0) * targetRangeFactor;
     const pct = target > 0 ? (row.a.rev / target) * 100 : null;
@@ -962,7 +962,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     <div className="leader-dash-obsidian team-dashboard-modern dash-fade-up">
       <header className="team-dashboard-topbar">
         <div className="team-dashboard-brand">
-          <div className="team-dashboard-brand-icon"><Users size={25} /></div>
+          <div className="team-dashboard-brand-icon"><Users size={20} /></div>
           <div className="min-w-0">
             <h1>Dashboard Team {teamName || 'Kinh doanh'}</h1>
             <p>Tổng quan hiệu suất, tiến độ và cơ cấu doanh số theo thành viên</p>
