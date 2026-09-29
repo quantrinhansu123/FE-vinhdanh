@@ -99,6 +99,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
 
   const currentRole = parsed.ok ? parsed.role : 'admin';
   const currentView = parsed.ok ? parsed.view : 'admin-dash';
+  const stitchOverview = currentView === 'admin-dash';
 
   const handleViewChange = (view: ViewId) => {
     navigate(crmAdminPathForView(view));
@@ -177,13 +178,14 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
   };
 
   return (
-    <div className="dash-theme flex h-screen w-full overflow-hidden font-sans antialiased">
+    <div className={`dash-theme flex h-screen w-full overflow-hidden font-sans antialiased ${stitchOverview ? 'stitch-admin-shell' : ''}`}>
       <Sidebar
         currentView={currentView}
         onViewChange={handleViewChange}
         user={userInfo}
         navGroups={navGroups}
         onLogout={onLogout}
+        stitch={stitchOverview}
       />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -191,9 +193,10 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
           title={VIEW_TITLES[currentView] || 'CRM Mini Ads'}
           onToggleNotif={() => setIsNotifOpen(!isNotifOpen)}
           hasNewNotif={false}
+          stitch={stitchOverview}
         />
 
-        <main className="flex-1 overflow-y-auto p-[12px] dash-scrollbar custom-scrollbar bg-[var(--bg0)]">
+        <main className={`flex-1 overflow-y-auto dash-scrollbar custom-scrollbar ${stitchOverview ? 'stitch-admin-main' : 'p-[12px] bg-[var(--bg0)]'}`}>
           <div className="dash-fade-up w-full">
             {renderContent()}
           </div>

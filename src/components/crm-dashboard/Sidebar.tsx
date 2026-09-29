@@ -1,6 +1,20 @@
 import React from 'react';
 import { NavGroup, UserInfo, ViewId } from './types';
-import { LogOut } from 'lucide-react';
+import { BriefcaseBusiness, ChartColumnIncreasing, ChartNoAxesCombined, Circle, Database, Download, Flame, Globe2, Home, IdCard, LogOut, Megaphone, Package, Scale, ShieldAlert, Target, TriangleAlert, Trophy, UserRound, UsersRound, Wallet } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+
+const stitchNavIcons: Record<string, LucideIcon> = {
+  'admin-dash': Home, 'mkt-dash': UserRound, 'leader-dash': UsersRound,
+  'burn-detect': Flame, alerts: TriangleAlert, projects: BriefcaseBusiness,
+  teams: UsersRound, staff: IdCard, 'ad-accounts': ChartNoAxesCombined,
+  kpis: ChartColumnIncreasing, agencies: BriefcaseBusiness, products: Package,
+  markets: Globe2, budget: Wallet, reconcile: Scale, 'upcare-mkt': Megaphone,
+  'project-qc-excel': ChartColumnIncreasing, 'reports-raw': Database,
+  'admin-ranking': Trophy, compare: ChartNoAxesCombined, 'leader-rank': Trophy,
+  'leader-mkt': UserRound, 'leader-tkqc': Megaphone, 'leader-budget': Wallet,
+  'kpi-target': Target, heatmap: ChartColumnIncreasing, 'mkt-history': Download,
+  'mkt-accounts': ShieldAlert,
+};
 
 interface SidebarProps {
   currentView: ViewId;
@@ -8,6 +22,7 @@ interface SidebarProps {
   user: UserInfo;
   navGroups: NavGroup[];
   onLogout?: () => void;
+  stitch?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -15,8 +30,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onViewChange,
   user,
   navGroups,
-  onLogout
+  onLogout,
+  stitch = false,
 }) => {
+  if (stitch) {
+    return (
+      <aside className="stitch-sidebar" aria-label="Điều hướng chính">
+        <div className="stitch-sidebar-brand">
+          <div className="stitch-sidebar-logo">MAP</div>
+          <div className="stitch-sidebar-brand-copy"><strong>MAP - Marketing</strong><span>Analytics Platform</span></div>
+        </div>
+        <nav className="stitch-sidebar-nav">
+          {navGroups.map((group, groupIndex) => (
+            <div className="stitch-sidebar-group" key={`${group.label}-${groupIndex}`}>
+              <div className="stitch-sidebar-group-label">{group.label}</div>
+              {group.items.map((item) => {
+                const Icon = stitchNavIcons[item.id] || Circle;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onViewChange(item.id)}
+                    className={`stitch-sidebar-link ${currentView === item.id ? 'is-active' : ''}`}
+                    aria-current={currentView === item.id ? 'page' : undefined}
+                    aria-label={item.label}
+                    title={item.label}
+                  >
+                    <Icon size={17} strokeWidth={2} aria-hidden="true" />
+                    <span>{item.label}</span>
+                    {item.id === 'burn-detect' && <i className="stitch-sidebar-alert-dot" aria-hidden="true" />}
+                    {item.badge && <b className="stitch-sidebar-badge">{item.badge.text}</b>}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+        <div className="stitch-sidebar-footer">
+          {onLogout && <button type="button" className="stitch-sidebar-logout" onClick={onLogout}><LogOut size={17} />Đăng xuất</button>}
+          <div className="stitch-sidebar-user">
+            <span className="stitch-sidebar-user-avatar">{user.avatar}</span>
+            <span className="stitch-sidebar-user-copy"><strong>{user.name}</strong><small>{user.role} · Admin</small></span>
+          </div>
+        </div>
+      </aside>
+    );
+  }
   return (
     <aside className="w-[var(--sw)] shrink-0 bg-[#101722] border-r border-white/[0.07] flex flex-col overflow-hidden z-20">
       <div className="p-[16px_14px_14px] border-b border-white/[0.07] shrink-0">

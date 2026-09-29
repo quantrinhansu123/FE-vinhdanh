@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { Bell } from 'lucide-react';
 
 interface TopbarProps {
   title: string;
   onToggleNotif: () => void;
   hasNewNotif: boolean;
+  stitch?: boolean;
 }
 
-export const Topbar: React.FC<TopbarProps> = ({ title, onToggleNotif, hasNewNotif }) => {
+export const Topbar: React.FC<TopbarProps> = ({ title, onToggleNotif, hasNewNotif, stitch = false }) => {
   const [time, setTime] = useState('');
 
   useEffect(() => {
@@ -21,6 +23,21 @@ export const Topbar: React.FC<TopbarProps> = ({ title, onToggleNotif, hasNewNoti
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  if (stitch) {
+    return (
+      <header className="stitch-topbar">
+        <h1>{title}</h1>
+        <div className="stitch-topbar-actions">
+          <label className="stitch-topbar-select"><span className="sr-only">Dự án</span><select defaultValue="Tất cả dự án"><option>Tất cả dự án</option><option>BIOKAMA</option><option>FABICO</option><option>MASSHU</option><option>YASU</option></select></label>
+          <label className="stitch-topbar-select"><span className="sr-only">Kỳ báo cáo</span><select defaultValue="Tháng này"><option>Tháng này</option><option>Tuần này</option><option>Hôm nay</option><option>Tháng trước</option></select></label>
+          <span className="stitch-topbar-live"><i aria-hidden="true" />LIVE</span>
+          <time className="stitch-topbar-clock">{time}</time>
+          <button type="button" className="stitch-topbar-notification" onClick={onToggleNotif} aria-label="Thông báo"><Bell size={18} />{hasNewNotif && <i aria-hidden="true" />}</button>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <div className="h-[var(--th)] shrink-0 bg-[var(--bg1)] border-b border-[var(--border)] flex items-center px-[12px] gap-[12px]">

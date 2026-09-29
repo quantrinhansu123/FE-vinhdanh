@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CheckCircle2, ChevronDown, ChevronUp, Eye, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ChevronDown, ChevronUp, CreditCard, Eye, Loader2, MessageCircleMore, RefreshCw, ShieldCheck, ShoppingBag, TrendingUp, TriangleAlert, UserRoundPlus, X, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { supabase } from '../../../api/supabase';
 import type { Employee, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { formatCompactVnd, formatReportDateVi } from '../mkt/mktDetailReportShared';
+import './stitchDashboard.css';
 
 const REPORTS_TABLE = 'detail_reports';
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
@@ -249,29 +251,27 @@ const MetricCard: React.FC<{
   title: string;
   value: string;
   detail: string;
-  icon: string;
+  icon: LucideIcon;
   color: string;
-  badge?: string;
-}> = ({ title, value, detail, icon, color, badge }) => (
-  <article className="personal-kpi-card">
-    <div className="flex items-start justify-between gap-3">
-      <div className="personal-kpi-icon" style={{ background: `${color}1a`, color }}>
-        <span className="material-symbols-outlined">{icon}</span>
-      </div>
-      {badge && <span className="personal-kpi-badge" style={{ color, borderColor: `${color}55`, background: `${color}15` }}>{badge}</span>}
-    </div>
-    <div className="relative z-[1] mt-4">
-      <p className="personal-kpi-title">{title}</p>
-      <p className="personal-kpi-value">{value}</p>
-      <p className="personal-kpi-detail">{detail}</p>
-    </div>
-    <div className="personal-kpi-bars" aria-hidden="true">
-      {[22, 35, 27, 48, 40, 68, 54, 78].map((height, index) => (
-        <span key={index} style={{ height: `${height}%`, background: color }} />
-      ))}
-    </div>
-  </article>
-);
+  badge: string;
+  delta?: number | null;
+  deltaTone?: 'good' | 'warning' | 'danger';
+  trend: number[];
+  tone?: 'warning' | 'muted';
+}> = ({ title, value, detail, icon: Icon, color, badge, delta, deltaTone = 'good', trend, tone }) => {
+  const finite = trend.filter(Number.isFinite);
+  const min = Math.min(...finite);
+  const max = Math.max(...finite);
+  const points = trend.map((v, index) => `${2 + index * (60 / Math.max(1, trend.length - 1))},${max === min ? 11 : 18 - ((v - min) / (max - min)) * 15}`).join(' ');
+  const hasTrend = finite.some((v) => v > 0);
+  return (
+    <article className={`personal-kpi-card ${tone ? `is-${tone}` : ''}`} style={{ '--metric-accent': color } as React.CSSProperties}>
+      <div className="personal-kpi-top"><span className="personal-kpi-icon"><Icon size={17} strokeWidth={1.8} /></span><span className="personal-kpi-badge">{badge}</span></div>
+      <div className="personal-kpi-main"><p className="personal-kpi-title">{title}</p><div className="personal-kpi-value-row"><strong className="personal-kpi-value">{value}</strong>{delta != null && Number.isFinite(delta) ? <span className={`personal-kpi-delta is-${deltaTone}`}>{delta >= 0 ? '↑' : '↓'} {delta > 0 ? '+' : ''}{delta.toFixed(1)}%</span> : <span className="personal-kpi-delta is-muted">N/A</span>}</div></div>
+      <div className="personal-kpi-footer"><span className="personal-kpi-detail">{detail}</span><svg className={`personal-kpi-sparkline ${!hasTrend ? 'is-empty' : ''}`} viewBox="0 0 64 20" fill="none" aria-hidden="true"><polyline points={hasTrend ? points : '2,11 62,11'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
+    </article>
+  );
+};
 
 function svgPathLine(pts: { x: number; y: number }[]): string {
   if (!pts.length) return '';
@@ -681,76 +681,71 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
 
   if (loading) {
     return (
-      <div className="leader-dash-obsidian dash-fade-up flex items-center justify-center min-h-[240px] gap-3 text-[var(--ld-on-surface-variant)]">
-        <Loader2 className="animate-spin text-[var(--ld-primary)]" size={24} />
+      <div className="stitch-dashboard-loading">
+        <Loader2 className="animate-spin" size={24} />
         <span className="text-sm font-semibold">Đang tải {REPORTS_TABLE}…</span>
       </div>
     );
   }
 
   return (
-    <div className="leader-dash-obsidian admin-personal-dashboard dash-fade-up -m-[12px] min-h-full px-4 py-4 sm:px-6 sm:py-5">
+    <div className="admin-personal-dashboard stitch-dashboard dash-fade-up">
       <header className="personal-dashboard-header">
-        <div className="flex min-w-0 items-center gap-4">
+        <div className="personal-dashboard-identity">
           <div className="personal-dashboard-avatar">
             {viewer?.avatar_url ? <img src={viewer.avatar_url} alt="" className="h-full w-full object-cover" /> : avatarInitials || 'U'}
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-white">{displayName}</p>
-            <p className="truncate text-xs text-slate-400">{displayRole}</p>
-          </div>
-          <div className="mx-1 hidden h-10 w-px bg-slate-700 sm:block" />
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-[28px]">Dashboard cá nhân</h1>
-            <p className="mt-0.5 text-xs text-slate-400 sm:text-sm">Tổng quan hiệu quả công việc trong kỳ</p>
+          <div className="personal-dashboard-identity-copy">
+            <p className="personal-dashboard-userline"><span>{displayName}</span><i aria-hidden="true" /><strong>{displayRole}</strong></p>
+            <h2>Dashboard cá nhân</h2>
+            <p className="personal-dashboard-subtitle">Tổng quan hiệu quả công việc trong kỳ</p>
           </div>
         </div>
         <div className="personal-period-toolbar">
           <div className="personal-period-presets" role="group" aria-label="Chọn khoảng thời gian">
-            <CalendarDays size={16} className="mx-1 text-slate-400" />
             <button type="button" onClick={() => setQuickRange('yesterday')} className={rangePreset === 'yesterday' ? 'active' : ''}>Hôm qua</button>
             <button type="button" onClick={() => setQuickRange('7days')} className={rangePreset === '7days' ? 'active' : ''}>7 ngày</button>
             <button type="button" onClick={() => setQuickRange('month')} className={rangePreset === 'month' ? 'active' : ''}>Tháng này</button>
             <button type="button" onClick={() => setRangePreset('custom')} className={rangePreset === 'custom' ? 'active' : ''}>Tùy chọn</button>
           </div>
           <div className="personal-date-range">
-            <CalendarDays size={16} className="shrink-0 text-slate-400" />
+            <CalendarDays size={16} className="shrink-0" />
             <input aria-label="Từ ngày" type="date" value={rangeStart} max={rangeEnd || undefined} onChange={(event) => { setRangeStart(event.target.value); setRangePreset('custom'); }} />
-            <span>–</span>
+            <span aria-hidden="true">—</span>
             <input aria-label="Đến ngày" type="date" value={rangeEnd} min={rangeStart || undefined} max={today} onChange={(event) => { setRangeEnd(event.target.value); setRangePreset('custom'); }} />
           </div>
         </div>
       </header>
 
       {error && (
-        <div className="my-4 flex flex-wrap items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        <div className="stitch-data-error">
           {error}
-          <button type="button" onClick={() => void load()} className="inline-flex items-center gap-2 font-semibold hover:text-white"><RefreshCw size={14} /> Thử lại</button>
+          <button type="button" onClick={() => void load()}><RefreshCw size={14} /> Thử lại</button>
         </div>
       )}
 
       <section className={`personal-alert-banner ${burnMarketers.length ? 'is-alert' : 'is-clear'}`}>
         <div className="personal-alert-icon">
-          {burnMarketers.length ? <TriangleAlert size={22} /> : <CheckCircle2 size={22} />}
+          {burnMarketers.length ? <TriangleAlert size={18} /> : <CheckCircle2 size={18} />}
         </div>
-        <div className="min-w-0">
+        <div className="personal-alert-copy">
           <h2>{burnMarketers.length ? `${burnMarketers.length} chỉ số đang vượt ngưỡng theo dõi` : 'Các chỉ số quảng cáo đang trong ngưỡng theo dõi'}</h2>
           <p>{burnMarketers.length
             ? `CP/DT từ ${ADS_DT_WARN}% trở lên ở ${burnMarketers.slice(0, 4).map((item) => item.displayName).join(', ')}${burnMarketers.length > 4 ? ` và ${burnMarketers.length - 4} nhân sự khác` : ''}.`
             : `Chưa ghi nhận nhân sự có CP/DT từ ${ADS_DT_WARN}% trong khoảng ${monthLabel}.`}</p>
-          <p>{rows.length ? `${rows.length.toLocaleString('vi-VN')} dòng báo cáo · ${activeCampaigns} nhân sự có dữ liệu` : 'Chưa có dữ liệu báo cáo trong khoảng thời gian đã chọn.'}</p>
+          <div className="personal-alert-bottom"><p>{rows.length ? `${rows.length.toLocaleString('vi-VN')} dòng báo cáo` : 'Chưa có dữ liệu báo cáo trong khoảng thời gian đã chọn.'}<span aria-hidden="true">·</span>{activeCampaigns} nhân sự có dữ liệu</p>{burnMarketers.length > 0 && <button type="button" onClick={() => navigate(crmAdminPathForView('burn-detect'))}>Xem chi tiết vi phạm →</button>}</div>
         </div>
       </section>
 
       <section className="personal-kpi-grid" aria-label="Chỉ số tổng quan">
-        <MetricCard title="Doanh số" value={formatCompactVnd(totals.revenue)} detail={deltaText(revDelta)} icon="bar_chart" color="#09c987" badge="Doanh thu" />
-        <MetricCard title="Chi phí quảng cáo" value={formatCompactVnd(totals.adCost)} detail={deltaText(spendDelta)} icon="database" color="#1688ff" badge="Chi phí" />
-        <MetricCard title="CP/DT" value={adsRevenuePct == null ? '—' : `${adsRevenuePct.toFixed(1)}%`} detail={`Ngưỡng theo dõi: ${ADS_DT_WARN}%`} icon="pie_chart" color={adsRevenuePct != null && adsRevenuePct >= ADS_DT_WARN ? '#ff4f63' : '#ff9d17'} badge={adsRevenuePct == null ? 'Chưa có dữ liệu' : adsRevenuePct >= ADS_DT_WARN ? 'Cần chú ý' : 'Trong ngưỡng'} />
-        <MetricCard title="Tin nhắn" value={Math.round(totals.mess).toLocaleString('vi-VN')} detail={`${deltaText(pctChange(totals.mess, prevTotals.mess))} · theo báo cáo`} icon="forum" color="#7963ff" badge="Tương tác" />
-        <MetricCard title="Lead" value={Math.round(leadCount).toLocaleString('vi-VN')} detail={deltaText(pctChange(leadCount, previousLeadCount))} icon="groups" color="#1389f5" badge="Khách hàng tiềm năng" />
-        <MetricCard title="Đơn hàng" value={Math.round(totals.orders).toLocaleString('vi-VN')} detail={averageOrderValue == null ? 'Chưa có đơn hàng trong kỳ' : `Giá trị TB ${formatCompactVnd(averageOrderValue)}`} icon="shopping_cart" color="#ffb321" badge="Chuyển đổi" />
-        <MetricCard title="Tỷ lệ chốt" value={closeRate == null ? '—' : `${closeRate.toFixed(1)}%`} detail={`${Math.round(totals.orders).toLocaleString('vi-VN')} đơn / ${Math.round(totals.tongData || totals.tongLead).toLocaleString('vi-VN')} data`} icon="track_changes" color="#14c5c9" badge="Hiệu quả" />
-        <MetricCard title="CPL" value={costPerLead == null ? '—' : formatCompactVnd(costPerLead)} detail="Chi phí quảng cáo / lead" icon="person_search" color="#37a7ff" badge="Chi phí / lead" />
+        <MetricCard title="Doanh số" value={formatCompactVnd(totals.revenue)} detail="so với kỳ trước" icon={TrendingUp} color="#10a768" badge="Doanh thu" delta={revDelta} trend={daily.slice(-8).map((d) => d.rev)} />
+        <MetricCard title="Chi phí quảng cáo" value={formatCompactVnd(totals.adCost)} detail="so với kỳ trước" icon={CreditCard} color="#0284c7" badge="Chi phí" delta={spendDelta} deltaTone={spendDelta != null && spendDelta > 0 ? 'warning' : 'good'} trend={daily.slice(-8).map((d) => d.spend)} />
+        <MetricCard title="CP/DT" value={adsRevenuePct == null ? '—' : `${adsRevenuePct.toFixed(1)}%`} detail={`Ngưỡng theo dõi: ${ADS_DT_WARN}%`} icon={TriangleAlert} color={adsRevenuePct != null && adsRevenuePct >= ADS_DT_WARN ? '#f43f5e' : '#f59e0b'} badge={adsRevenuePct == null ? 'Chưa có dữ liệu' : adsRevenuePct >= ADS_DT_WARN ? 'Cần chú ý' : 'Trong ngưỡng'} delta={adsRevenuePct != null && prevTotals.adsDtPct != null ? adsRevenuePct - prevTotals.adsDtPct : null} deltaTone="danger" trend={daily.slice(-8).map((d) => d.adsPct)} tone={adsRevenuePct != null && adsRevenuePct >= ADS_DT_WARN ? 'warning' : undefined} />
+        <MetricCard title="Tin nhắn" value={Math.round(totals.mess).toLocaleString('vi-VN')} detail="theo báo cáo" icon={MessageCircleMore} color="#a855f7" badge="Tương tác" delta={pctChange(totals.mess, prevTotals.mess)} trend={daily.slice(-8).map((d) => d.mess)} />
+        <MetricCard title="Lead" value={Math.round(leadCount).toLocaleString('vi-VN')} detail={leadCount ? 'so với kỳ trước' : 'chưa phát sinh'} icon={UserRoundPlus} color="#38bdf8" badge="Khách tiềm năng" delta={pctChange(leadCount, previousLeadCount)} trend={daily.slice(-8).map((d) => d.leads || d.data)} />
+        <MetricCard title="Đơn hàng" value={Math.round(totals.orders).toLocaleString('vi-VN')} detail={averageOrderValue == null ? 'Chưa có đơn hàng trong kỳ' : `Giá trị TB ${formatCompactVnd(averageOrderValue)}`} icon={ShoppingBag} color="#f59e0b" badge="Chuyển đổi" delta={pctChange(totals.orders, prevTotals.orders)} trend={daily.slice(-8).map((d) => d.orders)} />
+        <MetricCard title="Tỷ lệ chốt" value={closeRate == null ? '—' : `${closeRate.toFixed(1)}%`} detail={`${Math.round(totals.orders).toLocaleString('vi-VN')} đơn / ${Math.round(totals.tongData || totals.tongLead).toLocaleString('vi-VN')} data`} icon={Zap} color="#14b8a6" badge="Hiệu quả" trend={daily.slice(-8).map((d) => tyLeChot(d.data, d.orders, d.leads) || 0)} />
+        <MetricCard title="CPL" value={costPerLead == null ? '—' : formatCompactVnd(costPerLead)} detail="Chi phí quảng cáo / lead" icon={ShieldCheck} color="#6366f1" badge="Chi phí / lead" trend={daily.slice(-8).map((d) => (d.leads || d.data) > 0 ? d.spend / (d.leads || d.data) : 0)} />
       </section>
 
       <section className="personal-panel">
@@ -770,21 +765,19 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
             <div className="flex h-full min-h-[260px] items-center justify-center text-sm text-slate-400">Chưa có dữ liệu trong khoảng thời gian này.</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dailyRows} margin={{ top: 12, right: 10, bottom: 4, left: 8 }}>
-                <CartesianGrid stroke="#20324a" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tickFormatter={(value) => String(value).slice(8, 10)} tick={{ fill: '#a8bad2', fontSize: 11 }} axisLine={{ stroke: '#263a54' }} tickLine={false} />
-                <YAxis yAxisId="money" tickFormatter={(value) => formatCompactVnd(Number(value))} tick={{ fill: '#a8bad2', fontSize: 10 }} axisLine={false} tickLine={false} width={56} />
-                <YAxis yAxisId="ratio" orientation="right" tickFormatter={(value) => `${Number(value).toFixed(0)}%`} tick={{ fill: '#a8bad2', fontSize: 10 }} axisLine={false} tickLine={false} width={42} />
+              <ComposedChart data={daily.map((point) => ({ ...point, adsPct: point.rev > 0 ? point.adsPct : null }))} margin={{ top: 18, right: 10, bottom: 4, left: 8 }}>
+                <CartesianGrid stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="date" tickFormatter={(value) => String(value).slice(8, 10) + '/' + String(value).slice(5, 7)} tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} minTickGap={35} />
+                <YAxis yAxisId="money" tickFormatter={(value) => formatCompactVnd(Number(value))} tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} width={56} />
+                <YAxis yAxisId="ratio" orientation="right" tickFormatter={(value) => `${Number(value).toFixed(0)}%`} tick={{ fill: '#b45309', fontSize: 10 }} axisLine={false} tickLine={false} width={42} domain={[0, (dataMax: number) => Math.max(60, Math.ceil(dataMax / 10) * 10)]} />
                 <Tooltip
-                  contentStyle={{ background: '#101b2b', border: '1px solid #28405e', borderRadius: 10, color: '#e7efff' }}
+                  contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#1f2937', boxShadow: '0 8px 24px rgba(15, 23, 42, .12)' }}
                   labelFormatter={(label) => formatReportDateVi(String(label))}
                   formatter={(value, name) => [String(name) === 'CP/DT' ? `${Number(value).toFixed(1)}%` : formatCompactVnd(Number(value)), String(name)]}
                 />
-                <Legend wrapperStyle={{ color: '#c6d5eb', fontSize: 12 }} />
-                <ReferenceLine yAxisId="ratio" y={ADS_DT_WARN} stroke="#ff4e87" strokeDasharray="6 5" />
-                <Bar yAxisId="money" dataKey="rev" name="Doanh thu" fill="#1cc98a" radius={[3, 3, 0, 0]} maxBarSize={18} />
-                <Bar yAxisId="money" dataKey="spend" name="Chi phí quảng cáo" fill="#3978ff" radius={[3, 3, 0, 0]} maxBarSize={18} />
-                <Line yAxisId="ratio" type="monotone" dataKey="adsPct" name="CP/DT" stroke="#ff8a13" strokeWidth={2.5} dot={{ r: 3, fill: '#ff8a13', stroke: '#071426', strokeWidth: 1 }} activeDot={{ r: 5 }} />
+                <Bar yAxisId="money" dataKey="rev" name="Doanh thu" fill="#16a34a" radius={[4, 4, 0, 0]} maxBarSize={24} />
+                <Bar yAxisId="money" dataKey="spend" name="Chi phí quảng cáo" fill="#0284c7" radius={[4, 4, 0, 0]} maxBarSize={24} />
+                <Line yAxisId="ratio" type="monotone" dataKey="adsPct" name="CP/DT" stroke="#f59e0b" strokeWidth={2.5} connectNulls={false} dot={{ r: 4, fill: '#f59e0b', stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 5 }} />
               </ComposedChart>
             </ResponsiveContainer>
           )}
