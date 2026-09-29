@@ -4,7 +4,7 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     label: 'Tổng quan',
     items: [
-      { id: 'admin-dash', label: 'Dashboard', icon: '📊' },
+      { id: 'admin-dash', label: 'Dashboard tổng quan', icon: '📊' },
       { id: 'mkt-dash', label: 'Dashboard C\u00e1 nh\u00e2n', icon: '' },
       { id: 'leader-dash', label: 'Dashboard team', icon: '' },
       { id: 'burn-detect', label: 'Phát hiện đốt tiền', icon: '🔥' },
@@ -77,12 +77,9 @@ export const MAP_NAV: NavGroup[] = [
 
 export const MKT_NAV: NavGroup[] = [
   {
-    label: 'Của tôi',
+    label: 'Báo cáo',
     items: [
-      { id: 'mkt-dash', label: 'Dashboard cá nhân', icon: '📊' },
-      { id: 'mkt-report', label: 'Nhập báo cáo', icon: '✏️' },
-      { id: 'mkt-bill', label: 'Bill hiệu suất', icon: '📋' },
-      { id: 'mkt-history', label: 'Lịch sử', icon: '📅' },
+      { id: 'mkt-history', label: 'Tải báo cáo Excel', icon: '📥' },
     ]
   },
   {
@@ -94,7 +91,7 @@ export const MKT_NAV: NavGroup[] = [
 ];
 
 export const VIEW_TITLES: Record<string, string> = {
-  'admin-dash': 'Dashboard cá nhân',
+  'admin-dash': 'Dashboard tổng quan',
   'burn-detect': 'Phát hiện Đốt tiền',
   'alerts': 'Cảnh báo Hệ thống',
   'projects': 'Dự án',

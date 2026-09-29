@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CheckCircle2, Eye, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ChevronDown, ChevronUp, Eye, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { supabase } from '../../../api/supabase';
@@ -144,6 +144,7 @@ type MarketerAgg = {
 };
 
 type StaffLite = { name: string; team: string };
+type RankSortKey = 'name' | 'team' | 'orders' | 'revenue' | 'adCost' | 'adsPct';
 
 function buildStaffMaps(rows: Employee[]): { byCode: Map<string, StaffLite> } {
   const byCode = new Map<string, StaffLite>();
@@ -297,6 +298,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState(false);
   const [mktDetailKey, setMktDetailKey] = useState<string | null>(null);
+  const [rankSort, setRankSort] = useState<{ key: RankSortKey; direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
 
   const monthRef = useMemo(() => new Date(), []);
   const monthStart = useMemo(() => toLocalYyyyMmDd(startOfMonth(monthRef)), [monthRef]);
@@ -537,9 +539,36 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
 
   const tableRows = useMemo(() => {
     const base = rankRows;
-    if (!filterStatus) return base;
-    return base.filter((r) => r.status !== 'good');
-  }, [rankRows, filterStatus]);
+    const filtered = filterStatus ? base.filter((r) => r.status !== 'good') : base;
+    return [...filtered].sort((a, b) => {
+      const left = rankSort.key === 'name'
+        ? a.m.displayName.toLocaleLowerCase('vi')
+        : rankSort.key === 'team'
+          ? (a.m.team || '').toLocaleLowerCase('vi')
+          : a.m[rankSort.key as 'orders' | 'revenue' | 'adCost'] ?? (rankSort.key === 'adsPct' ? a.adsPct : 0);
+      const right = rankSort.key === 'name'
+        ? b.m.displayName.toLocaleLowerCase('vi')
+        : rankSort.key === 'team'
+          ? (b.m.team || '').toLocaleLowerCase('vi')
+          : b.m[rankSort.key as 'orders' | 'revenue' | 'adCost'] ?? (rankSort.key === 'adsPct' ? b.adsPct : 0);
+      const compare = typeof left === 'string' && typeof right === 'string'
+        ? left.localeCompare(right, 'vi')
+        : Number(left) - Number(right);
+      return rankSort.direction === 'asc' ? compare : -compare;
+    });
+  }, [rankRows, filterStatus, rankSort]);
+
+  const toggleRankSort = (key: RankSortKey) => {
+    setRankSort((current) => current.key === key
+      ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+      : { key, direction: key === 'name' || key === 'team' ? 'asc' : 'desc' });
+  };
+
+  const rankSortHeader = (label: string, key: RankSortKey) => (
+    <button type="button" onClick={() => toggleRankSort(key)} className="inline-flex items-center justify-center gap-1 hover:text-white" aria-label={`Sắp xếp theo ${label}`}>
+      {label}{rankSort.key === key ? (rankSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : <span className="text-slate-500">↕</span>}
+    </button>
+  );
 
   const rowsByMktKey = useMemo(() => groupRowsByMarketerKey(rows), [rows]);
 
@@ -762,7 +791,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
         </div>
       </section>
 
-      <section className="personal-panel overflow-hidden">
+      <section className="personal-panel personal-daily-panel overflow-hidden">
         <div className="personal-panel-heading">
           <div>
             <h2>Chi tiết theo ngày</h2>
@@ -805,11 +834,11 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
         <summary>Hiệu suất theo nhân sự · {rankRows.length}</summary>
         <div className="overflow-x-auto pt-4">
           <table className="personal-daily-table">
-            <thead><tr><th>Nhân sự</th><th>Team</th><th>Đơn</th><th>Doanh số</th><th>Chi phí</th><th>CP/DT</th><th>Tình trạng</th><th></th></tr></thead>
+            <thead><tr><th>{rankSortHeader('Nhân sự', 'name')}</th><th>{rankSortHeader('Team', 'team')}</th><th>{rankSortHeader('Đơn', 'orders')}</th><th>{rankSortHeader('Doanh số', 'revenue')}</th><th>{rankSortHeader('Chi phí', 'adCost')}</th><th>{rankSortHeader('CP/DT', 'adsPct')}</th><th>Tình trạng</th><th></th></tr></thead>
             <tbody>
               {tableRows.map(({ m, adsPct, status }) => (
                 <tr key={m.key}>
-                  <td>{m.displayName}</td><td>{m.team || '—'}</td><td>{m.orders.toLocaleString('vi-VN')}</td>
+                  <td style={{ textAlign: 'left' }}>{m.displayName}</td><td>{m.team || '—'}</td><td>{m.orders.toLocaleString('vi-VN')}</td>
                   <td className="metric-positive">{formatCompactVnd(m.revenue)}</td><td>{formatCompactVnd(m.adCost)}</td>
                   <td className={status === 'bad' ? 'metric-negative' : ''}>{m.revenue > 0 ? `${adsPct.toFixed(1)}%` : '—'}</td>
                   <td>{status === 'bad' ? 'Cần theo dõi' : status === 'med' ? 'Theo dõi' : 'Tốt'}</td>

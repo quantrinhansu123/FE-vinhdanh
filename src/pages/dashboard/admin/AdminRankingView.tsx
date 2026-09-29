@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Flame, Loader2, RefreshCw, TrendingUp } from 'lucide-react';
+import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import type { Employee } from '../../../types';
 import { REPORTS_TABLE } from '../mkt/mktDetailReportShared';
@@ -124,173 +125,83 @@ export const AdminRankingView: React.FC = () => {
 
   return (
     <div className="dash-fade-up">
-      {/* Top bar */}
-      <div className="flex justify-between items-center w-full mb-4">
-        <div className="flex items-center gap-8">
-          <h1 className="text-[var(--ld-on-surface)] font-extrabold text-xl tracking-tight">Bảng xếp hạng</h1>
-          <div className="hidden md:flex items-center gap-3 text-[var(--ld-on-surface-variant)]">
-            <div className="flex items-center gap-2 bg-[var(--ld-surface-container-low)] px-3 py-1.5 rounded-lg border border-[var(--ld-outline-variant)]/20">
-              <span className="text-xs">Tháng này</span>
-              <span className="material-symbols-outlined text-xs">calendar_today</span>
-            </div>
-            <span className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-primary)]">{monthBadge}</span>
-          </div>
+      <div className="mb-3 flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--bg2)] px-4 py-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#6d9fe5] to-[#3e659a] text-[11px] font-extrabold tracking-[-0.5px] text-white shadow-sm">MAP</div>
+        <div className="min-w-0">
+          <div className="text-[12px] font-extrabold text-[var(--text)]">MAP - Marketing Analytic Platform</div>
+          <div className="text-[10px] text-[var(--text3)]">Bảng xếp hạng doanh số · {monthBadge}</div>
         </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={loading}
-          className="bg-[var(--ld-surface-container-highest)] text-[var(--ld-on-surface)] px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold border border-[var(--ld-outline-variant)]/20 hover:bg-[var(--ld-surface-bright)] transition-all disabled:opacity-50"
-        >
-          <span className="material-symbols-outlined text-sm">{loading ? 'hourglass' : 'sync'}</span>
-          Đồng bộ dữ liệu
-        </button>
       </div>
 
       {error ? (
-        <div className="mb-3 text-[11px] text-[var(--ld-error)] border border-[var(--ld-error)]/25 rounded px-3 py-2 bg-[color-mix(in_srgb,var(--ld-error)_12%,transparent)]">
+        <div className="mb-3 rounded-[8px] border border-[var(--R)]/25 bg-[var(--Rd)] px-3 py-2 text-[11px] text-[var(--R)]">
           {error}
         </div>
       ) : null}
 
-      <div className="flex gap-6 items-start">
-        {/* Left: Top Marketing table */}
-        <section className="flex-[3] bg-[var(--ld-surface-container)] rounded-2xl overflow-hidden border border-[var(--ld-outline-variant)]/10">
-          <div className="p-4 border-b border-[var(--ld-surface-container-low)] flex justify-between items-center bg-[var(--ld-surface-container-high)]/30">
-            <h3 className="text-[var(--ld-on-surface)] font-bold text-base flex items-center gap-2">
-              <span className="material-symbols-outlined text-[var(--ld-primary)]">military_tech</span>
-              Top Marketing – doanh số báo cáo tháng này
-            </h3>
-            <div className="flex gap-2">
-              <span className="bg-[var(--ld-primary)]/10 text-[var(--ld-primary)] text-[10px] font-bold px-2 py-1 rounded">24/7 TRACKING</span>
-              <span className="bg-[var(--ld-tertiary)]/10 text-[var(--ld-tertiary)] text-[10px] font-bold px-2 py-1 rounded">REAL-TIME DATA</span>
-            </div>
-          </div>
-          <div className="max-h-[min(560px,70vh)] overflow-y-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="sticky top-0 bg-[var(--ld-surface-container)] z-10">
-                <tr className="text-[var(--ld-on-surface-variant)]/60 text-[10px] uppercase tracking-[0.2em] font-bold">
-                  <th className="px-6 py-3 w-14">#</th>
-                  <th className="py-3">Nhân sự</th>
-                  <th className="py-3">Nhóm</th>
-                  <th className="py-3 text-right">Doanh số (VNĐ)</th>
-                  <th className="py-3 text-center">Trạng thái</th>
-                  <th className="px-6 py-3 w-10" />
+      <SectionCard
+        title="Bảng xếp hạng nhân sự"
+        subtitle={`${rows.length.toLocaleString('vi-VN')} nhân sự · Doanh số báo cáo tháng ${monthBadge}`}
+        bodyPadding={false}
+        actions={
+          <button type="button" onClick={() => void load()} disabled={loading}
+            className="flex items-center gap-1.5 rounded-[6px] border border-[var(--border)] bg-[var(--bg3)] px-2.5 py-1.5 text-[11px] font-bold text-[var(--text2)] hover:bg-[var(--bg4)] disabled:opacity-50">
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Đồng bộ dữ liệu
+          </button>
+        }
+      >
+        <div className="max-h-[min(650px,72vh)] overflow-auto">
+          <table className="w-full min-w-[760px] border-collapse text-left">
+            <thead className="sticky top-0 z-10 bg-[var(--bg2)]">
+              <tr className="border-b border-[var(--border)] text-[9px] font-extrabold uppercase tracking-wide text-[var(--text3)]">
+                <th className="p-2 pl-4">Hạng</th><th className="p-2">Nhân sự</th><th className="p-2">Nhóm</th>
+                <th className="p-2 text-right">Doanh số (VND)</th><th className="p-2 text-center">Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody className="text-[11px] text-[var(--text2)]">
+              {loading && !rows.length ? (
+                <tr><td colSpan={5} className="p-10 text-center text-[var(--text3)]"><Loader2 className="mr-2 inline-block animate-spin" size={16} />Đang tải...</td></tr>
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={5} className="p-10 text-center text-[var(--text3)] font-bold">Chưa có nhân sự trong {EMPLOYEES_TABLE}.</td></tr>
+              ) : rows.map((emp) => (
+                <tr key={emp.id} className="border-b border-[rgba(255,255,255,0.04)] transition-colors hover:bg-[rgba(255,255,255,0.03)]">
+                  <td className="p-2 pl-4"><span className="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] bg-[var(--accent-d)] px-2 text-[11px] font-extrabold text-[var(--accent)]">{emp.rank}</span></td>
+                  <td className="p-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: AVATAR_BGS[(emp.rank - 1) % AVATAR_BGS.length] }}>{initials(emp.name)}</div>
+                      <div className="min-w-0"><div className="truncate font-bold text-[var(--text)]">{emp.name}</div><div className="text-[9px] text-[var(--text3)]">ID: {emp.ma_ns || '—'}</div></div>
+                    </div>
+                  </td>
+                  <td className="p-2">{emp.team || '—'}</td>
+                  <td className="p-2 text-right font-[var(--mono)] font-bold text-[var(--G)]">{emp.score.toLocaleString('vi-VN')}</td>
+                  <td className="p-2 text-center"><span className="rounded-[4px] border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-[9px] font-bold text-[var(--text2)]">{emp.trang_thai || '—'}</span></td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--ld-background)]/30">
-                {loading && !rows.length ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-[var(--ld-on-surface-variant)]">
-                      <Loader2 className="inline-block animate-spin mr-2" size={16} />
-                      Đang tải…
-                    </td>
-                  </tr>
-                ) : rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-[var(--ld-on-surface-variant)]">
-                      Chưa có nhân sự trong {EMPLOYEES_TABLE}.
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((emp) => (
-                    <tr key={emp.id} className="hover:bg-[var(--ld-surface-container-high)] transition-colors group">
-                      <td className="px-6 py-4">
-                        <span className="w-8 h-8 rounded-lg bg-[var(--ld-primary-container)] text-[var(--ld-on-primary-container)] flex items-center justify-center font-bold text-xs">
-                          {emp.rank === 1 ? '1st' : emp.rank}
-                        </span>
-                      </td>
-                      <td className="py-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-9 h-9 rounded-full ring-2 ring-[var(--ld-primary-container)]/30 flex items-center justify-center text-[11px] font-bold"
-                            style={{ background: AVATAR_BGS[(emp.rank - 1) % AVATAR_BGS.length] }}
-                          >
-                            {initials(emp.name)}
-                          </div>
-                          <div>
-                            <div className="text-[var(--ld-on-surface)] font-bold text-sm">{emp.name}</div>
-                            <div className="text-[var(--ld-on-surface-variant)]/60 text-[10px]">ID: {emp.ma_ns || '—'}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 text-[var(--ld-on-surface-variant)] text-xs font-medium">{emp.team || '—'}</td>
-                      <td className="py-4 text-right font-mono text-[var(--ld-primary)] font-bold text-sm tracking-tight">
-                        {emp.score.toLocaleString('vi-VN')}
-                      </td>
-                      <td className="py-4 text-center">
-                        <span className="px-2 py-1 bg-[var(--ld-surface-container-highest)] text-[var(--ld-on-surface-variant)]/70 text-[10px] font-bold rounded border border-[var(--ld-outline-variant)]/10">
-                          {emp.trang_thai || '—'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="material-symbols-outlined text-[var(--ld-on-surface-variant)]/30 group-hover:text-[var(--ld-primary)] transition-colors cursor-pointer">
-                          arrow_forward_ios
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="p-3 bg-[var(--ld-surface-container-lowest)] flex justify-center border-t border-[var(--ld-background)]/15">
-            <button className="text-[var(--ld-primary)] text-xs font-bold flex items-center gap-2 hover:underline">
-              Xem toàn bộ bảng vinh danh
-              <span className="material-symbols-outlined text-sm">open_in_new</span>
-            </button>
-          </div>
-        </section>
-
-        {/* Right: Burn alert + mini card */}
-        <section className="flex-1 flex flex-col gap-6">
-          <div className="bg-[var(--ld-surface-container)] rounded-2xl p-6 border border-[var(--ld-error)]/8 relative overflow-hidden text-center min-h-[280px] flex flex-col items-center justify-center">
-            <div className="absolute top-0 right-0 p-4">
-              <span className="bg-[var(--ld-error-container)] text-[var(--ld-on-error-container)] text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter shadow">
-                CRM staff
-              </span>
-            </div>
-            <div className="mb-4">
-              <div className="w-16 h-16 rounded-full bg-[color-mix(in_srgb,var(--ld-error)_15%,transparent)] flex items-center justify-center border border-[var(--ld-error)]/20 mx-auto">
-                <span className="material-symbols-outlined text-3xl text-[var(--ld-error)]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  local_fire_department
-                </span>
-              </div>
-            </div>
-            <h3 className="font-extrabold text-lg text-[var(--ld-on-surface)] mb-1">Marketing đốt tiền – Cần xử lý</h3>
-            <p className="text-[var(--ld-on-surface-variant)]/70 text-sm max-w-[260px] mx-auto mb-4">
-              {burnList.length === 0 ? 'Không có nhân sự trạng thái Đốt tiền trong hệ thống hiện tại.' : `Có ${burnList.length} nhân sự cần xử lý.`}
-            </p>
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="px-4 py-2 bg-[var(--ld-surface-container-high)] border border-[var(--ld-outline-variant)]/20 rounded-xl text-[var(--ld-on-surface)] text-sm font-bold hover:bg-[var(--ld-surface-bright)]"
-            >
-              Kiểm tra thủ công
-            </button>
-          </div>
-
-          <div className="bg-[var(--ld-surface-container)] rounded-2xl p-6 border border-[var(--ld-primary)]/8">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-bold text-sm text-[var(--ld-on-surface-variant)]">Doanh số cao nhất tháng này</h4>
-              <span className="material-symbols-outlined text-[var(--ld-primary)] text-sm">trending_up</span>
-            </div>
-            <div className="space-y-3">
-              {rows.filter((emp) => emp.score > 0).slice(0, 2).map((emp) => (
-                <div key={emp.id} className="flex items-center justify-between p-3 bg-[var(--ld-background)]/40 rounded-xl">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-[var(--ld-primary-fixed-variant,#3323cc)] flex items-center justify-center text-[10px] font-bold shrink-0">{initials(emp.name)}</div>
-                    <span className="text-xs font-semibold truncate">{emp.name}</span>
-                  </div>
-                  <span className="text-[var(--ld-tertiary)] font-bold text-xs whitespace-nowrap">{emp.score.toLocaleString('vi-VN')} ₫</span>
-                </div>
               ))}
-              {!rows.some((emp) => emp.score > 0) ? (
-                <p className="text-xs text-[var(--ld-on-surface-variant)]">Chưa có doanh số trong tháng này.</p>
-              ) : null}
-            </div>
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <SectionCard title="Marketing cần theo dõi" subtitle="Nhân sự đang có trạng thái đốt tiền" badge={{ text: `${burnList.length} nhân sự`, type: burnList.length ? 'R' : 'G' }}>
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[var(--Rd)] text-[var(--R)]"><Flame size={18} /></span>
+            <div className="text-[11px] text-[var(--text2)]">{burnList.length === 0 ? 'Không có nhân sự ở trạng thái đốt tiền.' : `Có ${burnList.length} nhân sự cần được kiểm tra.`}</div>
           </div>
-        </section>
+        </SectionCard>
+
+        <SectionCard title="Doanh số cao nhất tháng này" subtitle="Hai nhân sự có doanh số cao nhất" badge={{ text: 'Top 2', type: 'B' }}>
+          <div className="mb-3 flex items-center gap-2 text-[var(--G)]"><TrendingUp size={16} /><span className="text-[10px] font-bold">Doanh số trong tháng</span></div>
+          <div className="space-y-2">
+            {rows.filter((emp) => emp.score > 0).slice(0, 2).map((emp) => (
+              <div key={emp.id} className="flex items-center justify-between gap-3 rounded-[8px] border border-[var(--border)] bg-[var(--bg3)] p-2.5">
+                <div className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ background: AVATAR_BGS[(emp.rank - 1) % AVATAR_BGS.length] }}>{initials(emp.name)}</span><span className="truncate text-[11px] font-semibold text-[var(--text)]">{emp.name}</span></div>
+                <span className="whitespace-nowrap font-[var(--mono)] text-[10px] font-bold text-[var(--G)]">{emp.score.toLocaleString('vi-VN')} ₫</span>
+              </div>
+            ))}
+            {!rows.some((emp) => emp.score > 0) && <p className="text-[11px] text-[var(--text3)]">Chưa có doanh số trong tháng này.</p>}
+          </div>
+        </SectionCard>
       </div>
 
     </div>

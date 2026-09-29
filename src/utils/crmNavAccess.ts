@@ -98,6 +98,7 @@ export function tierAllowsRole(tier: CrmNavTier, role: Role): boolean {
 const READONLY_ADMIN_VIEWS: ReadonlySet<string> = new Set(['projects', 'teams', 'staff', 'ad-accounts']);
 
 export function tierAllowsView(tier: CrmNavTier, view: ViewId): boolean {
+  if (tier === 'mkt' && view === 'leader-dash') return true;
   if (READONLY_ADMIN_VIEWS.has(view)) return true;
   return tierAllowsRole(tier, viewToRole(view));
 }

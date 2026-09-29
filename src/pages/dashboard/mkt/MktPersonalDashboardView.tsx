@@ -1,10 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  BarChart3,
   CalendarDays,
   CheckCircle2,
+  Coins,
   Download,
+  FileText,
+  Filter,
   LockKeyhole,
+  Megaphone,
   MessageSquareText,
+  MoreVertical,
+  Percent,
   RefreshCw,
   ShoppingCart,
   Target,
@@ -67,6 +74,9 @@ type Metrics = Omit<DailyMetrics, 'date'> & {
   leadPct: number;
   closePct: number;
   cpl: number;
+  aov: number;
+  cpa: number;
+  cpo: number;
 };
 
 type DateRange = { from: string; to: string };
@@ -120,6 +130,9 @@ function makeMetrics(rows: DailyMetrics[]): Metrics {
     leadPct: totals.mess > 0 ? (totals.leads / totals.mess) * 100 : 0,
     closePct: totals.leads > 0 ? (totals.orders / totals.leads) * 100 : 0,
     cpl: totals.leads > 0 ? totals.adCost / totals.leads : 0,
+    aov: totals.orders > 0 ? totals.revenue / totals.orders : 0,
+    cpa: totals.mess > 0 ? totals.adCost / totals.mess : 0,
+    cpo: totals.orders > 0 ? totals.adCost / totals.orders : 0,
   };
 }
 
@@ -153,6 +166,12 @@ function formatCount(value: number): string {
 
 function formatPercent(value: number): string {
   return `${value.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`;
+}
+
+function periodDelta(current: number, previous: number): string {
+  if (previous === 0) return current === 0 ? '0%' : '+100%';
+  const change = ((current - previous) / Math.abs(previous)) * 100;
+  return `${change > 0 ? '+' : ''}${change.toLocaleString('vi-VN', { maximumFractionDigits: 0 })}%`;
 }
 
 function dateText(value: string): string {
@@ -229,6 +248,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
   const [range, setRange] = useState<DateRange>(() => presetRange('month'));
   const [draftRange, setDraftRange] = useState<DateRange>(() => presetRange('month'));
   const [showCustom, setShowCustom] = useState(false);
+  const [dailyFilter, setDailyFilter] = useState<'all' | 'active' | 'attention'>('all');
   const [compare, setCompare] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -352,7 +372,9 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
   const priorMetrics = useMemo(() => makeMetrics(priorDaily), [priorDaily]);
   const days = Math.max(1, daily.length);
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  const forecast = (metrics.revenue / days) * daysInMonth;
+  const forecastRevenue = (metrics.revenue / days) * daysInMonth * 0.95;
+  const forecastAdCost = (metrics.adCost / days) * daysInMonth * 1.06;
+  const forecastAdsPct = forecastRevenue > 0 ? (forecastAdCost / forecastRevenue) * 100 : 0;
   const revenueProgress = targetVnd ? Math.min(100, (metrics.revenue / targetVnd) * 100) : undefined;
   const alerts = [
     ...(metrics.revenue > 0 && metrics.adsPct > 30 ? [`%ADS ${formatPercent(metrics.adsPct)} đang vượt trần 30%.`] : []),
@@ -360,6 +382,16 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
     ...(metrics.leads > 0 && metrics.closePct < 32 ? [`Tỷ lệ chốt ${formatPercent(metrics.closePct)} thấp hơn mục tiêu 32%.`] : []),
   ];
   const displayRows = [...daily].reverse();
+  const filteredDisplayRows = displayRows.filter((row) => {
+    if (dailyFilter === 'active') return row.mess > 0 || row.leads > 0 || row.orders > 0 || row.revenue > 0 || row.adCost > 0;
+    if (dailyFilter === 'attention') {
+      const leadPct = row.mess ? row.leads / row.mess * 100 : 0;
+      const closePct = row.leads ? row.orders / row.leads * 100 : 0;
+      const adsPct = row.revenue ? row.adCost / row.revenue * 100 : 0;
+      return (row.adCost > 0 && row.revenue <= 0) || (row.revenue > 0 && adsPct > 30) || (row.mess > 0 && leadPct < 30) || (row.leads > 0 && closePct < 32);
+    }
+    return true;
+  });
   const priorCaption = compare && priorRows.length ? `Kỳ trước: ${formatMoney(priorMetrics.revenue)}` : 'Theo dữ liệu đã nhập';
 
   const choosePreset = (value: Exclude<Preset, 'custom'>) => {
@@ -379,7 +411,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
 
   const exportCsv = () => {
     const columns = ['Ngày', 'Mess', 'Data nhận', 'Tỷ lệ nhận data (%)', 'Đơn chốt', 'Tỷ lệ chốt (%)', 'Doanh số (VNĐ)', 'Chi phí Ads (VNĐ)', '%ADS'];
-    const lines = [columns, ...displayRows.map((row) => [
+    const lines = [columns, ...filteredDisplayRows.map((row) => [
       row.date,
       row.mess,
       row.leads,
@@ -492,7 +524,9 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
         <Card label="Data nhận · Lead" value={formatCount(metrics.leads)} sub={`Tỷ lệ nhận data ${formatPercent(metrics.leadPct)}`} status={metrics.leadPct >= 30 ? 'Đạt mục tiêu' : 'Theo dõi'} tone={metrics.leadPct >= 30 ? 'green' : 'amber'} icon={<Users size={12} />} progress={metrics.leadPct / 30 * 100} />
         <Card label="Tỷ lệ chốt" value={formatPercent(metrics.closePct)} sub="Đơn chốt / data nhận" status={metrics.closePct >= 32 ? 'Đạt mục tiêu' : 'Theo dõi'} tone={metrics.closePct >= 32 ? 'green' : 'amber'} icon={<CheckCircle2 size={12} />} progress={metrics.closePct / 32 * 100} />
         <Card label="CPL · Chi phí mỗi Lead" value={formatMoney(metrics.cpl)} sub="Chi phí Ads / data nhận" status="Theo dõi" tone="purple" icon={<Users size={12} />} progress={metrics.cpl ? 100 - Math.min(100, metrics.cpl / 1000000 * 20) : 4} />
-        <Card label="Dự báo doanh số tháng" value={formatMoney(forecast)} sub={`Ước tính theo bình quân ${formatMoney(metrics.revenue / days)}/ngày`} status="Tham khảo" tone="blue" icon={<Target size={12} />} progress={targetVnd ? forecast / targetVnd * 100 : 42} />
+        <Card label="AOV · Giá trị đơn trung bình" value={formatMoney(metrics.aov)} sub="Doanh số / đơn chốt" status="Theo dõi" tone="green" icon={<ShoppingCart size={12} />} progress={metrics.aov ? 70 : 4} />
+        <Card label="CPA · Chi phí mỗi tin nhắn" value={formatMoney(metrics.cpa)} sub="Chi phí Ads / tin nhắn" status="Theo dõi" tone="amber" icon={<MessageSquareText size={12} />} progress={metrics.cpa ? 100 - Math.min(100, metrics.cpa / 1000000 * 20) : 4} />
+        <Card label="CPO · Chi phí mỗi đơn" value={formatMoney(metrics.cpo)} sub="Chi phí Ads / đơn chốt" status="Theo dõi" tone="purple" icon={<ShoppingCart size={12} />} progress={metrics.cpo ? 100 - Math.min(100, metrics.cpo / 1000000 * 20) : 4} />
       </section>
 
       <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,.82fr)]">
@@ -519,41 +553,84 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
         </section>
 
         <section className="rounded-2xl border border-white/[0.08] bg-[#151f2d] p-4 shadow-lg shadow-black/10 sm:p-5">
-          <div><h2 className="text-sm font-extrabold">Phễu chuyển đổi của tôi</h2><p className="mt-1 text-[11px] text-slate-500">Từ tin nhắn đến đơn hàng</p></div>
+          <div><h2 className="text-sm font-extrabold">Dự đoán %ADS</h2><p className="mt-1 text-[11px] text-slate-500">Ước tính theo dữ liệu trong kỳ đã chọn</p></div>
           <div className="mt-5 space-y-3">
             {[
-              { label: 'Tin nhắn', value: metrics.mess, rate: 100, color: 'bg-violet-400', note: `${formatCount(metrics.mess / days)} tin/ngày` },
-              { label: 'Data nhận', value: metrics.leads, rate: metrics.mess ? metrics.leads / metrics.mess * 100 : 0, color: 'bg-sky-400', note: `${formatPercent(metrics.leadPct)} · mục tiêu 30%` },
-              { label: 'Đơn hàng', value: metrics.orders, rate: metrics.mess ? metrics.orders / metrics.mess * 100 : 0, color: 'bg-emerald-400', note: `${formatPercent(metrics.closePct)} chốt trên data · mục tiêu 32%` },
+              { label: 'Doanh thu dự kiến', value: forecastRevenue, rate: 100, color: 'bg-violet-400', note: 'Đã trừ dự phòng hoàn hủy 5%' },
+              { label: 'Chi phí quảng cáo dự kiến', value: forecastAdCost, rate: forecastRevenue ? forecastAdCost / forecastRevenue * 100 : 0, color: 'bg-sky-400', note: 'Đã cộng dự phòng phí 6%' },
+              { label: '%ADS dự kiến', value: forecastAdsPct, rate: forecastAdsPct, color: 'bg-emerald-400', note: 'Chi phí quảng cáo / doanh thu dự kiến' },
             ].map((stage) => (
               <div key={stage.label} className="rounded-xl border border-white/[0.06] bg-[#101722] p-3">
-                <div className="flex items-baseline justify-between gap-3"><span className="text-[11px] font-bold text-slate-400">{stage.label}</span><strong className="text-lg font-extrabold">{formatCount(stage.value)}</strong></div>
+                <div className="flex items-baseline justify-between gap-3"><span className="text-[11px] font-bold text-slate-400">{stage.label}</span><strong className="text-lg font-extrabold">{stage.label.includes('%ADS') ? formatPercent(stage.value) : formatMoney(stage.value)}</strong></div>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.07]"><div className={`h-full rounded-full ${stage.color}`} style={{ width: `${Math.max(stage.value > 0 ? 3 : 0, Math.min(stage.rate, 100))}%` }} /></div>
                 <p className="mt-1.5 text-[10px] text-slate-500">{stage.note}</p>
               </div>
             ))}
           </div>
-          <div className="mt-4 rounded-xl border border-sky-300/10 bg-sky-300/[0.06] p-3"><strong className="block text-[11px] text-sky-200">Dự báo đến cuối tháng</strong><span className="mt-1 block text-xl font-extrabold text-sky-100">{formatMoney(forecast)}</span><p className="mt-1 text-[10px] text-slate-500">Ước tính nếu duy trì bình quân {formatMoney(metrics.revenue / days)}/ngày.</p></div>
         </section>
       </div>
 
-      <section className="rounded-2xl border border-white/[0.08] bg-[#151f2d] p-4 shadow-lg shadow-black/10 sm:p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-extrabold">Chi tiết theo ngày</h2><p className="mt-1 text-[11px] text-slate-500">Dữ liệu tổng hợp trong khoảng thời gian đã chọn</p></div><button type="button" onClick={exportCsv} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#1b2838] px-3 py-2 text-[11px] font-bold text-slate-300 hover:bg-white/[0.06]"><Download size={14} /> Tải CSV</button></div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-right text-xs">
-            <thead><tr className="bg-[#101722] text-[9px] font-extrabold uppercase tracking-wide text-slate-500"><th className="rounded-l-lg p-3 text-left">Ngày</th><th className="p-3">Mess</th><th className="p-3">Data nhận</th><th className="p-3">Tỷ lệ nhận</th><th className="p-3">Đơn</th><th className="p-3">Tỷ lệ chốt</th><th className="p-3">Doanh số</th><th className="p-3">Chi phí</th><th className="rounded-r-lg p-3">%ADS</th></tr></thead>
-            <tbody>
-              {loading ? <tr><td colSpan={9} className="p-8 text-center text-slate-500">Đang tải dữ liệu…</td></tr> : displayRows.length ? displayRows.map((row) => {
+      <section className="mb-4 overflow-hidden rounded-2xl border border-emerald-900/10 bg-[#f5faf6] p-4 text-slate-800 shadow-[0_12px_32px_rgba(15,80,43,.10)] sm:p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-700 to-green-600 text-white shadow-sm"><BarChart3 size={24} /></span>
+            <div><h2 className="text-lg font-extrabold text-emerald-950 sm:text-xl">Chi tiết theo ngày</h2><p className="text-xs font-medium text-slate-500 sm:text-sm">Dữ liệu tổng hợp trong khoảng thời gian đã chọn</p></div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-emerald-950 shadow-sm"><CalendarDays size={16} className="text-emerald-700" />{formatReportDateVi(range.from)} – {formatReportDateVi(range.to)}</div>
+            <label className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-emerald-950 shadow-sm"><Filter size={16} className="text-emerald-700" /><span className="sr-only">Lọc ngày</span><select aria-label="Lọc ngày" value={dailyFilter} onChange={(event) => setDailyFilter(event.target.value as typeof dailyFilter)} className="max-w-[130px] bg-transparent outline-none"><option value="all">Tất cả ngày</option><option value="active">Có dữ liệu</option><option value="attention">Cần chú ý</option></select></label>
+            <button type="button" onClick={exportCsv} className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-700 px-4 text-xs font-extrabold text-white shadow-sm transition hover:bg-emerald-800"><Download size={16} /> Tải CSV</button>
+          </div>
+        </div>
+
+        <div className="mb-4 grid grid-cols-2 gap-2 xl:grid-cols-4 2xl:grid-cols-8">
+          {[
+            { label: 'Tổng MESS', value: formatCount(metrics.mess), change: periodDelta(metrics.mess, priorMetrics.mess), icon: <MessageSquareText size={20} />, tone: 'green' },
+            { label: 'Tổng dữ liệu nhận', value: formatCount(metrics.leads), change: periodDelta(metrics.leads, priorMetrics.leads), icon: <FileText size={20} />, tone: 'green' },
+            { label: 'Tỷ lệ nhận TB', value: formatPercent(metrics.leadPct), change: periodDelta(metrics.leadPct, priorMetrics.leadPct), icon: <Percent size={20} />, tone: 'rose' },
+            { label: 'Tổng đơn', value: formatCount(metrics.orders), change: periodDelta(metrics.orders, priorMetrics.orders), icon: <ShoppingCart size={20} />, tone: 'amber' },
+            { label: 'Tỷ lệ chốt TB', value: formatPercent(metrics.closePct), change: periodDelta(metrics.closePct, priorMetrics.closePct), icon: <CheckCircle2 size={20} />, tone: 'amber' },
+            { label: 'Tổng doanh số', value: formatMoney(metrics.revenue), change: periodDelta(metrics.revenue, priorMetrics.revenue), icon: <BarChart3 size={20} />, tone: 'green' },
+            { label: 'Tổng chi phí', value: formatMoney(metrics.adCost), change: periodDelta(metrics.adCost, priorMetrics.adCost), icon: <Coins size={20} />, tone: 'blue' },
+            { label: '% ADS TB', value: formatPercent(metrics.adsPct), change: periodDelta(metrics.adsPct, priorMetrics.adsPct), icon: <Megaphone size={20} />, tone: 'green' },
+          ].map((item) => {
+            const toneClass = item.tone === 'rose' ? 'border-rose-100 bg-rose-50 text-rose-700' : item.tone === 'amber' ? 'border-amber-100 bg-amber-50 text-amber-700' : item.tone === 'blue' ? 'border-sky-100 bg-sky-50 text-sky-700' : 'border-emerald-100 bg-emerald-50 text-emerald-700';
+            return <article key={item.label} className={`min-w-0 rounded-xl border p-3 shadow-[0_3px_10px_rgba(15,80,43,.05)] ${toneClass}`}>
+              <div className="flex items-center gap-2"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/80">{item.icon}</span><span className="truncate text-[10px] font-bold leading-tight text-slate-600">{item.label}</span></div>
+              <strong className="mt-1 block truncate text-xl font-extrabold text-slate-900">{item.value}</strong>
+              <p className="mt-1 truncate text-[9px] font-bold text-emerald-700">↗ {item.change} <span className="font-medium text-slate-500">so với kỳ trước</span></p>
+            </article>;
+          })}
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-emerald-900/5 bg-white shadow-sm">
+          <table className="w-full min-w-[1080px] border-collapse text-center text-xs">
+            <thead><tr className="bg-gradient-to-r from-emerald-700 to-green-700 text-[10px] font-extrabold text-white">
+              <th className="p-3">#</th><th className="p-3">Ngày</th><th className="p-3">MESS</th><th className="p-3">Data nhận</th><th className="p-3">Tỷ lệ nhận</th><th className="p-3">Đơn</th><th className="p-3">Tỷ lệ chốt</th><th className="p-3">Doanh số</th><th className="p-3">Chi phí</th><th className="p-3">% ADS</th><th className="p-3">Thao tác</th>
+            </tr></thead>
+            <tbody className="font-semibold text-slate-800">
+              {loading ? <tr><td colSpan={11} className="p-8 text-slate-500"><RefreshCw size={15} className="mr-2 inline animate-spin" />Đang tải dữ liệu…</td></tr> : filteredDisplayRows.length ? filteredDisplayRows.map((row, index) => {
                 const leadPct = row.mess ? row.leads / row.mess * 100 : 0;
                 const closePct = row.leads ? row.orders / row.leads * 100 : 0;
                 const adsPct = row.revenue ? row.adCost / row.revenue * 100 : 0;
-                return <tr key={row.date} className="border-t border-white/[0.05] text-slate-300 hover:bg-white/[0.025]"><td className="p-3 text-left font-semibold">{dateText(row.date)}</td><td className="p-3">{formatCount(row.mess)}</td><td className="p-3">{formatCount(row.leads)}</td><td className={`p-3 ${leadPct >= 30 ? 'text-emerald-300' : 'text-rose-300'}`}>{formatPercent(leadPct)}</td><td className="p-3">{formatCount(row.orders)}</td><td className={`p-3 ${closePct >= 32 ? 'text-emerald-300' : 'text-amber-300'}`}>{formatPercent(closePct)}</td><td className="p-3 font-bold text-emerald-300">{formatMoney(row.revenue)}</td><td className="p-3">{formatMoney(row.adCost)}</td><td className={`p-3 ${adsPct <= 30 ? 'text-emerald-300' : 'text-rose-300'}`}>{formatPercent(adsPct)}</td></tr>;
-              }) : <tr><td colSpan={9} className="p-8 text-center text-slate-500">Không có dữ liệu trong khoảng thời gian này.</td></tr>}
+                const greenPill = 'inline-flex min-w-[58px] justify-center rounded-full bg-emerald-100 px-3 py-1.5 font-extrabold text-emerald-800';
+                const redPill = 'inline-flex min-w-[58px] justify-center rounded-full bg-rose-100 px-3 py-1.5 font-extrabold text-rose-700';
+                const amberPill = 'inline-flex min-w-[58px] justify-center rounded-full bg-amber-100 px-3 py-1.5 font-extrabold text-amber-800';
+                return <tr key={row.date} className={`border-b border-emerald-900/[0.04] hover:bg-emerald-50 ${index % 2 === 0 ? 'bg-emerald-50/70' : 'bg-white'}`}>
+                  <td className="p-2.5">{index + 1}</td><td className="p-2.5 font-bold">{dateText(row.date)}</td><td className="p-2.5">{formatCount(row.mess)}</td><td className="p-2.5">{formatCount(row.leads)}</td>
+                  <td className="p-2.5"><span className={leadPct >= 30 ? greenPill : redPill}>{formatPercent(leadPct)}</span></td><td className="p-2.5">{formatCount(row.orders)}</td>
+                  <td className="p-2.5"><span className={closePct >= 32 ? greenPill : amberPill}>{formatPercent(closePct)}</span></td>
+                  <td className="p-2.5 font-bold text-emerald-800">{row.revenue ? formatMoney(row.revenue) : '—'}</td><td className="p-2.5">{row.adCost ? formatMoney(row.adCost) : '—'}</td>
+                  <td className="p-2.5"><span className={adsPct <= 30 ? greenPill : redPill}>{formatPercent(adsPct)}</span></td>
+                  <td className="p-2.5"><button type="button" title={`Xem riêng ngày ${dateText(row.date)}`} aria-label={`Xem riêng ngày ${dateText(row.date)}`} onClick={() => { setRange({ from: row.date, to: row.date }); setDraftRange({ from: row.date, to: row.date }); setPreset('custom'); }} className="rounded-md p-1 text-slate-500 hover:bg-emerald-100 hover:text-emerald-800"><MoreVertical size={17} /></button></td>
+                </tr>;
+              }) : <tr><td colSpan={11} className="p-8 text-slate-500">{dailyFilter === 'all' ? 'Không có dữ liệu trong khoảng thời gian này.' : 'Không có ngày phù hợp với bộ lọc.'}</td></tr>}
             </tbody>
           </table>
         </div>
-        <p className="mt-3 text-[10px] text-slate-600">Phạm vi hiển thị: báo cáo gắn với email hoặc mã nhân sự của {viewerIsAdmin ? selectedPerson?.name || 'nhân sự đã chọn' : 'bạn'}.</p>
+        <p className="mt-3 text-[10px] text-slate-500">Phạm vi hiển thị: báo cáo gắn với email hoặc mã nhân sự của {viewerIsAdmin ? selectedPerson?.name || 'nhân sự đã chọn' : 'bạn'}.</p>
       </section>
+
 
       </>}
       <footer className="flex items-center justify-center gap-1.5 py-2 text-[10px] text-slate-600"><LockKeyhole size={12} /> Báo cáo hiệu quả cá nhân · {selectedPerson?.name || 'Tài khoản của tôi'}</footer>
