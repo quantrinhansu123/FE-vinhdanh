@@ -11,11 +11,11 @@ import { supabase } from '../../../api/supabase';
 import { normalizeMaNsCode, REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboard/mkt/mktDetailReportShared';
 import { isMissingTienVietError } from '../../../utils/detailReportsVnd';
 
-/** Fabico MKT → detail_reports: chỉ cập nhật revenue + tien_viet (không đụng name/email/code/report_date). */
-type UpcareReportsPatch = { revenue: number; tien_viet: number };
+/** Fabico MKT → detail_reports: cập nhật doanh thu + số đơn (không đụng name/email/code/report_date). */
+type UpcareReportsPatch = { revenue: number; tien_viet: number; order_count: number };
 import { downloadMktReportExcelTemplate } from '../../dashboard/mkt/mktHistoryExcel';
 
-/** Nhiều dòng trên trang cùng mã (code) → một dòng, cộng dồn amount trước khi đẩy. */
+/** Nhiều dòng trên trang cùng mã (code) → một dòng, cộng dồn amount và count trước khi đẩy. */
 function aggregateUpcareRowsBySameCode(list: UpcareMktEmployeeRow[]): UpcareMktEmployeeRow[] {
   const m = new Map<string, UpcareMktEmployeeRow>();
   for (const r of list) {
@@ -24,9 +24,10 @@ function aggregateUpcareRowsBySameCode(list: UpcareMktEmployeeRow[]): UpcareMktE
     const prev = m.get(key);
     if (prev) {
       prev.amount = (Number(prev.amount) || 0) + (Number(r.amount) || 0);
+      prev.count = (Number(prev.count) || 0) + (Number(r.count) || 0);
       if (!prev.name?.trim() && r.name?.trim()) prev.name = r.name;
     } else {
-      m.set(key, { ...r, code: c, amount: Number(r.amount) || 0 });
+      m.set(key, { ...r, code: c, amount: Number(r.amount) || 0, count: Number(r.count) || 0 });
     }
   }
   return Array.from(m.values());
@@ -183,7 +184,11 @@ export const UpcareMktEmployeesView: React.FC = () => {
           const amt = Number(r.amount) || 0;
           toUpdate.push({
             id,
-            patch: { revenue: amt, tien_viet: Math.round(amt * 25000) },
+            patch: {
+              revenue: amt,
+              tien_viet: Math.round(amt * 25000),
+              order_count: Number(r.count) || 0,
+            },
           });
         }
       }
@@ -234,7 +239,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
         skippedNoDbRow > 0
           ? ` ${skippedNoDbRow} cặp (ngày+mã) không có trong detail_reports — bỏ qua (không thêm dòng).`
           : '';
-      const okMsg = `Đã cập nhật ${toUpdate.length} bản ghi trong detail_reports (chỉ cột revenue, tien_viet).${tailNoCode}${tailMerge}${tailSkip}`;
+      const okMsg = `Đã cập nhật ${toUpdate.length} bản ghi trong detail_reports (cột revenue, tien_viet, order_count).${tailNoCode}${tailMerge}${tailSkip}`;
       try { window.alert(okMsg); } catch {}
       // Ẩn dữ liệu source sau khi đẩy
       setRows([]);
@@ -323,7 +328,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
               onClick={() => void pushToDetailReports()}
               disabled={saving || loading || rows.length === 0}
               className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-[#69f6b8] to-[#4de2a2] px-5 py-2.5 text-sm font-bold text-[#013828] shadow-lg shadow-[#69f6b8]/15 transition-all hover:brightness-110 disabled:opacity-50"
-              title="Chỉ cập nhật bản ghi đã có trong detail_reports (trùng ngày + mã); chỉ sửa revenue và tien_viet. Không tạo dòng mới. Dòng trùng mã trên trang được cộng amount trước khi áp vào từng ngày."
+              title="Chỉ cập nhật bản ghi đã có trong detail_reports (trùng ngày + mã); cập nhật revenue, tien_viet và order_count. Không tạo dòng mới. Dòng trùng mã trên trang được cộng amount và count trước khi áp vào từng ngày."
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Đẩy vào detail_reports
@@ -369,13 +374,14 @@ export const UpcareMktEmployeesView: React.FC = () => {
                   <th className="px-4 py-3 sm:px-6">ID</th>
                   <th className="px-4 py-3 sm:px-6">Code</th>
                   <th className="px-4 py-3 sm:px-6">Tên</th>
+                  <th className="px-4 py-3 text-right sm:px-6">Số đơn</th>
                   <th className="px-4 py-3 text-right sm:px-6">Amount</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#41475b]/10">
                 {loading && rows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-[#a5aac2]">
+                    <td colSpan={7} className="px-6 py-12 text-center text-[#a5aac2]">
                       <span className="inline-flex items-center gap-2">
                         <Loader2 className="h-5 w-5 animate-spin" />
                         Đang tải…
@@ -385,7 +391,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
                 ) : null}
                 {!loading && configured && rows.length === 0 && !error ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-[#a5aac2]">
+                    <td colSpan={7} className="px-6 py-12 text-center text-[#a5aac2]">
                       Không có bản ghi. Chọn khoảng ngày và bấm Tải dữ liệu.
                     </td>
                   </tr>
@@ -416,6 +422,9 @@ export const UpcareMktEmployeesView: React.FC = () => {
                       <span className="line-clamp-2" title={row.name}>
                         {row.name}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums text-[#a5aac2] sm:px-6">
+                      {(Number(row.count) || 0).toLocaleString('vi-VN')}
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums text-[#69f6b8] sm:px-6">
                       {formatAmount(Number(row.amount) || 0)}

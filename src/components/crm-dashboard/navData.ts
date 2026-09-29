@@ -34,8 +34,8 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     label: 'Báo cáo',
     items: [
-      { id: 'upcare-mkt', label: 'MKT Fabico (API)', icon: '🌐' },
-      { id: 'project-qc-excel', label: 'Dữ liệu QC Excel (Mã NV)', icon: '📊' },
+      { id: 'upcare-mkt', label: 'MKT Fabico', icon: '🌐' },
+      { id: 'project-qc-excel', label: 'Dữ liệu QC Excel', icon: '📊' },
       { id: 'reports-raw', label: 'Bảng detail_reports', icon: '🧾' },
       { id: 'admin-ranking', label: 'Bảng xếp hạng', icon: '🏆' },
       { id: 'compare', label: 'So sánh tuần/tháng', icon: '📈' },
@@ -98,7 +98,7 @@ export const VIEW_TITLES: Record<string, string> = {
   'burn-detect': 'Phát hiện Đốt tiền',
   'alerts': 'Cảnh báo Hệ thống',
   'projects': 'Dự án',
-  'project-qc-excel': 'Dữ liệu QC Excel (Mã NV)',
+  'project-qc-excel': 'Dữ liệu QC Excel',
   'teams': 'Team',
   'staff': 'Nhân sự',
   'ad-accounts': 'Agency Control Center',
@@ -108,7 +108,7 @@ export const VIEW_TITLES: Record<string, string> = {
   'markets': 'Thị trường',
   'budget': 'Ngân sách',
   'reconcile': 'Đối chiếu 3 Lớp',
-  'upcare-mkt': 'MKT Fabico (API)',
+  'upcare-mkt': 'MKT Fabico',
   'admin-ranking': 'Bảng xếp hạng',
   'compare': 'So sánh tuần/tháng',
   'leader-dash': 'Dashboard team',

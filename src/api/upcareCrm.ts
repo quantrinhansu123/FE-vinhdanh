@@ -9,6 +9,7 @@ export type UpcareMktEmployeeRow = {
   name: string;
   avatar: string | null;
   amount: number;
+  count?: number;
 };
 
 /** Khoảng ngày mặc định cho BXH / employee mkt (7 ngày gần nhất, local date). */

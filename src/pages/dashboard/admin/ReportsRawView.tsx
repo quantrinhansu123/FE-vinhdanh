@@ -502,6 +502,7 @@ export const ReportsRawView: React.FC = () => {
                 <th className="p-2 text-right">Tỉ giá</th>
                 <th className="p-2 text-right">Ads chi</th>
                 <th className="p-2 text-right">Doanh thu (VNĐ)</th>
+                <th className="p-2 text-right">Số đơn</th>
                 <th className="p-2 text-right">Mess</th>
                 <th className="p-2 text-right">Giá mess</th>
                 <th className="p-2 text-right">Lead</th>
@@ -525,6 +526,7 @@ export const ReportsRawView: React.FC = () => {
                   <td className="p-2 text-right">{formatRawMoney(reportExchangeRate(r))}</td>
                   <td className="p-2 text-right">{Number(r.ad_cost || 0).toLocaleString('vi-VN')}</td>
                   <td className="p-2 text-right">{Number(r.tien_viet || 0).toLocaleString('vi-VN')}</td>
+                  <td className="p-2 text-right">{r.order_count == null ? '—' : Number(r.order_count).toLocaleString('vi-VN')}</td>
                   <td className="p-2 text-right">{r.mess_comment_count ?? '—'}</td>
                   <td className="p-2 text-right">
                     {Number(r.mess_comment_count) > 0
