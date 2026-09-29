@@ -1,10 +1,10 @@
-/* Stitch overview: scoped to /crm-admin/dashboard so other views keep their own UI. */
+/* Stitch shell shared by the overview and the teams pilot. */
 .stitch-admin-shell {
   --sw: 256px;
   --th: 64px;
   font-family: 'Plus Jakarta Sans', sans-serif;
-  color: #1f2937;
-  background: #f8faf8;
+  color: var(--stitch-text);
+  background: var(--stitch-canvas);
 }
 
 .stitch-admin-shell .stitch-sidebar {
@@ -14,7 +14,7 @@
   flex-direction: column;
   overflow: hidden;
   color: #fff;
-  background: #14532d;
+  background: var(--stitch-green-950);
   border-right: 1px solid rgba(0, 0, 0, .2);
   box-shadow: 4px 0 18px rgba(12, 43, 22, .12);
   z-index: 30;
@@ -86,7 +86,7 @@
 .stitch-sidebar-user-copy strong { font-size: 11px; }
 .stitch-sidebar-user-copy small { color: rgba(255,255,255,.78); font-size: 10px; }
 
-.stitch-admin-shell .stitch-topbar { display: flex; height: 64px; flex: 0 0 64px; align-items: center; justify-content: space-between; gap: 20px; padding: 0 32px; border-bottom: 1px solid rgba(255,255,255,.1); background: #166534; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.1); z-index: 20; }
+.stitch-admin-shell .stitch-topbar { display: flex; height: 64px; flex: 0 0 64px; align-items: center; justify-content: space-between; gap: 20px; padding: 0 32px; border-bottom: 1px solid rgba(255,255,255,.1); background: var(--stitch-green-900); color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.1); z-index: 20; }
 .stitch-topbar h1 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -.03em; white-space: nowrap; }
 .stitch-topbar-actions { display: flex; min-width: 0; align-items: center; gap: 12px; }
 .stitch-topbar-select { position: relative; display: flex; width: 126px; height: 34px; align-items: center; border: 1px solid rgba(255,255,255,.22); border-radius: 8px; background: rgba(255,255,255,.15); }
@@ -99,7 +99,7 @@
 .stitch-topbar-notification { position: relative; display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border: 1px solid rgba(255,255,255,.22); border-radius: 8px; background: rgba(255,255,255,.15); color: #fff; cursor: pointer; }
 .stitch-topbar-notification:hover { background: rgba(255,255,255,.24); }
 .stitch-topbar-notification i { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border: 1.5px solid #166534; border-radius: 50%; background: #fbbf24; }
-.stitch-admin-shell .stitch-admin-main { min-width: 0; padding: 32px; background: #f8faf8; color: #1f2937; }
+.stitch-admin-shell .stitch-admin-main { min-width: 0; padding: 32px; background: var(--stitch-canvas); color: var(--stitch-text); }
 
 .admin-personal-dashboard.stitch-dashboard { min-height: 100%; color: #1f2937; background: transparent; font-family: 'Plus Jakarta Sans', sans-serif; }
 .admin-personal-dashboard.stitch-dashboard .personal-dashboard-header { display: flex; min-height: 64px; align-items: center; justify-content: space-between; gap: 20px; padding: 0; border: 0; }

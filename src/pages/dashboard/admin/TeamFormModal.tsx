@@ -4,6 +4,7 @@ import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import type { CrmTeamRow, DuAnRow, Employee } from '../../../types';
 import { formatNumberDots, formatTypingGroupedInt } from '../mkt/mktDetailReportShared';
+import { StitchButton, StitchInput, StitchModalFrame, StitchSelect, StitchState } from '../../../components/ui/StitchUI';
 
 const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
@@ -15,10 +16,7 @@ const TRANG_THAI_OPTIONS = [
   { value: 'ngung', label: 'Ngừng' },
 ] as const;
 
-const FIELD_CLASS =
-  'w-full min-h-[38px] rounded-[6px] border border-[var(--border2)] bg-[var(--bg2)] text-[var(--text)] placeholder:text-[var(--text3)] text-[12px] px-3 py-2 outline-none transition-[border-color,box-shadow] focus:border-[var(--accent)] focus:shadow-[0_0_0_1px_rgba(61,142,240,0.28)] [color-scheme:dark]';
-
-const LABEL_CLASS = 'text-[10px] font-bold uppercase tracking-wide text-[var(--text2)]';
+const LABEL_CLASS = 'stitch-label';
 
 function parseOptionalNumber(raw: string): number | null {
   const t = raw.trim().replace(/\./g, '').replace(/\s/g, '').replace(/,/g, '');
@@ -213,68 +211,54 @@ export const TeamFormModal: React.FC<Props> = ({ open, initial, onClose, onSaved
   if (!open) return null;
 
   return createPortal(
-    <div className="dash-theme project-form-modal-root fixed inset-0 z-[200] !bg-transparent font-[family-name:var(--f)]">
-      <div className="absolute inset-0 z-0 bg-black/60 backdrop-blur-[3px]" aria-hidden onMouseDown={onClose} />
-      <div className="pointer-events-none relative z-[1] flex min-h-[100dvh] w-full items-center justify-center p-4 sm:p-6">
-        <div
-          className="project-form-modal-scroll pointer-events-auto w-full max-w-[560px] max-h-[min(90dvh,calc(100svh-2rem))] overflow-y-auto overflow-x-hidden rounded-[var(--r)] border border-[var(--border2)] bg-[var(--bg1)] text-[var(--text)] shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="team-form-title"
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between p-[14px_16px] border-b border-[var(--border2)] shrink-0 bg-[var(--bg1)]">
-            <h2 id="team-form-title" className="text-[13px] font-extrabold text-[var(--text)]">
-              {isEdit ? 'Sửa team' : 'Thêm team'}
-            </h2>
+    <StitchModalFrame labelledBy="team-form-title" onClose={onClose}>
+          <div className="stitch-modal-header">
+            <div><h2 id="team-form-title">{isEdit ? 'Sửa team' : 'Thêm team'}</h2><p>{isEdit ? 'Cập nhật thông tin và phân công của team.' : 'Tạo team và phân công người phụ trách.'}</p></div>
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-[6px] text-[var(--text2)] hover:bg-[var(--bg3)] hover:text-[var(--text)] transition-colors"
+              className="stitch-icon-button"
               aria-label="Đóng"
             >
               <X size={18} />
             </button>
           </div>
 
-          <form onSubmit={(e) => void handleSubmit(e)} className="p-[16px] space-y-[12px]">
+          <form onSubmit={(e) => void handleSubmit(e)} className="stitch-modal-body space-y-[18px]">
             {formError && (
-              <div className="text-[11px] text-[var(--R)] bg-[var(--Rd)]/30 border border-[rgba(224,61,61,0.2)] rounded-[6px] px-3 py-2">
-                {formError}
-              </div>
+              <StitchState tone="error" role="alert">{formError}</StitchState>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-[10px]">
-              <label className="block space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-[16px]">
+              <label className="block">
                 <span className={LABEL_CLASS}>Mã team</span>
-                <input value={maTeam} onChange={(e) => setMaTeam(e.target.value)} className={FIELD_CLASS} placeholder="VD: TEAM-A" />
+                <StitchInput value={maTeam} onChange={(e) => setMaTeam(e.target.value)} placeholder="VD: TEAM-A" />
               </label>
-              <label className="block space-y-1.5">
+              <label className="block">
                 <span className={LABEL_CLASS}>Trạng thái</span>
-                <select value={trangThai} onChange={(e) => setTrangThai(e.target.value)} className={FIELD_CLASS}>
+                <StitchSelect value={trangThai} onChange={(e) => setTrangThai(e.target.value)}>
                   {TRANG_THAI_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
                     </option>
                   ))}
-                </select>
+                </StitchSelect>
               </label>
             </div>
 
-            <label className="block space-y-1.5">
+            <label className="block">
               <span className={LABEL_CLASS}>
-                Tên team <span className="text-[var(--R)]">*</span>
+                Tên team <span className="stitch-label-required">*</span>
               </span>
-              <input value={tenTeam} onChange={(e) => setTenTeam(e.target.value)} className={FIELD_CLASS} required />
+              <StitchInput value={tenTeam} onChange={(e) => setTenTeam(e.target.value)} required />
             </label>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-[10px]">
-              <label className="block space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-[16px]">
+              <label className="block">
                 <span className={LABEL_CLASS}>Leader</span>
-                <select
+                <StitchSelect
                   value={leader}
                   onChange={(e) => setLeader(e.target.value)}
-                  className={FIELD_CLASS}
                   disabled={listsLoading}
                 >
                   <option value="">— Chọn leader (vị trí Leader trong nhân sự) —</option>
@@ -289,21 +273,20 @@ export const TeamFormModal: React.FC<Props> = ({ open, initial, onClose, onSaved
                       {emp.vi_tri?.trim() ? ` — ${emp.vi_tri.trim()}` : ''}
                     </option>
                   ))}
-                </select>
+                </StitchSelect>
                 {!listsLoading && leaderCandidates.length === 0 ? (
-                  <p className="text-[10px] text-[var(--text3)] leading-snug">
+                  <p className="mt-2 text-[10px] text-[var(--stitch-text-muted)] leading-snug">
                     Chưa có nhân sự nào: đặt <span className="font-bold">vi_tri</span> là Admin, Quản lý dự án, Leader (hoặc «Trưởng nhóm» / «Team lead») trong{' '}
                     <span className="font-mono">/crm-admin/staff</span>.
                   </p>
                 ) : null}
               </label>
-              <label className="block space-y-1.5">
+              <label className="block">
                 <span className={LABEL_CLASS}>Doanh số tháng (VND)</span>
-                <input
+                <StitchInput
                   inputMode="numeric"
                   value={doanhSoThang}
                   onChange={(e) => setDoanhSoThang(formatTypingGroupedInt(e.target.value))}
-                  className={FIELD_CLASS}
                   placeholder="VND"
                 />
               </label>
@@ -312,37 +295,30 @@ export const TeamFormModal: React.FC<Props> = ({ open, initial, onClose, onSaved
             <div className="space-y-[8px]">
               <div className="flex items-center justify-between gap-3">
                 <span className={LABEL_CLASS}>Thành viên (nhân sự)</span>
-                <span className="text-[10px] text-[var(--text3)] font-bold">{selectedMemberIds.length} đã chọn</span>
+                <span className="text-[10px] text-[var(--stitch-text-muted)] font-bold">{selectedMemberIds.length} đã chọn</span>
               </div>
-              <input
+              <StitchInput
                 value={memberQuery}
                 onChange={(e) => setMemberQuery(e.target.value)}
-                className={FIELD_CLASS}
                 placeholder="Tìm: tên / team / email"
               />
-              <div className="project-form-modal-scroll max-h-[180px] overflow-y-auto rounded-[6px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] p-[8px]">
+              <div className="stitch-choice-list">
                 {listsLoading ? (
-                  <div className="flex items-center justify-center gap-2 text-[var(--text3)] py-6">
-                    <Loader2 className="animate-spin" size={16} /> Đang tải…
-                  </div>
+                  <StitchState tone="loading"><Loader2 className="animate-spin" size={16} /> Đang tải…</StitchState>
                 ) : filteredMembers.length === 0 ? (
-                  <div className="text-[var(--text3)] text-[11px] py-3 text-center">Không có nhân sự phù hợp.</div>
+                  <StitchState tone="empty">Không có nhân sự phù hợp.</StitchState>
                 ) : (
                   filteredMembers.map((emp) => {
                     const checked = selectedMemberIds.includes(emp.id);
                     return (
                       <label
                         key={emp.id}
-                        className={`flex items-start gap-2 p-[8px] rounded-[6px] cursor-pointer transition-colors ${
-                          checked
-                            ? 'bg-[rgba(61,142,240,0.12)] border border-[rgba(61,142,240,0.18)]'
-                            : 'hover:bg-[rgba(255,255,255,0.04)] border border-transparent'
-                        }`}
+                        className={`stitch-choice ${checked ? 'is-selected' : ''}`}
                       >
                         <input type="checkbox" checked={checked} onChange={() => toggleMember(emp.id)} className="mt-[2px]" />
                         <div className="min-w-0 flex-1">
-                          <div className="text-[12px] font-extrabold text-[var(--text)] truncate">{emp.name}</div>
-                          <div className="text-[10px] text-[var(--text3)] truncate">
+                          <div className="text-[12px] font-extrabold text-[var(--stitch-text)] truncate">{emp.name}</div>
+                          <div className="text-[10px] text-[var(--stitch-text-muted)] truncate">
                             {emp.team || '—'}
                             {emp.email ? ` · ${emp.email}` : ''}
                           </div>
@@ -357,21 +333,18 @@ export const TeamFormModal: React.FC<Props> = ({ open, initial, onClose, onSaved
             <div className="space-y-[8px]">
               <div className="flex items-center justify-between gap-3">
                 <span className={LABEL_CLASS}>Dự án phụ trách</span>
-                <span className="text-[10px] text-[var(--text3)] font-bold">{selectedDuAnIds.length} đã chọn</span>
+                <span className="text-[10px] text-[var(--stitch-text-muted)] font-bold">{selectedDuAnIds.length} đã chọn</span>
               </div>
-              <input
+              <StitchInput
                 value={projectQuery}
                 onChange={(e) => setProjectQuery(e.target.value)}
-                className={FIELD_CLASS}
                 placeholder="Tìm: tên dự án / mã"
               />
-              <div className="project-form-modal-scroll max-h-[180px] overflow-y-auto rounded-[6px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] p-[8px]">
+              <div className="stitch-choice-list">
                 {listsLoading ? (
-                  <div className="flex items-center justify-center gap-2 text-[var(--text3)] py-6">
-                    <Loader2 className="animate-spin" size={16} /> Đang tải…
-                  </div>
+                  <StitchState tone="loading"><Loader2 className="animate-spin" size={16} /> Đang tải…</StitchState>
                 ) : filteredDuAns.length === 0 ? (
-                  <div className="text-[var(--text3)] text-[11px] py-3 text-center">Không có dự án phù hợp.</div>
+                  <StitchState tone="empty">Không có dự án phù hợp.</StitchState>
                 ) : (
                   filteredDuAns.map((d) => {
                     const checked = selectedDuAnIds.includes(d.id);
@@ -379,16 +352,12 @@ export const TeamFormModal: React.FC<Props> = ({ open, initial, onClose, onSaved
                     return (
                       <label
                         key={d.id}
-                        className={`flex items-start gap-2 p-[8px] rounded-[6px] cursor-pointer transition-colors ${
-                          checked
-                            ? 'bg-[rgba(61,142,240,0.12)] border border-[rgba(61,142,240,0.18)]'
-                            : 'hover:bg-[rgba(255,255,255,0.04)] border border-transparent'
-                        }`}
+                        className={`stitch-choice ${checked ? 'is-selected' : ''}`}
                       >
                         <input type="checkbox" checked={checked} onChange={() => toggleDuAn(d.id)} className="mt-[2px]" />
                         <div className="min-w-0 flex-1">
-                          <div className="text-[12px] font-extrabold text-[var(--text)] truncate">{d.ten_du_an}</div>
-                          <div className="text-[10px] text-[var(--text3)] truncate">{sub}</div>
+                          <div className="text-[12px] font-extrabold text-[var(--stitch-text)] truncate">{d.ten_du_an}</div>
+                          <div className="text-[10px] text-[var(--stitch-text-muted)] truncate">{sub}</div>
                         </div>
                       </label>
                     );
@@ -397,28 +366,25 @@ export const TeamFormModal: React.FC<Props> = ({ open, initial, onClose, onSaved
               </div>
             </div>
 
-            <div className="flex justify-end gap-[8px] pt-2">
-              <button
+            <div className="stitch-modal-footer">
+              <StitchButton
                 type="button"
                 onClick={onClose}
                 disabled={saving}
-                className="py-[8px] px-[14px] rounded-[6px] text-[11px] font-bold border border-[var(--border)] bg-[var(--bg3)] text-[var(--text2)] hover:bg-[var(--bg2)] transition-colors disabled:opacity-50"
+                variant="secondary"
               >
                 Huỷ
-              </button>
-              <button
+              </StitchButton>
+              <StitchButton
                 type="submit"
                 disabled={saving}
-                className="flex items-center gap-2 py-[8px] px-[14px] rounded-[6px] text-[11px] font-bold bg-[#3d8ef0] hover:bg-[#2e7dd1] text-white transition-colors disabled:opacity-60"
               >
                 {saving ? <Loader2 className="animate-spin" size={14} /> : null}
                 {isEdit ? 'Cập nhật' : 'Tạo mới'}
-              </button>
+              </StitchButton>
             </div>
           </form>
-        </div>
-      </div>
-    </div>,
+    </StitchModalFrame>,
     document.body
   );
 };

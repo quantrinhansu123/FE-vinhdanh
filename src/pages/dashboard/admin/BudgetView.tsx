@@ -12,6 +12,7 @@ import { supabase } from '../../../api/supabase';
 import type { AuthUser, BudgetRequestRow, ReportRow } from '../../../types';
 import { canEditProjects, scopeBannerText } from '../../../utils/roleScope';
 import { isMissingBudgetApprovalColumn, stripBudgetApprovalColumns } from '../../../utils/budgetRequestsApproval';
+import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 
 const BUDGET_TABLE = import.meta.env.VITE_SUPABASE_BUDGET_REQUESTS_TABLE?.trim() || 'budget_requests';
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
@@ -859,8 +860,8 @@ export const BudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = nu
       <BudgetRequestFormModal open={createOpen} onClose={() => setCreateOpen(false)} onSubmitted={() => void load()} />
 
       {viewRequest && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md transition-opacity duration-300 leader-dash-obsidian">
-          <div className="bg-[var(--ld-surface-container-high)] w-full max-w-lg rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-[var(--ld-outline-variant)]/20 overflow-hidden">
+        <div className={`${STITCH_PORTAL_CLASS} fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md transition-opacity duration-300 leader-dash-obsidian`}>
+          <div className="bg-[var(--ld-surface-container-high)] w-full max-w-lg rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-[var(--ld-outline-variant)]/20 overflow-hidden" role="dialog" aria-modal="true" aria-label="Chi tiết phê duyệt">
             <div className="px-6 py-4 border-b border-[var(--ld-outline-variant)]/10 flex justify-between items-center">
               <h3 className="font-bold text-[var(--ld-on-surface)]">Chi tiết phê duyệt</h3>
               <button

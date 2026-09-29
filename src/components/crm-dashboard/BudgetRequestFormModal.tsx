@@ -4,6 +4,7 @@ import { Loader2, Save, Upload, X } from 'lucide-react';
 import { supabase } from '../../api/supabase';
 import type { CrmAgencyRow } from '../../types';
 import { formatTypingGroupedInt } from '../../pages/dashboard/mkt/mktDetailReportShared';
+import { STITCH_PORTAL_CLASS } from '../ui/StitchUI';
 
 const BUDGET_TABLE = import.meta.env.VITE_SUPABASE_BUDGET_REQUESTS_TABLE?.trim() || 'budget_requests';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
@@ -337,7 +338,7 @@ export const BudgetRequestFormModal: React.FC<Props> = ({ open, onClose, onSubmi
   if (!open) return null;
 
   return createPortal(
-    <div className="dash-theme project-form-modal-root fixed inset-0 z-[10050] !bg-transparent font-[family-name:var(--f)]">
+    <div className={`${STITCH_PORTAL_CLASS} dash-theme project-form-modal-root fixed inset-0 z-[10050] !bg-transparent font-[family-name:var(--f)]`}>
       <div className="absolute inset-0 z-0 bg-black/65 backdrop-blur-[4px]" aria-hidden onMouseDown={onClose} />
       <div className="pointer-events-none relative z-[1] flex min-h-[100dvh] w-full items-center justify-center p-4 sm:p-6">
         <div

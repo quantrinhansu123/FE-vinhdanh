@@ -1,6 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2, RefreshCw } from 'lucide-react';
+import {
+  Check,
+  CheckCircle2,
+  Circle,
+  Clock,
+  ExternalLink,
+  Eye,
+  FileSearch,
+  Info,
+  Loader2,
+  Megaphone,
+  PlusCircle,
+  RefreshCw,
+  Wallet,
+  X,
+  XCircle,
+} from 'lucide-react';
+import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 import { BudgetRequestFormModal } from '../../../components/crm-dashboard/BudgetRequestFormModal';
 import { MultiSelect } from '../../../components/common/MultiSelect';
 import { supabase } from '../../../api/supabase';
@@ -110,23 +127,23 @@ function budgetAgencyLabel(r: BudgetRequestRow): string {
 function statusBadgeObsidian(trangThai: BudgetRequestStatus) {
   if (trangThai === 'cho_phe_duyet') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-tertiary)_12%,transparent)] text-[var(--ld-tertiary)] border border-[var(--ld-tertiary)]/25 shrink-0">
-        <span className="material-symbols-outlined text-[12px]">schedule</span>
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-tertiary)_12%,transparent)] text-[var(--ld-tertiary)] border border-[var(--ld-tertiary)]/25 shrink-0">
+        <Clock className="w-3 h-3" />
         Chờ duyệt
       </span>
     );
   }
   if (trangThai === 'dong_y') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-secondary)_12%,transparent)] text-[var(--ld-secondary)] border border-[var(--ld-secondary)]/25 shrink-0">
-        <span className="material-symbols-outlined text-[12px]">check_circle</span>
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-secondary)_12%,transparent)] text-[var(--ld-secondary)] border border-[var(--ld-secondary)]/25 shrink-0">
+        <CheckCircle2 className="w-3 h-3" />
         Đã duyệt
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-error)_12%,transparent)] text-[var(--ld-error)] border border-[var(--ld-error)]/25 shrink-0">
-      <span className="material-symbols-outlined text-[12px]">cancel</span>
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-error)_12%,transparent)] text-[var(--ld-error)] border border-[var(--ld-error)]/25 shrink-0">
+      <XCircle className="w-3 h-3" />
       Từ chối
     </span>
   );
@@ -143,7 +160,7 @@ function ApprovalStepBadge({ label, done, by, at }: { label: string; done: boole
             : 'bg-transparent border-[var(--ld-outline-variant)] text-[var(--ld-on-surface-variant)] opacity-40'
         }`}
       >
-        <span className="material-symbols-outlined text-[14px]">{done ? 'check' : 'radio_button_unchecked'}</span>
+        {done ? <Check className="w-3 h-3" /> : <Circle className="w-2.5 h-2.5 opacity-60" />}
       </div>
       <span className={`text-[9px] font-bold uppercase tracking-tighter ${done ? 'text-[var(--ld-secondary)]' : 'text-[var(--ld-on-surface-variant)] opacity-40'}`}>
         {label === 'Giám đốc' ? 'GĐ' : label === 'Kế toán' ? 'KT' : 'GN'}
@@ -159,7 +176,7 @@ const SummaryCard: React.FC<{
   valueSub: React.ReactNode;
   footnote: string;
   footnoteItalic?: boolean;
-  icon: string;
+  icon: React.ReactNode;
 }> = ({ label, badge, valueMain, valueSub, footnote, footnoteItalic, icon }) => (
   <div className="bg-[var(--ld-surface-container-low)] p-6 rounded-xl ld-ghost-border relative overflow-hidden group hover:bg-[var(--ld-surface-container)] transition-colors">
     <div className="flex justify-between items-start mb-4 gap-2">
@@ -173,8 +190,8 @@ const SummaryCard: React.FC<{
       <div className="text-lg font-semibold">{valueSub}</div>
       <span className={`text-xs text-[var(--ld-on-surface-variant)] mt-2 ${footnoteItalic ? 'italic' : ''}`}>{footnote}</span>
     </div>
-    <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
-      <span className="material-symbols-outlined text-8xl text-[var(--ld-on-surface)]">{icon}</span>
+    <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none text-[var(--ld-on-surface)]">
+      <div className="w-24 h-24 flex items-center justify-center [&>svg]:w-24 [&>svg]:h-24">{icon}</div>
     </div>
   </div>
 );
@@ -478,21 +495,21 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
           valueSub={<span className="text-[var(--ld-primary)]">VND {formatVndDots(kpi.pendingSum)}</span>}
           footnote="Trong phạm vi bảng"
           footnoteItalic
-          icon="pending_actions"
+          icon={<Clock className="w-20 h-20" />}
         />
         <SummaryCard
           label="Đã duyệt tháng này"
           valueMain={String(kpi.approvedCount)}
           valueSub={<span className="text-[var(--ld-secondary)]">VND {formatVndDots(kpi.approvedSum)}</span>}
           footnote={`Tháng ${monthBounds.label}`}
-          icon="check_circle"
+          icon={<CheckCircle2 className="w-20 h-20" />}
         />
         <SummaryCard
           label="Chi ads khai báo (tháng)"
           valueMain={formatVndDots(adCostMonthScoped)}
           valueSub={<span className="text-[var(--ld-tertiary)]">VNĐ</span>}
           footnote={selectedDuAnIds.length > 0 ? 'Theo ma_tkqc TKQC dự án' : 'Mọi dòng trong tháng'}
-          icon="campaign"
+          icon={<Megaphone className="w-20 h-20" />}
         />
         <SummaryCard
           label="Đã duyệt − chi khai báo"
@@ -505,7 +522,7 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
           valueSub={<span className="text-[var(--ld-on-surface-variant)] text-sm font-normal">VNĐ ước lượng</span>}
           footnote="Cùng phạm vi lọc"
           footnoteItalic
-          icon="account_balance_wallet"
+          icon={<Wallet className="w-20 h-20" />}
         />
       </div>
 
@@ -557,7 +574,7 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
             ) : filteredHistory.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center py-16 sm:py-20">
                 <div className="w-28 h-32 sm:w-32 sm:h-32 bg-[var(--ld-surface-container)] mb-6 rounded-full flex items-center justify-center border border-[var(--ld-outline-variant)]/10">
-                  <span className="material-symbols-outlined text-5xl text-[var(--ld-outline-variant)]">find_in_page</span>
+                  <FileSearch className="w-12 h-12 text-[var(--ld-outline-variant)] stroke-[1.5]" />
                 </div>
                 <h3 className="text-[var(--ld-on-surface-variant)] font-semibold mb-1 text-center" style={{ fontFamily: '"Inter", sans-serif' }}>
                   Chưa có yêu cầu
@@ -601,7 +618,7 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
                             onClick={() => setViewRequest(r)}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--ld-surface-container-highest)] text-[var(--ld-primary)] text-[10px] font-bold leader-dash-label border border-[var(--ld-outline-variant)]/20 hover:brightness-110 transition-all"
                           >
-                            <span className="material-symbols-outlined text-[14px]">visibility</span>
+                            <Eye className="w-3.5 h-3.5" />
                             Xem chi tiết
                           </button>
                         </div>
@@ -620,13 +637,13 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
             onClick={() => setCreateOpen(true)}
             className="w-full min-h-[6rem] bg-gradient-to-br from-[var(--ld-primary)] to-[var(--ld-primary-container)] text-[var(--ld-on-primary-container)] rounded-2xl flex flex-col items-center justify-center gap-2 group hover:shadow-[0_0_20px_rgba(59,191,250,0.3)] transition-all px-4 py-4 border border-[var(--ld-primary-container)]/30"
           >
-            <span className="material-symbols-outlined text-3xl group-hover:scale-110 transition-transform">add_circle</span>
+            <PlusCircle className="w-8 h-8 group-hover:scale-110 transition-transform" />
             <span className="font-bold text-base text-center leading-snug">Tạo yêu cầu xin ngân sách</span>
           </button>
 
           <div className="bg-[var(--ld-surface-container)] p-6 rounded-2xl border border-[var(--ld-outline-variant)]/10">
             <div className="flex items-center gap-3 mb-4">
-              <span className="material-symbols-outlined text-[var(--ld-tertiary)]">info</span>
+              <Info className="w-5 h-5 text-[var(--ld-tertiary)]" />
               <h4 className="font-bold text-[var(--ld-on-surface)] text-sm" style={{ fontFamily: '"Inter", sans-serif' }}>
                 Hướng dẫn nhanh
               </h4>
@@ -656,12 +673,12 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
       </div>
 
       {viewRequest && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md leader-dash-obsidian">
+        <div className={`${STITCH_PORTAL_CLASS} fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md leader-dash-obsidian`}>
           <div className="bg-[var(--ld-surface-container-high)] w-full max-w-lg rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-[var(--ld-outline-variant)]/20 overflow-hidden">
             <div className="px-6 py-4 border-b border-[var(--ld-outline-variant)]/10 flex justify-between items-center">
               <h3 className="font-bold text-[var(--ld-on-surface)]">Thông tin chi tiết</h3>
               <button type="button" onClick={() => setViewRequest(null)} className="text-[var(--ld-on-surface-variant)] hover:text-[var(--ld-on-surface)]">
-                <span className="material-symbols-outlined">close</span>
+                <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto leader-obsidian-scrollbar">
@@ -730,7 +747,7 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
                               onClick={() => window.open(url, '_blank')}
                               className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-full text-white text-xs font-bold hover:bg-white/20 transition-all flex items-center gap-2"
                             >
-                              <span className="material-symbols-outlined text-sm">open_in_new</span>
+                              <ExternalLink className="w-3.5 h-3.5" />
                               Mở ảnh gốc
                             </button>
                           </div>

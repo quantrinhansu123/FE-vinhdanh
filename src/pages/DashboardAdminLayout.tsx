@@ -53,6 +53,38 @@ import {
   defaultViewForTier,
   tierAllowsView,
 } from '../utils/crmNavAccess';
+import { StitchDataView } from '../components/ui/StitchUI';
+
+const STITCH_DATA_VIEWS: ReadonlySet<ViewId> = new Set([
+  'burn-detect',
+  'alerts',
+  'projects',
+  'project-qc-excel',
+  'reports-raw',
+  'staff',
+  'ad-accounts',
+  'agencies',
+  'products',
+  'markets',
+  'budget',
+  'reconcile',
+  'upcare-mkt',
+  'admin-ranking',
+  'leader-rank',
+  'leader-mkt',
+  'leader-tkqc',
+  'mkt-history',
+  'mkt-accounts',
+  'leader-dash',
+  'heatmap',
+  'compare',
+  'mkt-dash',
+  'mkt-report',
+  'leader-budget',
+  'kpis',
+  'kpi-target',
+  'mkt-bill',
+]);
 
 export interface DashboardAdminLayoutProps {
   employees?: Employee[];
@@ -99,7 +131,8 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
 
   const currentRole = parsed.ok ? parsed.role : 'admin';
   const currentView = parsed.ok ? parsed.view : 'admin-dash';
-  const stitchOverview = currentView === 'admin-dash';
+  const stitchDataView = STITCH_DATA_VIEWS.has(currentView);
+  const stitchShell = true;
 
   const handleViewChange = (view: ViewId) => {
     navigate(crmAdminPathForView(view));
@@ -134,17 +167,17 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'admin-dash': return <AdminDashboardView viewer={reportUser ?? null} />;
       case 'burn-detect': return <BurnDetectionView />;
       case 'alerts': return <AlertsView />;
-      case 'projects': return <ProjectsView />;
+      case 'projects': return <ProjectsView viewer={reportUser ?? null} />;
       case 'project-qc-excel': return <ProjectQcExcelView />;
       case 'reports-raw': return <ReportsRawView />;
-      case 'teams': return <TeamsView />;
+      case 'teams': return <TeamsView viewer={reportUser ?? null} />;
       case 'staff':
         return <StaffView onEmployeesRefresh={onEmployeesRefresh} />;
-      case 'ad-accounts': return <AdAccountsView />;
+      case 'ad-accounts': return <AdAccountsView viewer={reportUser ?? null} />;
       case 'agencies': return <AgenciesView />;
       case 'products': return <ProductsView />;
       case 'markets': return <MarketsView />;
-      case 'budget': return <BudgetView />;
+      case 'budget': return <BudgetView viewer={reportUser ?? null} />;
       case 'reconcile': return <ReconcileView />;
       case 'upcare-mkt': return <UpcareMktEmployeesView />;
       case 'admin-ranking': return <AdminRankingView />;
@@ -178,14 +211,14 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
   };
 
   return (
-    <div className={`dash-theme flex h-screen w-full overflow-hidden font-sans antialiased ${stitchOverview ? 'stitch-admin-shell' : ''}`}>
+    <div className={`dash-theme flex h-screen w-full overflow-hidden font-sans antialiased ${stitchShell ? 'stitch-admin-shell stitch-system' : ''}`}>
       <Sidebar
         currentView={currentView}
         onViewChange={handleViewChange}
         user={userInfo}
         navGroups={navGroups}
         onLogout={onLogout}
-        stitch={stitchOverview}
+        stitch={stitchShell}
       />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -193,12 +226,12 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
           title={VIEW_TITLES[currentView] || 'CRM Mini Ads'}
           onToggleNotif={() => setIsNotifOpen(!isNotifOpen)}
           hasNewNotif={false}
-          stitch={stitchOverview}
+          stitch={stitchShell}
         />
 
-        <main className={`flex-1 overflow-y-auto dash-scrollbar custom-scrollbar ${stitchOverview ? 'stitch-admin-main' : 'p-[12px] bg-[var(--bg0)]'}`}>
+        <main className={`flex-1 overflow-y-auto dash-scrollbar custom-scrollbar ${stitchShell ? 'stitch-admin-main' : 'p-[12px] bg-[var(--bg0)]'}`}>
           <div className="dash-fade-up w-full">
-            {renderContent()}
+            {stitchDataView ? <StitchDataView>{renderContent()}</StitchDataView> : renderContent()}
           </div>
         </main>
       </div>

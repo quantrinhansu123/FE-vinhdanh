@@ -16,6 +16,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { STITCH_PORTAL_CLASS } from '../ui/StitchUI';
 
 export interface MultiSelectOption {
   value: string;
@@ -218,7 +219,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
           <div
             ref={dropdownRef}
             style={dropdownStyle}
-            className="leader-dash-obsidian"
+            className={`${STITCH_PORTAL_CLASS} stitch-popover-portal leader-dash-obsidian`}
           >
             <div className="bg-[var(--ld-surface-container-high)] rounded-xl border border-[var(--ld-outline-variant)]/25 shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col">
               {/* Search */}

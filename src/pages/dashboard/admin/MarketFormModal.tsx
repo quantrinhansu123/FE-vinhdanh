@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import type { CrmMarketRow } from '../../../types';
+import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 
 const MARKETS_TABLE = import.meta.env.VITE_SUPABASE_MARKETS_TABLE?.trim() || 'crm_markets';
 
@@ -108,7 +109,7 @@ export const MarketFormModal: React.FC<Props> = ({ open, initial, onClose, onSav
 
   return createPortal(
     <div
-      className="dash-theme project-form-modal-root fixed inset-0 z-[10050] font-[family-name:var(--f)]"
+      className={`${STITCH_PORTAL_CLASS} dash-theme project-form-modal-root fixed inset-0 z-[10050] font-[family-name:var(--f)]`}
       role="presentation"
     >
       <div

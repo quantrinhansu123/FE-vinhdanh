@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Eye, Loader2, RefreshCw, Users, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../api/supabase';
+import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 import type { AuthUser, Employee } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import {
@@ -294,9 +295,7 @@ const ObsidianKpiCard: React.FC<{
           className={`text-[10px] font-bold shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${deltaRing[deltaKind]}`}
         >
           {deltaText}
-          <span className="material-symbols-outlined text-[10px] leading-none" style={{ fontSize: '10px' }}>
-            {icon}
-          </span>
+          {icon ? <span className="text-[10px] leading-none">{icon}</span> : null}
         </span>
       </div>
     </div>
@@ -932,13 +931,6 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
   const averageOrderValue = teamTotals.orders > 0 ? teamTotals.rev / teamTotals.orders : 0;
   const leaderMember = tableRows[0] ?? null;
   const bestEfficiency = [...tableRows].filter((row) => row.cpdt != null).sort((a, b) => (a.cpdt ?? Infinity) - (b.cpdt ?? Infinity))[0] ?? null;
-  const supportMember = [...tableRows].sort((a, b) => {
-    const aTarget = (staffTargets.get(a.m.id) || 0) * targetRangeFactor;
-    const bTarget = (staffTargets.get(b.m.id) || 0) * targetRangeFactor;
-    const aGap = aTarget > 0 ? (a.a.rev / aTarget) * 100 - periodPacePct : Infinity;
-    const bGap = bTarget > 0 ? (b.a.rev / bTarget) * 100 - periodPacePct : Infinity;
-    return aGap - bGap;
-  })[0] ?? null;
   const memberColors = ['#1682ff', '#14d88a', '#7b5cff', '#ff9d1b', '#21d4d8', '#ff4f5e', '#f5c451'];
   const pieStops = tableRows.length
     ? (() => {
@@ -960,6 +952,11 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     const state = forecastPct == null ? 'unassigned' : forecastPct >= 100 ? 'on' : forecastPct >= 80 ? 'slow' : 'risk';
     return { ...row, target, pct, forecast, forecastPct, state };
   });
+  const supportMember = [...progressRows].sort((a, b) => {
+    const aGap = a.target > 0 ? (a.pct ?? 0) - periodPacePct : Infinity;
+    const bGap = b.target > 0 ? (b.pct ?? 0) - periodPacePct : Infinity;
+    return aGap - bGap;
+  })[0] ?? null;
 
   return (
     <div className="leader-dash-obsidian team-dashboard-modern dash-fade-up">
@@ -1058,7 +1055,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
 
       <button type="button" onClick={() => navigate(crmAdminPathForView('kpi-target'))} className="team-dashboard-kpi-button" title="Gán KPI tháng">＋</button>
 
-      {mktDetailCodeKey != null ? <div className="team-dashboard-modal-backdrop" role="presentation" onClick={() => setMktDetailCodeKey(null)}><div className="team-dashboard-modal" role="dialog" aria-modal="true" aria-labelledby="leader-mkt-detail-title" onClick={(event) => event.stopPropagation()}>
+      {mktDetailCodeKey != null ? <div className={`${STITCH_PORTAL_CLASS} team-dashboard-modal-backdrop`} role="presentation" onClick={() => setMktDetailCodeKey(null)}><div className="team-dashboard-modal" role="dialog" aria-modal="true" aria-labelledby="leader-mkt-detail-title" onClick={(event) => event.stopPropagation()}>
         <div className="team-dashboard-modal-head"><div><h3 id="leader-mkt-detail-title">Chi tiết báo cáo — {mktDetailTitle}</h3><p>{monthLabel} · {mktDetailRows.length} dòng · {DETAIL_REPORTS_TABLE}</p></div><button type="button" onClick={() => setMktDetailCodeKey(null)} aria-label="Đóng"><X size={19} /></button></div>
         <div className="team-dashboard-table-wrap"><table className="team-dashboard-table"><thead><tr><th>Ngày</th><th>MKT</th><th>Mã NS</th><th>Tên trên báo cáo</th><th>Team</th><th>Chi phí</th><th>Doanh thu</th><th>Đơn</th><th>Mess</th><th>Lead / Data</th></tr></thead><tbody>
           {mktDetailRows.map((row, index) => { const date = String((row as { report_date?: string }).report_date || '').slice(0, 10); const revenue = reportRevenueVnd(row as { tien_viet?: unknown; revenue?: unknown }); return <tr key={String((row as { id?: unknown }).id ?? `detail-${index}`)}><td>{date ? formatReportDateVi(date) : '—'}</td><td>{leaderDrMktDisplayName(row, mktNameByCode)}</td><td>{safeTrim((row as { code?: string }).code) || '—'}</td><td>{safeTrim((row as { name?: string }).name) || '—'}</td><td>{safeTrim((row as { team?: string }).team) || '—'}</td><td>{formatVndDots(safeNum((row as { ad_cost?: unknown }).ad_cost))}</td><td className="td-good">{formatVndDots(revenue)}</td><td>{safeNum((row as { order_count?: unknown }).order_count)}</td><td>{safeNum((row as { mess_comment_count?: unknown }).mess_comment_count)}</td><td>{safeNum((row as { tong_lead?: unknown }).tong_lead)} / {safeNum((row as { tong_data_nhan?: unknown }).tong_data_nhan)}</td></tr>; })}

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
+import { AlertCircle, AlertTriangle, Bell, CheckCircle2, History, MoreHorizontal } from 'lucide-react';
 
 const L1_ROWS: { agency: string; nap: string; khaiBao: string; chenh: string; chenhTone: 'err' | 'ok' | 'mid' }[] = [
   { agency: 'Agency Alpha', nap: '500.000.000', khaiBao: '495.000.000', chenh: '-5.000.000', chenhTone: 'err' },
@@ -136,14 +137,14 @@ export const ReconcileView: React.FC = () => {
               className="rounded-lg p-2 opacity-80 transition-all hover:bg-[#1c253e]/50 active:opacity-100"
               title="Thông báo"
             >
-              <span className="material-symbols-outlined">notifications</span>
+              <Bell className="w-5 h-5" />
             </button>
             <button
               type="button"
               className="rounded-lg p-2 opacity-80 transition-all hover:bg-[#1c253e]/50 active:opacity-100"
               title="Lịch sử"
             >
-              <span className="material-symbols-outlined">history</span>
+              <History className="w-5 h-5" />
             </button>
           </div>
         </header>
@@ -164,7 +165,7 @@ export const ReconcileView: React.FC = () => {
             </div>
           </div>
           <div className="flex max-w-md items-center gap-3 rounded-xl border border-[#f8a010]/30 bg-[#f8a010]/10 px-5 py-3">
-            <span className="material-symbols-outlined shrink-0 text-[#ffb148]">warning</span>
+            <AlertTriangle className="shrink-0 text-[#ffb148] w-5 h-5" />
             <p className="font-[Manrope,sans-serif] text-sm font-semibold leading-tight text-[#ffb148]">
               Marketing không được sửa tay — CRM trả về trực tiếp
             </p>
@@ -180,7 +181,7 @@ export const ReconcileView: React.FC = () => {
                 </span>
                 Lớp 1 - Nạp vs Khai báo
               </h3>
-              <span className="material-symbols-outlined text-[#a5aac2]/50">more_horiz</span>
+              <MoreHorizontal className="text-[#a5aac2]/50 w-5 h-5" />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full border-separate border-spacing-y-2 text-left">
@@ -295,16 +296,11 @@ export const ReconcileView: React.FC = () => {
                   <div className="mb-4 flex items-start justify-between">
                     <span className="font-[Manrope,sans-serif] text-xs font-bold text-[#a5aac2]">{c.marketer}</span>
                     {c.icon === 'error' ? (
-                      <span className="material-symbols-outlined text-lg text-[#9f0519]">error</span>
+                      <AlertCircle className="w-5 h-5 text-[#9f0519]" />
                     ) : c.icon === 'warn' ? (
-                      <span className="material-symbols-outlined text-lg text-[#f8a010]">warning</span>
+                      <AlertTriangle className="w-5 h-5 text-[#f8a010]" />
                     ) : (
-                      <span
-                        className="material-symbols-outlined text-lg text-[#006c49]"
-                        style={{ fontVariationSettings: "'FILL' 1" }}
-                      >
-                        check_circle
-                      </span>
+                      <CheckCircle2 className="w-5 h-5 text-[#006c49]" />
                     )}
                   </div>
                   <h4 className="mb-4 font-[Inter,sans-serif] text-base font-bold text-[#dfe4fe]">{c.campaign}</h4>

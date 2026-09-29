@@ -4,6 +4,7 @@ import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import type { CrmProductRow } from '../../../types';
 import { formatNumberDots, formatTypingGroupedInt } from '../mkt/mktDetailReportShared';
+import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 
 const PRODUCTS_TABLE = import.meta.env.VITE_SUPABASE_PRODUCTS_TABLE?.trim() || 'crm_products';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
@@ -160,7 +161,7 @@ export const ProductFormModal: React.FC<Props> = ({ open, initial, onClose, onSa
 
   return createPortal(
     <div
-      className="dash-theme project-form-modal-root fixed inset-0 z-[10050] font-[family-name:var(--f)]"
+      className={`${STITCH_PORTAL_CLASS} dash-theme project-form-modal-root fixed inset-0 z-[10050] font-[family-name:var(--f)]`}
       role="presentation"
     >
       <div

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import '../../../styles/stitchSystem.css';
 import {
   BarChart3,
   CalendarDays,
@@ -204,31 +205,31 @@ function Card({
   progress?: number;
 }) {
   const accent = {
-    green: { border: 'border-l-emerald-400', text: 'text-emerald-300', icon: 'bg-emerald-400/10 text-emerald-300', badge: 'bg-emerald-400/10 text-emerald-200 ring-emerald-300/10' },
-    red: { border: 'border-l-rose-400', text: 'text-rose-300', icon: 'bg-rose-400/10 text-rose-300', badge: 'bg-rose-400/10 text-rose-200 ring-rose-300/10' },
-    amber: { border: 'border-l-amber-400', text: 'text-amber-300', icon: 'bg-amber-400/10 text-amber-300', badge: 'bg-amber-400/10 text-amber-200 ring-amber-300/10' },
-    blue: { border: 'border-l-sky-400', text: 'text-sky-300', icon: 'bg-sky-400/10 text-sky-300', badge: 'bg-sky-400/10 text-sky-200 ring-sky-300/10' },
-    purple: { border: 'border-l-violet-400', text: 'text-violet-300', icon: 'bg-violet-400/10 text-violet-300', badge: 'bg-violet-400/10 text-violet-200 ring-violet-300/10' },
+    green: { border: 'border-l-emerald-600', text: 'text-emerald-700', icon: 'bg-emerald-50 text-emerald-700 border border-emerald-200', badge: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+    red: { border: 'border-l-rose-600', text: 'text-rose-700', icon: 'bg-rose-50 text-rose-700 border border-rose-200', badge: 'bg-rose-50 text-rose-700 border border-rose-200' },
+    amber: { border: 'border-l-amber-600', text: 'text-amber-800', icon: 'bg-amber-50 text-amber-800 border border-amber-200', badge: 'bg-amber-50 text-amber-800 border border-amber-200' },
+    blue: { border: 'border-l-sky-600', text: 'text-sky-800', icon: 'bg-sky-50 text-sky-800 border border-sky-200', badge: 'bg-sky-50 text-sky-800 border border-sky-200' },
+    purple: { border: 'border-l-purple-600', text: 'text-purple-800', icon: 'bg-purple-50 text-purple-800 border border-purple-200', badge: 'bg-purple-50 text-purple-800 border border-purple-200' },
   }[tone];
   const bar = {
-    green: 'bg-emerald-400',
-    red: 'bg-rose-400',
-    amber: 'bg-amber-400',
-    blue: 'bg-sky-400',
-    purple: 'bg-violet-400',
+    green: 'bg-emerald-600',
+    red: 'bg-rose-600',
+    amber: 'bg-amber-500',
+    blue: 'bg-sky-600',
+    purple: 'bg-purple-600',
   }[tone];
   return (
-    <article className={`group relative min-h-[154px] overflow-hidden rounded-2xl border border-white/[0.07] border-l-[3px] ${accent.border} bg-gradient-to-br from-[#172333] to-[#121b28] p-4 shadow-[0_10px_24px_rgba(0,0,0,.16)] transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.14] hover:shadow-[0_16px_32px_rgba(0,0,0,.24)]`}>
+    <article className={`group relative min-h-[154px] overflow-hidden rounded-2xl border border-[var(--stitch-border)] border-l-[4px] ${accent.border} bg-white p-4 shadow-[var(--stitch-shadow)] transition duration-200 hover:-translate-y-0.5 hover:shadow-md`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${accent.icon}`}>{icon}</span>
-          <span className="text-xs font-semibold leading-4 text-slate-400">{label}</span>
+          <span className="text-xs font-bold leading-4 text-[#64748b]">{label}</span>
         </div>
-        <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-bold ring-1 ${accent.badge}`}>{status}</span>
+        <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ${accent.badge}`}>{status}</span>
       </div>
-      <div className={`mt-3 text-[26px] font-extrabold tracking-tight ${accent.text}`}>{value}</div>
-      <div className="mt-1 min-h-4 text-[10px] text-slate-500">{sub}</div>
-      <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+      <div className={`mt-3 text-[24px] font-extrabold tracking-tight font-mono ${accent.text}`}>{value}</div>
+      <div className="mt-1 min-h-4 text-[11px] text-[#64748b]">{sub}</div>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#f1f5f9]">
         <div className={`h-full rounded-full ${bar}`} style={{ width: `${Math.max(4, Math.min(progress ?? 42, 100))}%` }} />
       </div>
     </article>
@@ -440,81 +441,81 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[1580px] space-y-5 pb-8 text-slate-100">
-      <header className="relative flex flex-wrap items-center justify-between gap-5 overflow-hidden rounded-2xl border border-white/[0.08] bg-[radial-gradient(ellipse_at_top_right,rgba(59,130,246,.14),transparent_42%),linear-gradient(135deg,#172333,#121a27)] p-5 shadow-xl shadow-black/15 sm:p-6">
+    <div className="mx-auto w-full max-w-[1580px] space-y-5 pb-8 text-[#1f2937]">
+      <header className="relative flex flex-wrap items-center justify-between gap-5 overflow-hidden rounded-2xl border border-[var(--stitch-border)] bg-white p-5 shadow-[var(--stitch-shadow)] sm:p-6">
         <div>
-          <p className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-sky-300/15 bg-sky-300/[0.07] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[.15em] text-sky-200"><LockKeyhole size={11} /> Hiệu quả cá nhân · Marketing</p>
-          <h1 className="text-[26px] font-extrabold tracking-tight text-slate-50 sm:text-[30px]">{viewerIsAdmin ? 'Báo cáo cá nhân' : 'Báo cáo của tôi'}</h1>
-          <p className="mt-1.5 max-w-2xl text-xs leading-5 text-slate-400">{viewerIsAdmin ? 'Chọn nhân sự để xem kết quả, chi phí quảng cáo và chất lượng chuyển đổi.' : 'Theo dõi kết quả, chi phí quảng cáo và chất lượng chuyển đổi của riêng bạn.'}</p>
+          <p className="mb-2 inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[.1em] text-emerald-800"><LockKeyhole size={11} /> Hiệu quả cá nhân · Marketing</p>
+          <h1 className="text-[24px] font-extrabold tracking-tight text-[#1f2937] sm:text-[28px]">{viewerIsAdmin ? 'Báo cáo cá nhân' : 'Báo cáo của tôi'}</h1>
+          <p className="mt-1.5 max-w-2xl text-xs leading-5 text-[#64748b]">{viewerIsAdmin ? 'Chọn nhân sự để xem kết quả, chi phí quảng cáo và chất lượng chuyển đổi.' : 'Theo dõi kết quả, chi phí quảng cáo và chất lượng chuyển đổi của riêng bạn.'}</p>
         </div>
         {viewerIsAdmin ? (
-          <label className="grid min-w-[240px] gap-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-            <span className="inline-flex items-center gap-1.5"><Users size={12} className="text-sky-300" /> Nhân sự đang xem</span>
-            <select value={selectedPersonId} onChange={(event) => setSelectedPersonId(event.target.value)} disabled={peopleLoading} className="max-w-[360px] rounded-xl border border-white/10 bg-[#0d1520]/80 px-3 py-2.5 text-xs font-semibold normal-case tracking-normal text-white shadow-inner shadow-black/20 outline-none transition focus:border-sky-400/50 focus:ring-2 focus:ring-sky-400/10 disabled:opacity-60">
+          <label className="grid min-w-[240px] gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[#64748b]">
+            <span className="inline-flex items-center gap-1.5"><Users size={12} className="text-emerald-700" /> Nhân sự đang xem</span>
+            <select value={selectedPersonId} onChange={(event) => setSelectedPersonId(event.target.value)} disabled={peopleLoading} className="stitch-field max-w-[360px] text-xs font-semibold">
               <option value="">{peopleLoading ? 'Đang tải danh sách…' : 'Chọn nhân sự cần xem'}</option>
               {people.map((person) => <option key={person.id} value={person.id}>{person.name || person.email} · {person.email}</option>)}
             </select>
           </label>
         ) : (
-          <div className="inline-flex items-center gap-2.5 rounded-xl border border-emerald-300/10 bg-[#0c1722]/60 px-3.5 py-2.5 text-xs font-bold text-slate-200">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-sky-300 to-indigo-400 text-[10px] font-extrabold text-slate-950">{(selectedPerson?.name || 'T').slice(0, 2).toUpperCase()}</span>
-            <span><span className="block text-[9px] font-semibold uppercase tracking-wider text-slate-500">Tài khoản cá nhân</span><span className="mt-0.5 block">{selectedPerson?.name || 'Tài khoản của tôi'}</span></span>
-            <LockKeyhole size={13} className="ml-2 text-emerald-300" />
+          <div className="inline-flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs font-bold text-emerald-900">
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-600 text-[10px] font-extrabold text-white">{(selectedPerson?.name || 'T').slice(0, 2).toUpperCase()}</span>
+            <span><span className="block text-[9px] font-semibold uppercase tracking-wider text-emerald-700">Tài khoản cá nhân</span><span className="mt-0.5 block">{selectedPerson?.name || 'Tài khoản của tôi'}</span></span>
+            <LockKeyhole size={13} className="ml-2 text-emerald-600" />
           </div>
         )}
       </header>
 
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-[#131d29] p-3.5 shadow-lg shadow-black/10 sm:p-4">
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--stitch-border)] bg-white p-3.5 shadow-[var(--stitch-shadow)] sm:p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="mr-1 hidden text-[9px] font-extrabold uppercase tracking-[.12em] text-slate-600 lg:inline">Kỳ báo cáo</span>
-          <div className="flex flex-wrap gap-1 rounded-xl border border-white/[0.04] bg-[#0b121c]/80 p-1">
+          <span className="mr-1 hidden text-[10px] font-extrabold uppercase tracking-[.12em] text-[#64748b] lg:inline">Kỳ báo cáo</span>
+          <div className="flex flex-wrap gap-1 rounded-xl border border-[var(--stitch-border)] bg-[#f8faf9] p-1">
           {presets.map((item) => (
-            <button key={item.id} type="button" onClick={() => choosePreset(item.id)} className={`rounded-lg px-3 py-2 text-[10px] font-bold transition ${preset === item.id ? 'bg-sky-500 text-slate-950 shadow-[0_3px_12px_rgba(56,189,248,.24)]' : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'}`}>
+            <button key={item.id} type="button" onClick={() => choosePreset(item.id)} className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${preset === item.id ? 'bg-[var(--stitch-green-600)] text-white shadow-sm' : 'text-[#64748b] hover:bg-white hover:text-[#1f2937]'}`}>
               {item.label}
             </button>
           ))}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-300"><CalendarDays size={16} className="text-sky-300" />{dateText(range.from)} – {dateText(range.to)}</div>
-          <button type="button" onClick={() => { setDraftRange(range); setShowCustom((value) => !value); }} className="rounded-lg border border-white/10 bg-[#1b2838] px-3 py-2 text-[11px] font-bold text-slate-300 hover:bg-white/[0.06]">Chọn thời gian</button>
-          <button type="button" onClick={() => setCompare((value) => !value)} aria-pressed={compare} className={`rounded-lg border px-3 py-2 text-[11px] font-bold ${compare ? 'border-sky-400/40 bg-sky-400/10 text-sky-200' : 'border-white/10 bg-[#1b2838] text-slate-300 hover:bg-white/[0.06]'}`}>Đối chiếu kỳ trước</button>
-          <button type="button" onClick={() => void load()} className="rounded-lg border border-white/10 bg-[#1b2838] p-2 text-slate-300 hover:bg-white/[0.06]" aria-label="Tải lại"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
+          <div className="flex items-center gap-2 text-xs font-semibold text-[#475569]"><CalendarDays size={16} className="text-emerald-700" />{dateText(range.from)} – {dateText(range.to)}</div>
+          <button type="button" onClick={() => { setDraftRange(range); setShowCustom((value) => !value); }} className="rounded-lg border border-[var(--stitch-border)] bg-white px-3 py-2 text-[11px] font-bold text-[#475569] hover:border-[#86efac] hover:bg-[#f0fdf4] hover:text-[var(--stitch-green-700)]">Chọn thời gian</button>
+          <button type="button" onClick={() => setCompare((value) => !value)} aria-pressed={compare} className={`rounded-lg border px-3 py-2 text-[11px] font-bold transition ${compare ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-[var(--stitch-border)] bg-white text-[#475569] hover:border-[#86efac] hover:bg-[#f0fdf4] hover:text-[var(--stitch-green-700)]'}`}>Đối chiếu kỳ trước</button>
+          <button type="button" onClick={() => void load()} className="rounded-lg border border-[var(--stitch-border)] bg-white p-2 text-[#475569] hover:border-[#86efac] hover:bg-[#f0fdf4] hover:text-[var(--stitch-green-700)]" aria-label="Tải lại"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
         </div>
       </section>
 
       {showCustom && (
-        <section className="flex flex-wrap items-end gap-3 rounded-xl border border-white/[0.08] bg-[#151f2d] p-4">
-          <label className="grid gap-1 text-[11px] font-bold text-slate-400">Từ ngày<input type="date" value={draftRange.from} max={draftRange.to || undefined} onChange={(event) => setDraftRange((current) => ({ ...current, from: event.target.value }))} className="rounded-lg border border-white/10 bg-[#101722] px-3 py-2 text-xs text-white" /></label>
-          <label className="grid gap-1 text-[11px] font-bold text-slate-400">Đến ngày<input type="date" value={draftRange.to} min={draftRange.from || undefined} onChange={(event) => setDraftRange((current) => ({ ...current, to: event.target.value }))} className="rounded-lg border border-white/10 bg-[#101722] px-3 py-2 text-xs text-white" /></label>
-          <button type="button" onClick={applyCustomRange} className="rounded-lg bg-sky-600 px-4 py-2 text-xs font-bold text-white hover:bg-sky-500">Áp dụng</button>
+        <section className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--stitch-border)] bg-[#f8faf9] p-4">
+          <label className="grid gap-1 text-[11px] font-bold text-[#64748b]">Từ ngày<input type="date" value={draftRange.from} max={draftRange.to || undefined} onChange={(event) => setDraftRange((current) => ({ ...current, from: event.target.value }))} className="stitch-field text-xs" /></label>
+          <label className="grid gap-1 text-[11px] font-bold text-[#64748b]">Đến ngày<input type="date" value={draftRange.to} min={draftRange.from || undefined} onChange={(event) => setDraftRange((current) => ({ ...current, to: event.target.value }))} className="stitch-field text-xs" /></label>
+          <button type="button" onClick={applyCustomRange} className="stitch-button stitch-button--primary">Áp dụng</button>
         </section>
       )}
 
       {viewerIsAdmin && !selectedPerson ? (
-        <div className="rounded-xl border border-sky-300/15 bg-sky-300/[0.06] p-5 text-sm font-semibold text-sky-100">{peopleLoading ? 'Đang tải danh sách nhân sự…' : peopleError || 'Chọn một nhân sự để xem báo cáo cá nhân.'}</div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-sm font-semibold text-emerald-900">{peopleLoading ? 'Đang tải danh sách nhân sự…' : peopleError || 'Chọn một nhân sự để xem báo cáo cá nhân.'}</div>
       ) : error ? (
-        <div className="rounded-xl border border-rose-400/20 bg-rose-400/[0.08] p-4 text-sm font-semibold text-rose-200">{error}</div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800">{error}</div>
       ) : loading ? (
-        <div className="flex items-center gap-2 rounded-xl border border-sky-300/10 bg-sky-300/[0.04] p-4 text-xs font-semibold text-sky-100/80"><RefreshCw size={14} className="animate-spin" /> Đang tổng hợp dữ liệu cá nhân…</div>
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-800"><RefreshCw size={14} className="animate-spin" /> Đang tổng hợp dữ liệu cá nhân…</div>
       ) : rows.length === 0 ? (
-        <div className="rounded-xl border border-white/[0.08] bg-[#131d29] p-4 text-xs font-semibold text-slate-400">Chưa có báo cáo trong khoảng thời gian đã chọn.</div>
+        <div className="rounded-xl border border-[var(--stitch-border)] bg-white p-4 text-xs font-semibold text-[#64748b]">Chưa có báo cáo trong khoảng thời gian đã chọn.</div>
       ) : alerts.length ? (
-        <div className="flex gap-3 rounded-xl border border-rose-400/20 border-l-4 border-l-rose-400 bg-rose-400/[0.07] p-4">
+        <div className="flex gap-3 rounded-xl border border-rose-200 border-l-4 border-l-rose-500 bg-rose-50 p-4">
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-rose-500 text-white"><TriangleAlert size={15} /></span>
-          <div><strong className="text-sm text-rose-200">Chỉ số cần chú ý</strong><p className="mt-1 text-xs text-rose-100/70">{alerts.join(' ')}</p></div>
+          <div><strong className="text-sm text-rose-800">Chỉ số cần chú ý</strong><p className="mt-1 text-xs text-rose-700">{alerts.join(' ')}</p></div>
         </div>
       ) : (
-        <div className="flex gap-3 rounded-xl border border-emerald-400/20 border-l-4 border-l-emerald-400 bg-emerald-400/[0.06] p-4">
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-emerald-500 text-white"><CheckCircle2 size={15} /></span>
-          <div><strong className="text-sm text-emerald-200">Các chỉ số đang trong ngưỡng</strong><p className="mt-1 text-xs text-emerald-100/70">Tiếp tục theo dõi tiến độ theo ngày.</p></div>
+        <div className="flex gap-3 rounded-xl border border-emerald-200 border-l-4 border-l-emerald-600 bg-emerald-50 p-4">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-emerald-600 text-white"><CheckCircle2 size={15} /></span>
+          <div><strong className="text-sm text-emerald-900">Các chỉ số đang trong ngưỡng</strong><p className="mt-1 text-xs text-emerald-800">Tiếp tục theo dõi tiến độ theo ngày.</p></div>
         </div>
       )}
 
       {(!viewerIsAdmin || selectedPerson) && <>
       <div className="flex items-end justify-between gap-3">
-        <div><h2 className="text-base font-extrabold">Chỉ số trọng tâm</h2><p className="mt-1 text-[11px] text-slate-500">{daily.length} ngày · {selectedPerson?.name || 'cá nhân'} · {priorCaption}</p></div>
-        <span className="text-[10px] text-slate-500">Cập nhật theo khoảng thời gian đã chọn</span>
+        <div><h2 className="text-base font-extrabold text-[#1f2937]">Chỉ số trọng tâm</h2><p className="mt-1 text-[11px] text-[#64748b]">{daily.length} ngày · {selectedPerson?.name || 'cá nhân'} · {priorCaption}</p></div>
+        <span className="text-[10px] text-[#64748b]">Cập nhật theo khoảng thời gian đã chọn</span>
       </div>
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Các chỉ số cá nhân">
         <Card label="Doanh số" value={formatMoney(metrics.revenue)} sub={targetVnd ? `Mục tiêu tháng ${formatKpiMoney(targetVnd)}` : 'Tổng doanh thu trong kỳ'} status={targetVnd && metrics.revenue >= targetVnd ? 'Đạt KPI' : 'Theo dõi'} tone="green" icon={<Target size={12} />} progress={revenueProgress} />
@@ -530,40 +531,40 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
       </section>
 
       <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,.82fr)]">
-        <section className="rounded-2xl border border-white/[0.08] bg-[#151f2d] p-4 shadow-lg shadow-black/10 sm:p-5">
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-sm font-extrabold">Doanh số, chi phí và %ADS theo ngày</h2><p className="mt-1 text-[11px] text-slate-500">Xu hướng trong khoảng thời gian đã chọn</p></div><span className="text-[10px] text-slate-500">{daily.length} ngày dữ liệu</span></div>
+        <section className="rounded-2xl border border-[var(--stitch-border)] bg-white p-4 shadow-[var(--stitch-shadow)] sm:p-5">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-sm font-extrabold text-[#1f2937]">Doanh số, chi phí và %ADS theo ngày</h2><p className="mt-1 text-[11px] text-[#64748b]">Xu hướng trong khoảng thời gian đã chọn</p></div><span className="text-[10px] text-[#64748b]">{daily.length} ngày dữ liệu</span></div>
           <div className="h-[270px] w-full">
-            {loading ? <div className="grid h-full place-items-center text-xs text-slate-500">Đang tải dữ liệu…</div> : (
+            {loading ? <div className="grid h-full place-items-center text-xs text-[#64748b]">Đang tải dữ liệu…</div> : (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={daily} margin={{ top: 12, right: 8, left: 0, bottom: 4 }}>
-                  <CartesianGrid stroke="rgba(148,163,184,.12)" vertical={false} />
-                  <XAxis dataKey="date" tickFormatter={(value: string) => value.slice(8)} tick={{ fill: '#8290a3', fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis yAxisId="money" tickFormatter={(value: number) => formatMoney(value)} tick={{ fill: '#8290a3', fontSize: 10 }} axisLine={false} tickLine={false} width={60} />
-                  <YAxis yAxisId="percent" orientation="right" tickFormatter={(value: number) => `${value}%`} tick={{ fill: '#8290a3', fontSize: 10 }} axisLine={false} tickLine={false} width={38} />
-                  <Tooltip contentStyle={{ background: '#101722', border: '1px solid rgba(255,255,255,.12)', borderRadius: 10, color: '#e2e8f0', fontSize: 11 }} labelFormatter={(value) => formatReportDateVi(String(value))} formatter={(value, name) => [name === '%ADS' ? `${Number(value).toFixed(1)}%` : formatMoney(Number(value)), name]} />
-                  <ReferenceLine yAxisId="percent" y={30} stroke="#fb7185" strokeDasharray="5 5" />
-                  <Bar yAxisId="money" dataKey="revenue" name="Doanh số" fill="#34d399" radius={[3, 3, 0, 0]} maxBarSize={15} />
-                  <Bar yAxisId="money" dataKey="adCost" name="Chi phí Ads" fill="#818cf8" radius={[3, 3, 0, 0]} maxBarSize={15} />
-                  <Line yAxisId="percent" type="monotone" dataKey={(row: DailyMetrics) => row.revenue ? row.adCost / row.revenue * 100 : 0} name="%ADS" stroke="#fbbf24" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                  <CartesianGrid stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="date" tickFormatter={(value: string) => value.slice(8)} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis yAxisId="money" tickFormatter={(value: number) => formatMoney(value)} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} width={60} />
+                  <YAxis yAxisId="percent" orientation="right" tickFormatter={(value: number) => `${value}%`} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} width={38} />
+                  <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8e5', borderRadius: 8, color: '#1f2937', fontSize: 11, boxShadow: '0 8px 24px rgba(15,23,42,.1)' }} labelFormatter={(value) => formatReportDateVi(String(value))} formatter={(value, name) => [name === '%ADS' ? `${Number(value).toFixed(1)}%` : formatMoney(Number(value)), name]} />
+                  <ReferenceLine yAxisId="percent" y={30} stroke="#f43f5e" strokeDasharray="5 5" />
+                  <Bar yAxisId="money" dataKey="revenue" name="Doanh số" fill="#16a34a" radius={[3, 3, 0, 0]} maxBarSize={15} />
+                  <Bar yAxisId="money" dataKey="adCost" name="Chi phí Ads" fill="#6366f1" radius={[3, 3, 0, 0]} maxBarSize={15} />
+                  <Line yAxisId="percent" type="monotone" dataKey={(row: DailyMetrics) => row.revenue ? row.adCost / row.revenue * 100 : 0} name="%ADS" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-[10px] text-slate-400"><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-emerald-400" />Doanh số</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-indigo-400" />Chi phí</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-amber-400" />%ADS thực tế</span><span className="inline-flex items-center gap-1.5"><i className="h-px w-3 bg-rose-400" />Trần %ADS 30%</span></div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-[10px] text-[#64748b]"><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-emerald-600" />Doanh số</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-indigo-500" />Chi phí</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-amber-500" />%ADS thực tế</span><span className="inline-flex items-center gap-1.5"><i className="h-px w-3 bg-rose-500" />Trần %ADS 30%</span></div>
         </section>
 
-        <section className="rounded-2xl border border-white/[0.08] bg-[#151f2d] p-4 shadow-lg shadow-black/10 sm:p-5">
-          <div><h2 className="text-sm font-extrabold">Dự đoán %ADS</h2><p className="mt-1 text-[11px] text-slate-500">Ước tính theo dữ liệu trong kỳ đã chọn</p></div>
+        <section className="rounded-2xl border border-[var(--stitch-border)] bg-white p-4 shadow-[var(--stitch-shadow)] sm:p-5">
+          <div><h2 className="text-sm font-extrabold text-[#1f2937]">Dự đoán %ADS</h2><p className="mt-1 text-[11px] text-[#64748b]">Ước tính theo dữ liệu trong kỳ đã chọn</p></div>
           <div className="mt-5 space-y-3">
             {[
-              { label: 'Doanh thu dự kiến', value: forecastRevenue, rate: 100, color: 'bg-violet-400', note: 'Đã trừ dự phòng hoàn hủy 5%' },
-              { label: 'Chi phí quảng cáo dự kiến', value: forecastAdCost, rate: forecastRevenue ? forecastAdCost / forecastRevenue * 100 : 0, color: 'bg-sky-400', note: 'Đã cộng dự phòng phí 6%' },
-              { label: '%ADS dự kiến', value: forecastAdsPct, rate: forecastAdsPct, color: 'bg-emerald-400', note: 'Chi phí quảng cáo / doanh thu dự kiến' },
+              { label: 'Doanh thu dự kiến', value: forecastRevenue, rate: 100, color: 'bg-purple-600', note: 'Đã trừ dự phòng hoàn hủy 5%' },
+              { label: 'Chi phí quảng cáo dự kiến', value: forecastAdCost, rate: forecastRevenue ? forecastAdCost / forecastRevenue * 100 : 0, color: 'bg-sky-600', note: 'Đã cộng dự phòng phí 6%' },
+              { label: '%ADS dự kiến', value: forecastAdsPct, rate: forecastAdsPct, color: 'bg-emerald-600', note: 'Chi phí quảng cáo / doanh thu dự kiến' },
             ].map((stage) => (
-              <div key={stage.label} className="rounded-xl border border-white/[0.06] bg-[#101722] p-3">
-                <div className="flex items-baseline justify-between gap-3"><span className="text-[11px] font-bold text-slate-400">{stage.label}</span><strong className="text-lg font-extrabold">{stage.label.includes('%ADS') ? formatPercent(stage.value) : formatMoney(stage.value)}</strong></div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.07]"><div className={`h-full rounded-full ${stage.color}`} style={{ width: `${Math.max(stage.value > 0 ? 3 : 0, Math.min(stage.rate, 100))}%` }} /></div>
-                <p className="mt-1.5 text-[10px] text-slate-500">{stage.note}</p>
+              <div key={stage.label} className="rounded-xl border border-[var(--stitch-border)] bg-[#f8faf9] p-3">
+                <div className="flex items-baseline justify-between gap-3"><span className="text-[11px] font-bold text-[#64748b]">{stage.label}</span><strong className="text-lg font-extrabold font-mono text-[#1f2937]">{stage.label.includes('%ADS') ? formatPercent(stage.value) : formatMoney(stage.value)}</strong></div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e2e8e5]"><div className={`h-full rounded-full ${stage.color}`} style={{ width: `${Math.max(stage.value > 0 ? 3 : 0, Math.min(stage.rate, 100))}%` }} /></div>
+                <p className="mt-1.5 text-[10px] text-[#64748b]">{stage.note}</p>
               </div>
             ))}
           </div>

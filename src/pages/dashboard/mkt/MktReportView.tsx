@@ -5,6 +5,7 @@ import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms
 import { supabase } from '../../../api/supabase';
 import type { AuthUser, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
+import '../../../styles/stitchSystem.css';
 import {
   REPORTS_TABLE,
   toLocalYyyyMmDd,
@@ -868,12 +869,12 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
           </div>
         </div>
 
-        <div className="mt-[24px] flex gap-[12px] flex-wrap">
+        <div className="mt-6 flex gap-3 flex-wrap">
           <button
             type="button"
             disabled={saving || syncing || !reportUser?.email}
             onClick={() => void persistReport()}
-            className="bg-[var(--accent)] text-[#fff] flex-1 min-w-[140px] py-[11px] rounded-[10px] text-[13px] font-black flex items-center justify-center gap-[8px] shadow-lg shadow-[rgba(61,142,240,0.3)] hover:brightness-110 active:scale-[0.98] transition-all whitespace-nowrap disabled:opacity-50"
+            className="bg-[#006e51] text-white flex-1 min-w-[140px] py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-xs hover:bg-[#005840] active:scale-[0.99] transition-all whitespace-nowrap disabled:opacity-50"
           >
             {saving ? <Loader2 className="animate-spin" size={18} /> : '💾'}
             {draftLineId ? 'Lưu dòng này' : 'Thêm & lưu dòng'}
@@ -881,7 +882,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
           <button
             type="button"
             onClick={() => navigate(crmAdminPathForView('mkt-bill'))}
-            className="bg-[var(--bg3)] border border-[var(--border)] text-[var(--text2)] flex-1 min-w-[140px] py-[10px] rounded-[10px] text-[13px] font-extrabold flex items-center justify-center gap-[6px] hover:bg-[var(--bg4)] transition-all"
+            className="bg-[#f8faf9] border border-[#e2e8e5] text-[#191c1b] flex-1 min-w-[140px] py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-[#f0f4f1] transition-all"
           >
             📋 Xem bill
           </button>

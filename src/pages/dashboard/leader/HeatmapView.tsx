@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, Calendar, Loader2, RefreshCw, TrendingUp, Zap } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { REPORTS_TABLE, toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
+import '../../../styles/stitchSystem.css';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 
@@ -55,7 +56,7 @@ function initialsFromName(name: string): string {
 function ObsidianHeatCell({ pct }: { pct: number | null }) {
   if (pct == null) {
     return (
-      <div className="heatmap-cell w-full min-h-[56px] rounded-lg bg-[var(--ld-surface-container-highest)] flex items-center justify-center text-sm font-bold text-[var(--ld-on-surface-variant)]">
+      <div className="heatmap-cell w-full min-h-[56px] rounded-xl bg-[#f0f4f1] border border-[#e2e8e5]/80 flex items-center justify-center text-sm font-semibold text-[#8b9b94]">
         —
       </div>
     );
@@ -63,12 +64,12 @@ function ObsidianHeatCell({ pct }: { pct: number | null }) {
   const t = heatType(pct);
   const cls =
     t === 'G'
-      ? 'bg-[var(--ld-secondary-container)] text-[var(--ld-secondary)]'
+      ? 'bg-[#ecfdf5] text-[#059669] border border-[#a7f3d0] font-bold'
       : t === 'Y'
-        ? 'bg-[var(--ld-tertiary-container)] text-[#2a1700]'
-        : 'bg-[var(--ld-error-container)] text-[#ffa8a3]';
+        ? 'bg-[#fefce8] text-[#d97706] border border-[#fde68a] font-bold'
+        : 'bg-[#fff1f2] text-[#e11d48] border border-[#fecdd3] font-black';
   return (
-    <div className={`heatmap-cell w-full min-h-[56px] rounded-lg flex items-center justify-center font-bold text-sm ${cls}`}>
+    <div className={`heatmap-cell w-full min-h-[56px] rounded-xl flex items-center justify-center text-sm shadow-xs transition-transform hover:scale-[1.03] ${cls}`}>
       {pct.toFixed(1)}%
     </div>
   );
@@ -258,87 +259,87 @@ export const HeatmapView: React.FC = () => {
   };
 
   return (
-    <div className="leader-dash-obsidian heatmap-obsidian dash-fade-up text-[var(--ld-on-surface)] pb-10">
+    <div className="leader-dash-obsidian heatmap-obsidian dash-fade-up text-[#191c1b] pb-10">
       <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6">
         <div>
-          <h1 className="font-[family-name:Inter,sans-serif] font-extrabold text-2xl sm:text-3xl tracking-tight text-[var(--ld-on-surface)] mb-2">
+          <h1 className="font-sans font-extrabold text-2xl sm:text-3xl tracking-tight text-[#191c1b] mb-2">
             Heatmap Ads/DT
           </h1>
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-            <div className="flex items-center gap-2 bg-[var(--ld-secondary)]/10 px-3 py-1 rounded-full border border-[var(--ld-secondary)]/25">
-              <div className="w-2 h-2 rounded-full bg-[var(--ld-secondary)] animate-pulse" />
-              <span className="font-[family-name:Manrope,sans-serif] text-[10px] font-bold uppercase tracking-widest text-[var(--ld-secondary)]">
+            <div className="flex items-center gap-2 bg-[#ecfdf5] px-3 py-1 rounded-full border border-[#a7f3d0]">
+              <div className="w-2 h-2 rounded-full bg-[#059669] animate-pulse" />
+              <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#059669]">
                 LIVE
               </span>
             </div>
-            <span className="font-[family-name:Manrope,sans-serif] text-[11px] text-[var(--ld-on-surface-variant)] uppercase tracking-widest">
+            <span className="font-sans text-xs text-[#476355] font-medium tracking-wide">
               {REPORTS_TABLE} · Ads/Doanh thu theo ngày
             </span>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-[var(--ld-surface-container-high)] p-1 rounded-lg flex items-center gap-1 border border-[var(--ld-outline-variant)]/40">
-            <span className="px-4 py-2 bg-[var(--ld-surface-container-highest)] text-[var(--ld-primary)] font-[family-name:Manrope,sans-serif] text-[11px] font-bold rounded-md shadow-sm whitespace-nowrap">
+          <div className="bg-white p-1 rounded-xl flex items-center gap-1 border border-[#e2e8e5] shadow-xs">
+            <span className="px-3.5 py-1.5 bg-[#f0f4f1] text-[#006e51] font-sans text-xs font-bold rounded-lg shadow-xs whitespace-nowrap">
               {monthLabel || '—'}
             </span>
             <span
-              className="px-3 py-2 text-[var(--ld-on-surface-variant)]"
+              className="px-2.5 py-1.5 text-[#476355]"
               title="Khung 7 ngày gần nhất (theo máy)"
             >
-              <span className="material-symbols-outlined text-[22px]">calendar_today</span>
+              <Calendar className="w-4 h-4" />
             </span>
           </div>
           <button
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="w-10 h-10 flex items-center justify-center bg-[var(--ld-surface-container-high)] rounded-lg border border-[var(--ld-outline-variant)]/40 text-[var(--ld-on-surface-variant)] hover:text-[var(--ld-primary)] transition-all active:scale-95 disabled:opacity-50"
+            className="w-10 h-10 flex items-center justify-center bg-white rounded-xl border border-[#e2e8e5] shadow-xs text-[#476355] hover:text-[#006e51] transition-all active:scale-95 disabled:opacity-50"
             title="Làm mới"
           >
-            {loading ? <Loader2 className="w-[22px] h-[22px] animate-spin" /> : <span className="material-symbols-outlined text-[22px]">refresh</span>}
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </header>
 
       {error && (
-        <div className="mb-4 text-[11px] font-bold text-[#ffa8a3] border border-[#9f0519]/40 rounded-lg px-3 py-2 bg-[#9f0519]/15">
+        <div className="mb-4 text-xs font-semibold text-[#e11d48] border border-[#fecdd3] rounded-xl px-4 py-3 bg-[#fff1f2]">
           {error}
         </div>
       )}
 
-      <section className="bg-[var(--ld-surface-container-low)] rounded-xl overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.45)] border border-[var(--ld-outline-variant)]/35 relative">
+      <section className="bg-white rounded-2xl overflow-hidden shadow-xs border border-[#e2e8e5] relative">
         <div className="overflow-x-auto leader-dash-no-scrollbar">
           {loading && marketers.length === 0 ? (
-            <div className="flex items-center justify-center gap-2 py-20 text-[var(--ld-on-surface-variant)] text-[13px] font-[family-name:Manrope,sans-serif]">
-              <Loader2 className="animate-spin w-5 h-5" />
+            <div className="flex items-center justify-center gap-2 py-20 text-[#476355] text-sm font-medium">
+              <Loader2 className="animate-spin w-5 h-5 text-[#006e51]" />
               Đang tải {REPORTS_TABLE}…
             </div>
           ) : (
             <table className="w-full text-left border-collapse min-w-[900px]">
               <thead>
-                <tr className="bg-[var(--ld-surface-container-high)]/55">
-                  <th className="p-5 font-[family-name:Manrope,sans-serif] text-[10px] uppercase tracking-[0.2em] text-[var(--ld-on-surface-variant)] font-bold sticky left-0 z-40 bg-[var(--ld-surface-container-high)]/95 backdrop-blur-md min-w-[240px] border-b border-[var(--ld-outline-variant)]/25">
+                <tr className="bg-[#f8faf9]">
+                  <th className="p-4 font-sans text-[11px] uppercase tracking-wider text-[#476355] font-bold sticky left-0 z-40 bg-[#f8faf9] backdrop-blur-md min-w-[240px] border-b border-[#e2e8e5] border-r border-[#e2e8e5]">
                     Marketing Lead
                   </th>
-                  <th className="p-3 font-[family-name:Manrope,sans-serif] text-[10px] uppercase tracking-[0.2em] text-[var(--ld-on-surface-variant)] font-bold text-center min-w-[88px] border-b border-[var(--ld-outline-variant)]/25">
+                  <th className="p-3 font-sans text-[11px] uppercase tracking-wider text-[#476355] font-bold text-center min-w-[96px] border-b border-[#e2e8e5]">
                     TB 7 ngày
                   </th>
                   {dayKeys.map((ymd) => (
                     <th
                       key={ymd}
-                      className="p-3 font-[family-name:Manrope,sans-serif] text-[10px] uppercase tracking-[0.2em] text-[var(--ld-on-surface-variant)] font-bold text-center whitespace-nowrap min-w-[72px] border-b border-[var(--ld-outline-variant)]/25"
+                      className="p-3 font-sans text-[11px] uppercase tracking-wider text-[#476355] font-bold text-center whitespace-nowrap min-w-[80px] border-b border-[#e2e8e5]"
                     >
                       {formatColHeader(ymd)}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--ld-outline-variant)]/12">
+              <tbody className="divide-y divide-[#e2e8e5]">
                 {marketers.length === 0 ? (
                   <tr>
                     <td
                       colSpan={dayKeys.length + 2}
-                      className="p-12 text-center text-[var(--ld-on-surface-variant)] text-[13px] font-[family-name:Manrope,sans-serif]"
+                      className="p-12 text-center text-[#476355] text-sm font-medium"
                     >
                       Chưa có dòng báo cáo trong 7 ngày (hoặc thiếu email trên bản ghi).
                     </td>
@@ -359,10 +360,10 @@ export const HeatmapView: React.FC = () => {
                     }
                     const avgPct = adsDtPct(wAd, wRev);
                     return (
-                      <tr key={email} className="hover:bg-[var(--ld-surface-container-high)]/35 transition-colors group">
-                        <td className="p-5 sticky left-0 z-30 bg-[var(--ld-surface-container-low)] group-hover:bg-[var(--ld-surface-container-high)]/50 transition-colors border-r border-[var(--ld-outline-variant)]/15">
+                      <tr key={email} className="hover:bg-[#f8faf9]/80 transition-colors group">
+                        <td className="p-4 sticky left-0 z-30 bg-white group-hover:bg-[#f8faf9] transition-colors border-r border-[#e2e8e5]">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-[var(--ld-surface-container)] shrink-0 flex items-center justify-center text-[11px] font-extrabold text-[var(--ld-primary)]">
+                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-[#e8f5ee] shrink-0 flex items-center justify-center text-xs font-black text-[#006e51] border border-[#c1e2d2]">
                               {emp?.avatar_url ? (
                                 <img src={emp.avatar_url} alt="" className="w-full h-full object-cover" />
                               ) : (
@@ -370,17 +371,17 @@ export const HeatmapView: React.FC = () => {
                               )}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-[family-name:Inter,sans-serif] font-bold text-sm text-[var(--ld-on-surface)] truncate" title={label}>
+                              <p className="font-sans font-bold text-sm text-[#191c1b] truncate" title={label}>
                                 {label}
                               </p>
-                              <p className="font-[family-name:Manrope,sans-serif] text-[10px] text-[var(--ld-on-surface-variant)] uppercase tracking-wider truncate">
+                              <p className="font-sans text-xs text-[#476355] truncate">
                                 {role}
                               </p>
                             </div>
                           </div>
                         </td>
                         <td className="p-2 align-middle">
-                          <div className="w-full min-h-[56px] rounded-lg bg-[var(--ld-surface-container-highest)] flex items-center justify-center font-[family-name:Inter,sans-serif] font-extrabold text-sm text-[var(--ld-primary)]">
+                          <div className="w-full min-h-[56px] rounded-xl bg-[#f0f4f1] border border-[#e2e8e5]/80 flex items-center justify-center font-mono font-bold text-sm text-[#006e51]">
                             {avgPct != null ? `${avgPct.toFixed(1)}%` : '—'}
                           </div>
                         </td>
@@ -402,39 +403,39 @@ export const HeatmapView: React.FC = () => {
           )}
         </div>
 
-        <footer className="p-5 sm:p-6 bg-[var(--ld-surface-container-high)]/25 border-t border-[var(--ld-outline-variant)]/15 flex flex-col md:flex-row items-center justify-between gap-6">
+        <footer className="p-4 sm:p-5 bg-[#f8faf9] border-t border-[#e2e8e5] flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex flex-wrap items-center gap-6 sm:gap-8">
-            <div className="flex items-center gap-3">
-              <div className="w-4 h-4 rounded-sm bg-[var(--ld-secondary-container)]" />
-              <span className="font-[family-name:Manrope,sans-serif] text-xs font-bold text-[var(--ld-on-surface-variant)]">
+            <div className="flex items-center gap-2.5">
+              <div className="w-3.5 h-3.5 rounded-sm bg-[#ecfdf5] border border-[#a7f3d0]" />
+              <span className="font-sans text-xs font-semibold text-[#191c1b]">
                 OK (&lt; 30%)
               </span>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="w-4 h-4 rounded-sm bg-[var(--ld-tertiary-container)]" />
-              <span className="font-[family-name:Manrope,sans-serif] text-xs font-bold text-[var(--ld-on-surface-variant)]">
+            <div className="flex items-center gap-2.5">
+              <div className="w-3.5 h-3.5 rounded-sm bg-[#fefce8] border border-[#fde68a]" />
+              <span className="font-sans text-xs font-semibold text-[#191c1b]">
                 WARNING (30–45%)
               </span>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="w-4 h-4 rounded-sm bg-[var(--ld-error-container)]" />
-              <span className="font-[family-name:Manrope,sans-serif] text-xs font-bold text-[var(--ld-on-surface-variant)]">
+            <div className="flex items-center gap-2.5">
+              <div className="w-3.5 h-3.5 rounded-sm bg-[#fff1f2] border border-[#fecdd3]" />
+              <span className="font-sans text-xs font-semibold text-[#191c1b]">
                 DANGER (&gt; 45%)
               </span>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-[var(--ld-on-surface-variant)] font-[family-name:Manrope,sans-serif] text-[10px] uppercase tracking-widest font-bold">
-            <span>Export:</span>
-            <button type="button" onClick={exportCsv} className="hover:text-[var(--ld-primary)] transition-colors disabled:opacity-40" disabled={!marketers.length}>
+          <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-[#476355]">
+            <span className="uppercase text-[10px] tracking-wider text-[#8b9b94]">Xuất file:</span>
+            <button type="button" onClick={exportCsv} className="px-3 py-1.5 bg-white border border-[#e2e8e5] rounded-lg shadow-2xs hover:text-[#006e51] hover:border-[#006e51] transition-all disabled:opacity-40" disabled={!marketers.length}>
               CSV
             </button>
-            <button type="button" onClick={exportJson} className="hover:text-[var(--ld-primary)] transition-colors disabled:opacity-40" disabled={!marketers.length}>
+            <button type="button" onClick={exportJson} className="px-3 py-1.5 bg-white border border-[#e2e8e5] rounded-lg shadow-2xs hover:text-[#006e51] hover:border-[#006e51] transition-all disabled:opacity-40" disabled={!marketers.length}>
               JSON
             </button>
             <button
               type="button"
               onClick={() => window.print()}
-              className="hover:text-[var(--ld-primary)] transition-colors disabled:opacity-40"
+              className="px-3 py-1.5 bg-white border border-[#e2e8e5] rounded-lg shadow-2xs hover:text-[#006e51] hover:border-[#006e51] transition-all disabled:opacity-40"
               disabled={!marketers.length}
               title="Dùng hộp thoại in của trình duyệt"
             >
@@ -444,59 +445,65 @@ export const HeatmapView: React.FC = () => {
         </footer>
       </section>
 
-      <section className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-[var(--ld-surface-container)] rounded-xl p-6 shadow-xl border-l-4 border-[var(--ld-primary)] border border-[var(--ld-outline-variant)]/25">
+      <section className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-2xl p-6 shadow-xs border-l-4 border-l-[#006e51] border border-[#e2e8e5]">
           <div className="flex justify-between items-start mb-4">
-            <span className="material-symbols-outlined text-[var(--ld-primary)] bg-[var(--ld-primary)]/12 p-2 rounded-lg">trending_up</span>
-            <span className="font-[family-name:Manrope,sans-serif] text-[10px] font-bold text-[var(--ld-secondary)] uppercase tracking-tight bg-[var(--ld-secondary)]/12 px-2 py-0.5 rounded">
+            <div className="bg-[#ecfdf5] p-2.5 rounded-xl border border-[#a7f3d0]">
+              <TrendingUp className="w-5 h-5 text-[#006e51]" />
+            </div>
+            <span className="font-mono text-xs font-bold text-[#059669] bg-[#ecfdf5] border border-[#a7f3d0] px-2.5 py-0.5 rounded-full">
               {insights.vs30 != null ? `${insights.vs30 >= 0 ? '+' : ''}${insights.vs30.toFixed(1)} vs 30%` : '—'}
             </span>
           </div>
-          <h3 className="font-[family-name:Inter,sans-serif] font-bold text-lg text-[var(--ld-on-surface)] mb-1">Trung bình Ads/DT</h3>
-          <p className="font-[family-name:Manrope,sans-serif] text-xs text-[var(--ld-on-surface-variant)] mb-4 leading-relaxed">
+          <h3 className="font-sans font-bold text-base text-[#191c1b] mb-1">Trung bình Ads/DT</h3>
+          <p className="font-sans text-xs text-[#476355] mb-4 leading-relaxed">
             Trung bình các ô có doanh thu &gt; 0 trong khung 7 ngày ({insights.cellCount} ô).
           </p>
           <div className="flex items-end gap-2">
-            <span className="text-3xl font-extrabold text-[var(--ld-on-surface)]">{insights.avg != null ? `${insights.avg.toFixed(1)}%` : '—'}</span>
-            <span className="font-[family-name:Manrope,sans-serif] text-xs text-[var(--ld-on-surface-variant)] mb-1">Overall</span>
+            <span className="text-3xl font-extrabold font-mono text-[#191c1b]">{insights.avg != null ? `${insights.avg.toFixed(1)}%` : '—'}</span>
+            <span className="font-sans text-xs text-[#476355] mb-1">Toàn sàn</span>
           </div>
         </div>
 
-        <div className="bg-[var(--ld-surface-container)] rounded-xl p-6 shadow-xl border-l-4 border-[var(--ld-tertiary)] border border-[var(--ld-outline-variant)]/25">
+        <div className="bg-white rounded-2xl p-6 shadow-xs border-l-4 border-l-[#e11d48] border border-[#e2e8e5]">
           <div className="flex justify-between items-start mb-4">
-            <span className="material-symbols-outlined text-[var(--ld-tertiary)] bg-[var(--ld-tertiary)]/12 p-2 rounded-lg">warning</span>
-            <span className="font-[family-name:Manrope,sans-serif] text-[10px] font-bold text-[var(--ld-error)] uppercase tracking-tight bg-[var(--ld-error)]/12 px-2 py-0.5 rounded">
-              High risk
+            <div className="bg-[#fff1f2] p-2.5 rounded-xl border border-[#fecdd3]">
+              <AlertTriangle className="w-5 h-5 text-[#e11d48]" />
+            </div>
+            <span className="font-mono text-xs font-bold text-[#e11d48] bg-[#fff1f2] border border-[#fecdd3] px-2.5 py-0.5 rounded-full">
+              Cảnh báo cao
             </span>
           </div>
-          <h3 className="font-[family-name:Inter,sans-serif] font-bold text-lg text-[var(--ld-on-surface)] mb-1">Ô nguy cơ cao</h3>
-          <p className="font-[family-name:Manrope,sans-serif] text-xs text-[var(--ld-on-surface-variant)] mb-4 leading-relaxed">
-            Số ô có Ads/DT &gt; 45% (cùng ngưỡng màu đỏ trên heatmap).
+          <h3 className="font-sans font-bold text-base text-[#191c1b] mb-1">Ô nguy cơ cao</h3>
+          <p className="font-sans text-xs text-[#476355] mb-4 leading-relaxed">
+            Số ô có Ads/DT &gt; 45% (ngưỡng cần tối ưu ngân sách ngay).
           </p>
           <div className="flex items-end gap-2">
-            <span className="text-3xl font-extrabold text-[var(--ld-on-surface)]">{String(insights.danger).padStart(2, '0')}</span>
-            <span className="font-[family-name:Manrope,sans-serif] text-xs text-[var(--ld-on-surface-variant)] mb-1">Critical</span>
+            <span className="text-3xl font-extrabold font-mono text-[#e11d48]">{String(insights.danger).padStart(2, '0')}</span>
+            <span className="font-sans text-xs text-[#476355] mb-1">Critical</span>
           </div>
         </div>
 
-        <div className="bg-[var(--ld-surface-container)] rounded-xl p-6 shadow-xl border-l-4 border-[var(--ld-secondary)] border border-[var(--ld-outline-variant)]/25">
+        <div className="bg-white rounded-2xl p-6 shadow-xs border-l-4 border-l-[#059669] border border-[#e2e8e5]">
           <div className="flex justify-between items-start mb-4">
-            <span className="material-symbols-outlined text-[var(--ld-secondary)] bg-[var(--ld-secondary)]/12 p-2 rounded-lg">bolt</span>
-            <span className="font-[family-name:Manrope,sans-serif] text-[10px] font-bold text-[var(--ld-secondary)] uppercase tracking-tight bg-[var(--ld-secondary)]/12 px-2 py-0.5 rounded">
-              Optimal
+            <div className="bg-[#ecfdf5] p-2.5 rounded-xl border border-[#a7f3d0]">
+              <Zap className="w-5 h-5 text-[#059669]" />
+            </div>
+            <span className="font-mono text-xs font-bold text-[#059669] bg-[#ecfdf5] border border-[#a7f3d0] px-2.5 py-0.5 rounded-full">
+              Trực tiếp
             </span>
           </div>
-          <h3 className="font-[family-name:Inter,sans-serif] font-bold text-lg text-[var(--ld-on-surface)] mb-1">Cập nhật dữ liệu</h3>
-          <p className="font-[family-name:Manrope,sans-serif] text-xs text-[var(--ld-on-surface-variant)] mb-4 leading-relaxed">
-            Lần tải gần nhất từ Supabase (báo cáo MKT).
+          <h3 className="font-sans font-bold text-base text-[#191c1b] mb-1">Cập nhật dữ liệu</h3>
+          <p className="font-sans text-xs text-[#476355] mb-4 leading-relaxed">
+            Lần tải gần nhất từ cơ sở dữ liệu Supabase (báo cáo MKT).
           </p>
           <div className="flex items-end gap-2">
-            <span className="text-xl sm:text-2xl font-extrabold text-[var(--ld-on-surface)] tabular-nums">
+            <span className="text-2xl font-extrabold font-mono text-[#191c1b]">
               {lastRefresh
                 ? lastRefresh.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
                 : '—'}
             </span>
-            <span className="font-[family-name:Manrope,sans-serif] text-xs text-[var(--ld-on-surface-variant)] mb-1">Giờ</span>
+            <span className="font-sans text-xs text-[#476355] mb-1">Hôm nay</span>
           </div>
         </div>
       </section>

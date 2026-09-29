@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, RefreshCw, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { STITCH_PORTAL_CLASS, StitchButton } from '../../../components/ui/StitchUI';
+import '../../../styles/stitchSystem.css';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const KPI_STAFF_TABLE =
@@ -106,62 +108,83 @@ export const AdminKpisView: React.FC = () => {
   };
 
   return (
-    <div className="dash-fade-up">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <div className="dash-fade-up space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-[#e2e8e5]">
         <div>
-          <h1 className="text-[var(--ld-on-surface)] text-2xl font-extrabold">KPIs</h1>
-          <p className="mt-1 text-sm text-[var(--ld-on-surface-variant)]">Mục tiêu doanh số theo nhân sự</p>
+          <h1 className="text-2xl font-extrabold text-[#191c1b] tracking-tight">KPIs</h1>
+          <p className="mt-1 text-xs text-[#476355]">Mục tiêu doanh số theo nhân sự</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
+        <div className="flex flex-wrap gap-2.5">
+          <StitchButton
+            variant="secondary"
+            size="small"
             onClick={() => void load()}
             disabled={loading}
-            className="flex items-center gap-2 rounded-lg border border-[var(--ld-outline-variant)]/30 bg-[var(--ld-surface-container-highest)] px-4 py-2 text-sm font-semibold text-[var(--ld-on-surface)] disabled:opacity-50"
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             Làm mới
-          </button>
-          <button
-            type="button"
+          </StitchButton>
+          <StitchButton
+            variant="primary"
+            size="small"
             onClick={() => { setDraftMonth(targetMonth); setDraftEmployee(''); setDraftTarget(''); setTargetError(null); setShowAddModal(true); }}
-            className="flex items-center gap-2 rounded-lg bg-[var(--ld-primary)] px-4 py-2 text-sm font-bold text-[var(--ld-on-primary)]"
           >
-            <Plus size={17} />
+            <Plus size={16} />
             Thêm KPI
-          </button>
+          </StitchButton>
         </div>
       </div>
 
-      {staffError ? <div className="mb-4 rounded-lg border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-200">{staffError}</div> : null}
+      {staffError && (
+        <div className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3 text-xs font-semibold text-[#e11d48]">
+          {staffError}
+        </div>
+      )}
 
-      <section className="mt-6 overflow-hidden rounded-2xl border border-[var(--ld-outline-variant)]/15 bg-[var(--ld-surface-container)]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--ld-outline-variant)]/15 px-5 py-4">
+      <section className="overflow-hidden rounded-2xl border border-[#e2e8e5] bg-white shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e2e8e5] px-5 py-4 bg-white">
           <div>
-            <h2 className="text-lg font-bold text-[var(--ld-on-surface)]">Mục tiêu KPI · {targetMonth}</h2>
-            <p className="mt-1 text-sm text-[var(--ld-on-surface-variant)]">Doanh số mục tiêu theo nhân sự</p>
+            <h2 className="text-base font-bold text-[#191c1b]">Mục tiêu KPI · {targetMonth}</h2>
+            <p className="mt-0.5 text-xs text-[#476355]">Doanh số mục tiêu theo nhân sự</p>
           </div>
-          <label className="flex items-center gap-2 text-sm text-[var(--ld-on-surface-variant)]">
+          <label className="flex items-center gap-2 text-xs font-medium text-[#476355]">
             Tháng
-            <input type="month" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} className="rounded-lg border border-[var(--ld-outline-variant)]/30 bg-[var(--ld-surface-container-high)] px-3 py-2 text-[var(--ld-on-surface)]" />
+            <input
+              type="month"
+              value={targetMonth}
+              onChange={(event) => setTargetMonth(event.target.value)}
+              className="rounded-lg border border-[#e2e8e5] bg-[#f8faf9] px-2.5 py-1 text-xs text-[#191c1b] font-medium outline-none focus:border-[#006e51] focus:bg-white transition-all"
+            />
           </label>
         </div>
-        {targetError ? <div className="mx-5 mt-4 rounded-lg border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-200">{targetError}</div> : null}
+        {targetError && (
+          <div className="mx-5 mt-4 rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3 text-xs font-semibold text-[#e11d48]">
+            {targetError}
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] border-collapse text-left">
-            <thead className="bg-[var(--ld-surface-container-high)] text-sm font-bold text-[var(--ld-on-surface-variant)]">
-              <tr><th className="px-5 py-4">Tháng</th><th className="px-5 py-4">Nhân sự</th><th className="px-5 py-4 text-right">Doanh số mục tiêu (VNĐ)</th></tr>
+            <thead className="bg-[#f8faf9] text-xs font-bold uppercase tracking-wider text-[#476355] border-b border-[#e2e8e5]">
+              <tr>
+                <th className="px-5 py-3.5">Tháng</th>
+                <th className="px-5 py-3.5">Nhân sự</th>
+                <th className="px-5 py-3.5 text-right">Doanh số mục tiêu (VNĐ)</th>
+              </tr>
             </thead>
-            <tbody className="divide-y divide-[var(--ld-background)]/30 text-base font-semibold text-[var(--ld-on-surface)]">
+            <tbody className="divide-y divide-[#e2e8e5] text-sm text-[#191c1b]">
               {targetRows.length === 0 ? (
-                <tr><td colSpan={3} className="px-5 py-8 text-center text-[var(--ld-on-surface-variant)]">Chưa có mục tiêu KPI trong tháng này. Bấm “Thêm KPI” để tạo.</td></tr>
+                <tr>
+                  <td colSpan={3} className="px-5 py-12 text-center text-[#476355] text-xs font-medium">
+                    Chưa có mục tiêu KPI trong tháng này. Bấm “Thêm KPI” để tạo.
+                  </td>
+                </tr>
               ) : targetRows.map((row) => {
                 const employee = staff.find((person) => person.id === row.employee_id);
                 return (
-                  <tr key={row.employee_id} className="hover:bg-[var(--ld-surface-container-high)]/60">
-                    <td className="px-5 py-4">{row.nam_thang}</td>
-                    <td className="px-5 py-4">{employee?.name || 'Nhân sự không còn trong danh sách'}</td>
-                    <td className="px-5 py-4 text-right font-mono font-bold text-[var(--ld-primary)]">{formatVnd(Number(row.muc_tieu_vnd) || 0)}</td>
+                  <tr key={row.employee_id} className="hover:bg-[#f8faf9]/70 transition-colors">
+                    <td className="px-5 py-3.5 font-medium">{row.nam_thang}</td>
+                    <td className="px-5 py-3.5 font-semibold text-[#191c1b]">{employee?.name || 'Nhân sự không còn trong danh sách'}</td>
+                    <td className="px-5 py-3.5 text-right font-mono font-bold text-[#006e51]">{formatVnd(Number(row.muc_tieu_vnd) || 0)}</td>
                   </tr>
                 );
               })}
@@ -171,31 +194,35 @@ export const AdminKpisView: React.FC = () => {
       </section>
 
       {showAddModal ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4" role="presentation" onClick={() => !saving && setShowAddModal(false)}>
-          <form className="w-full max-w-lg space-y-4 rounded-2xl border border-[var(--ld-outline-variant)]/25 bg-[var(--ld-surface-container)] p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="add-kpi-title" onSubmit={saveTarget} onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between gap-3">
-              <h2 id="add-kpi-title" className="text-xl font-bold text-[var(--ld-on-surface)]">Thêm KPI doanh số</h2>
-              <button type="button" onClick={() => setShowAddModal(false)} disabled={saving} aria-label="Đóng" className="rounded-lg p-2 text-[var(--ld-on-surface-variant)] hover:bg-[var(--ld-surface-container-high)]"><X size={20} /></button>
+        <div className={`${STITCH_PORTAL_CLASS} fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-xs p-4`} role="presentation" onClick={() => !saving && setShowAddModal(false)}>
+          <form className="w-full max-w-lg space-y-4 rounded-2xl border border-[#e2e8e5] bg-white p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="add-kpi-title" onSubmit={saveTarget} onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#e2e8e5]">
+              <h2 id="add-kpi-title" className="text-lg font-bold text-[#191c1b]">Thêm KPI doanh số</h2>
+              <button type="button" onClick={() => setShowAddModal(false)} disabled={saving} aria-label="Đóng" className="rounded-lg p-1.5 text-[#476355] hover:bg-[#f0f4f1] transition-colors"><X size={18} /></button>
             </div>
-            <label className="block space-y-1 text-sm font-semibold text-[var(--ld-on-surface-variant)]">
+            <label className="block space-y-1.5 text-xs font-bold text-[#476355]">
               Tháng
-              <input required type="month" value={draftMonth} onChange={(event) => setDraftMonth(event.target.value)} className="w-full rounded-lg border border-[var(--ld-outline-variant)]/30 bg-[var(--ld-surface-container-high)] px-3 py-2 text-[var(--ld-on-surface)]" />
+              <input required type="month" value={draftMonth} onChange={(event) => setDraftMonth(event.target.value)} className="w-full rounded-xl border border-[#e2e8e5] bg-[#f8faf9] px-3.5 py-2.5 text-sm text-[#191c1b] focus:border-[#006e51] focus:bg-white outline-none transition-all" />
             </label>
-            <label className="block space-y-1 text-sm font-semibold text-[var(--ld-on-surface-variant)]">
+            <label className="block space-y-1.5 text-xs font-bold text-[#476355]">
               Nhân sự
-              <select required value={draftEmployee} onChange={(event) => setDraftEmployee(event.target.value)} className="w-full rounded-lg border border-[var(--ld-outline-variant)]/30 bg-[var(--ld-surface-container-high)] px-3 py-2 text-[var(--ld-on-surface)]">
+              <select required value={draftEmployee} onChange={(event) => setDraftEmployee(event.target.value)} className="w-full rounded-xl border border-[#e2e8e5] bg-[#f8faf9] px-3.5 py-2.5 text-sm text-[#191c1b] focus:border-[#006e51] focus:bg-white outline-none transition-all">
                 <option value="">Chọn nhân sự</option>
                 {staff.map((person) => <option key={person.id} value={person.id}>{person.name}{person.ma_ns ? ` · ${person.ma_ns}` : ''}</option>)}
               </select>
             </label>
-            <label className="block space-y-1 text-sm font-semibold text-[var(--ld-on-surface-variant)]">
+            <label className="block space-y-1.5 text-xs font-bold text-[#476355]">
               Doanh số mục tiêu (VNĐ)
-              <input required type="number" min="0" step="1000" value={draftTarget} onChange={(event) => setDraftTarget(event.target.value)} className="w-full rounded-lg border border-[var(--ld-outline-variant)]/30 bg-[var(--ld-surface-container-high)] px-3 py-2 text-[var(--ld-on-surface)]" placeholder="50000000" />
+              <input required type="number" min="0" step="1000" value={draftTarget} onChange={(event) => setDraftTarget(event.target.value)} className="w-full rounded-xl border border-[#e2e8e5] bg-[#f8faf9] px-3.5 py-2.5 text-sm text-[#191c1b] focus:border-[#006e51] focus:bg-white outline-none transition-all font-mono" placeholder="50000000" />
             </label>
-            {targetError ? <div className="rounded-lg border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-200">{targetError}</div> : null}
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowAddModal(false)} disabled={saving} className="rounded-lg border border-[var(--ld-outline-variant)]/30 px-4 py-2 text-sm font-semibold text-[var(--ld-on-surface)]">Hủy</button>
-              <button type="submit" disabled={saving || !staff.length} className="rounded-lg bg-[var(--ld-primary)] px-4 py-2 text-sm font-bold text-[var(--ld-on-primary)] disabled:opacity-50">{saving ? 'Đang lưu…' : 'Lưu KPI'}</button>
+            {targetError && (
+              <div className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3 text-xs font-semibold text-[#e11d48]">
+                {targetError}
+              </div>
+            )}
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-[#e2e8e5]">
+              <StitchButton type="button" variant="secondary" onClick={() => setShowAddModal(false)} disabled={saving}>Hủy</StitchButton>
+              <StitchButton type="submit" variant="primary" disabled={saving || !staff.length}>{saving ? 'Đang lưu…' : 'Lưu KPI'}</StitchButton>
             </div>
           </form>
         </div>
