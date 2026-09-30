@@ -47,6 +47,8 @@ export const ProjectQcExcelView: React.FC = () => {
   const [draftFrom, setDraftFrom] = useState(defaultFrom);
   const [draftTo, setDraftTo] = useState(defaultTo);
   const [applied, setApplied] = useState({ maNv: '', from: defaultFrom, to: defaultTo });
+  const loadVersion = useRef(0);
+  const dailyLoadVersion = useRef(0);
 
   const [rows, setRows] = useState<RowWithCode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,8 +69,10 @@ export const ProjectQcExcelView: React.FC = () => {
   const [dailyLoading, setDailyLoading] = useState(true);
   const [dailyError, setDailyError] = useState<string | null>(null);
   const loadDailyDetails = useCallback(async () => {
+    const version = ++dailyLoadVersion.current;
     setDailyLoading(true);
     setDailyError(null);
+    setDailyDetails([]);
     let q = supabase
       .from(MKT_DAILY_DETAILS_TABLE)
       .select('id, report_date, ma_nv, ten_chien_dich, ad_cost_vnd, message_conversations, source_file')
@@ -79,6 +83,7 @@ export const ProjectQcExcelView: React.FC = () => {
       .order('ten_chien_dich', { ascending: true });
     if (applied.maNv) q = q.eq('ma_nv', applied.maNv);
     const { data, error: qErr } = await fetchAllRows<typeof dailyDetails[number]>(q);
+    if (version !== dailyLoadVersion.current) return;
     if (qErr) {
       setDailyError(qErr.message);
       setDailyDetails([]);
@@ -91,8 +96,10 @@ export const ProjectQcExcelView: React.FC = () => {
   useEffect(() => { void loadDailyDetails(); }, [loadDailyDetails]);
 
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
     setLoading(true);
     setError(null);
+    setRows([]);
     let q = supabase
       .from(QC_EXCEL_TABLE)
       .select(
@@ -108,6 +115,7 @@ export const ProjectQcExcelView: React.FC = () => {
     if (applied.maNv) q = q.eq('ma_nv', applied.maNv);
 
     const { data, error: qErr } = await fetchAllRows<RowWithCode>(q);
+    if (version !== loadVersion.current) return;
     if (qErr) {
       console.error('project-qc-excel:', qErr);
       setError(
@@ -117,7 +125,12 @@ export const ProjectQcExcelView: React.FC = () => {
       );
       setRows([]);
     } else {
-      setRows((data || []) as RowWithCode[]);
+      const filtered = (data || []).filter((row) => {
+        const day = String(row.ngay || '').slice(0, 10);
+        if (!day || day < applied.from || day > applied.to) return false;
+        return !applied.maNv || normalizeEmployeeCode(row.ma_nv) === normalizeEmployeeCode(applied.maNv);
+      });
+      setRows(filtered as RowWithCode[]);
     }
     setLoading(false);
   }, [applied]);
@@ -127,6 +140,8 @@ export const ProjectQcExcelView: React.FC = () => {
   }, [load]);
 
   const applyFilters = () => {
+    setRows([]);
+    setDailyDetails([]);
     setApplied({
       maNv: draftMaNv.trim(),
       from: draftFrom,
@@ -175,24 +190,7 @@ export const ProjectQcExcelView: React.FC = () => {
         done += part.length;
       }
       setExcelMsg(`Đã nhập ${done} dòng từ «${file.name}».`);
-      // Hiển thị ngay các dòng vừa nhập, tránh bị lọc ngoài khoảng ngày
-      const { data: justInserted } = await fetchAllRows<RowWithCode>(supabase
-        .from(QC_EXCEL_TABLE)
-        .select(
-          `id, ma_nv, ngay, ten_chien_dich, so_tien_da_chi_tieu_vnd,
-         so_tro_chuyen_tin_nhan, source_file, created_at`
-        )
-        .eq('source_file', file.name.slice(0, 240))
-        .gte('ngay', applied.from)
-        .lte('ngay', applied.to)
-        .not('ten_chien_dich', 'ilike', 'all')
-        .order('ngay', { ascending: false, nullsFirst: true })
-        .order('created_at', { ascending: false }));
-      if (justInserted) {
-        setRows((justInserted || []) as RowWithCode[]);
-      } else {
-        await load();
-      }
+      await load();
     } finally {
       setExcelBusy(false);
       if (fileRef.current) fileRef.current.value = '';
