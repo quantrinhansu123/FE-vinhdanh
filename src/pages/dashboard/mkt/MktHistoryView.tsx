@@ -23,6 +23,32 @@ const PRODUCTS_TABLE = import.meta.env.VITE_SUPABASE_PRODUCTS_TABLE?.trim() || '
 const MARKETS_TABLE = import.meta.env.VITE_SUPABASE_MARKETS_TABLE?.trim() || 'crm_markets';
 const PAGE_SIZE = 10;
 
+function reportImportKey(row: {
+  report_date?: string | null;
+  product?: string | null;
+  market?: string | null;
+  page?: string | null;
+  ma_tkqc?: string | null;
+  ad_account?: string | null;
+  ad_cost?: number | null;
+  mess_comment_count?: number | null;
+  tong_data_nhan?: number | null;
+}): string {
+  const text = (value: string | null | undefined) => value?.trim().toLocaleLowerCase('vi') || '';
+  const number = (value: number | null | undefined) => Number(value) || 0;
+  return JSON.stringify([
+    row.report_date?.slice(0, 10) || '',
+    text(row.product),
+    text(row.market),
+    text(row.page),
+    text(row.ma_tkqc),
+    text(row.ad_account),
+    number(row.ad_cost),
+    number(row.mess_comment_count),
+    number(row.tong_data_nhan),
+  ]);
+}
+
 function addDays(d: Date, n: number): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   x.setDate(x.getDate() + n);
@@ -488,15 +514,53 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
         team,
       }));
 
+      const dateFrom = parsed.reduce((min, r) => (r.report_date < min ? r.report_date : min), parsed[0].report_date);
+      const dateTo = parsed.reduce((max, r) => (r.report_date > max ? r.report_date : max), parsed[0].report_date);
+      const { data: existingRows, error: existingErr } = await fetchAllRows<{
+        report_date: string;
+        product?: string | null;
+        market?: string | null;
+        page?: string | null;
+        ma_tkqc?: string | null;
+        ad_account?: string | null;
+        ad_cost?: number | null;
+        mess_comment_count?: number | null;
+        tong_data_nhan?: number | null;
+      }>(supabase
+        .from(REPORTS_TABLE)
+        .select('report_date, product, market, page, ma_tkqc, ad_account, ad_cost, mess_comment_count, tong_data_nhan')
+        .ilike('email', email)
+        .gte('report_date', dateFrom)
+        .lte('report_date', dateTo));
+      if (existingErr) {
+        console.error('mkt-history duplicate check:', existingErr);
+        window.alert(`Không kiểm tra được dữ liệu trùng: ${existingErr.message || 'Unknown'}. Chưa nhập file.`);
+        return;
+      }
+
+      const seen = new Set((existingRows || []).map(reportImportKey));
+      const uniquePayloads = payloads.filter((row) => {
+        const key = reportImportKey(row);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      const skippedDuplicates = payloads.length - uniquePayloads.length;
+      if (uniquePayloads.length === 0) {
+        setExcelMsg(`Không có dòng mới: đã bỏ qua ${skippedDuplicates} dòng trùng với dữ liệu đã có.`);
+        await load();
+        return;
+      }
+
       const chunk = 80;
       let inserted = 0;
-      for (let i = 0; i < payloads.length; i += chunk) {
-        const part = payloads.slice(i, i + chunk);
+      for (let i = 0; i < uniquePayloads.length; i += chunk) {
+        const part = uniquePayloads.slice(i, i + chunk);
         const { error: insErr } = await supabase.from(REPORTS_TABLE).insert(part);
         if (insErr) {
           console.error('mkt-history excel insert:', insErr);
           window.alert(
-            `Lỗi khi ghi DB (đã nhập ${inserted}/${parsed.length} dòng): ${insErr.message || 'Unknown'}`
+            `Lỗi khi ghi DB (đã nhập ${inserted}/${uniquePayloads.length} dòng): ${insErr.message || 'Unknown'}`
           );
           await load();
           return;
@@ -504,7 +568,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
         inserted += part.length;
       }
 
-      setExcelMsg(`Đã nhập ${inserted} dòng từ Excel.`);
+      setExcelMsg(`Đã nhập ${inserted} dòng từ Excel; bỏ qua ${skippedDuplicates} dòng trùng.`);
       await load();
     } finally {
       setExcelBusy(false);

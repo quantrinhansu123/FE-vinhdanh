@@ -214,13 +214,26 @@ export const ReportsRawView: React.FC = () => {
     if (!window.confirm(`Xóa ${ids.length} dòng khỏi ${REPORTS_TABLE}?`)) return;
     setDeleting(true);
     try {
-      const { error: delErr } = await supabase.from(REPORTS_TABLE).delete().in('id', ids);
+      const { data: deletedRows, error: delErr } = await supabase
+        .from(REPORTS_TABLE)
+        .delete()
+        .in('id', ids)
+        .select('id');
       if (delErr) {
         window.alert(`Lỗi xóa: ${delErr.message}`);
         return;
       }
-      setRows((prev) => prev.filter((r) => !r.id || !selectedIds.has(r.id)));
+      const deletedIds = new Set((deletedRows || []).map((r: { id: string }) => r.id));
+      if (deletedIds.size === 0) {
+        window.alert('Supabase không xóa dòng nào. Hãy kiểm tra quyền DELETE / RLS của bảng detail_reports.');
+        await load();
+        return;
+      }
+      if (deletedIds.size < ids.length) {
+        window.alert(`Chỉ xóa được ${deletedIds.size}/${ids.length} dòng. Các dòng còn lại có thể bị RLS chặn.`);
+      }
       setSelectedIds(new Set());
+      await load();
     } finally {
       setDeleting(false);
     }
@@ -253,14 +266,23 @@ export const ReportsRawView: React.FC = () => {
           ].join(',')
         );
       }
-      const { error: delErr } = await q;
+      const { data: deletedRows, error: delErr } = await q.select('id');
       if (delErr) {
         window.alert(`Lỗi xóa toàn bộ: ${delErr.message}`);
         return;
       }
-      setRows([]);
+      const deletedCount = deletedRows?.length || 0;
+      if (deletedCount === 0) {
+        window.alert('Supabase không xóa dòng nào. Hãy kiểm tra quyền DELETE / RLS của bảng detail_reports.');
+        await load();
+        return;
+      }
+      if (deletedCount < rows.length) {
+        window.alert(`Chỉ xóa được ${deletedCount}/${rows.length} dòng đang hiển thị. Các dòng còn lại có thể bị RLS chặn.`);
+      }
       setSelectedIds(new Set());
       setPage(1);
+      await load();
     } finally {
       setDeletingAll(false);
     }
