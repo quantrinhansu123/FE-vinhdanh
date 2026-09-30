@@ -57,6 +57,7 @@ export default defineConfig(({mode}) => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     optimizeDeps: {
       include: ['recharts'],
     },
