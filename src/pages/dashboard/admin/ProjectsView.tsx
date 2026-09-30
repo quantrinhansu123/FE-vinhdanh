@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
-import type { AuthUser, DuAnRow } from '../../../types';
+import { fetchAllRows } from '../../../api/fetchAllRows';
+import type { DuAnRow } from '../../../types';
 import { ProjectFormModal } from './ProjectFormModal';
-import { canEditProjects, canViewAllProjects, scopeBannerText } from '../../../utils/roleScope';
 
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
-const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
 const PAGE_SIZE = 10;
 
 const ROW_ICONS = ['package_2', 'rocket_launch', 'hub', 'energy_savings_leaf', 'token', 'assignment'] as const;
@@ -91,7 +90,7 @@ function statusUi(trangThai: string | undefined): {
   }
 }
 
-export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = null }) => {
+export const ProjectsView: React.FC = () => {
   const [rows, setRows] = useState<DuAnRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,22 +99,17 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'all' | 'dang_chay' | 'tam_dung'>('all');
   const [page, setPage] = useState(1);
-  /** Leader: giới hạn theo team phụ trách (crm_teams.leader == viewer.name → du_an_ids) */
-  const [scopedProjectIds, setScopedProjectIds] = useState<string[] | null>(null);
-
-  const canViewAll = canViewAllProjects(viewer);
-  const canEdit = canEditProjects(viewer);
-  const scopeBanner = scopeBannerText(viewer);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: qErr } = await supabase
+    const { data, error: qErr } = await fetchAllRows<DuAnRow>(supabase
       .from(DU_AN_TABLE)
       .select(
         'id, ma_du_an, ten_du_an, don_vi, mo_ta, thi_truong, leader, so_mkt, ngan_sach_ke_hoach, chi_phi_marketing_thuc_te, tong_doanh_so, doanh_thu_thang, ty_le_ads_doanh_so, ngay_bat_dau, ngay_ket_thuc, trang_thai, staff_ids'
       )
-      .order('ten_du_an', { ascending: true });
+      .order('ten_du_an', { ascending: true }));
 
     if (qErr) {
       console.error('Supabase du_an:', qErr);
@@ -124,68 +118,52 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
     } else {
       setRows((data || []) as DuAnRow[]);
     }
-
-    // Leader/NV: resolve dự án thuộc team mình để lọc (admin/GĐ/QLDA xem tất cả nên bỏ qua)
-    if (viewer && !canViewAllProjects(viewer)) {
-      try {
-        const vName = viewer.name?.trim() || '';
-        const vId = viewer.id || '';
-        const ids = new Set<string>();
-        if (vName) {
-          const tRes = await supabase.from(TEAMS_TABLE).select('du_an_ids').eq('leader', vName);
-          if (!tRes.error) {
-            for (const t of (tRes.data || []) as Array<{ du_an_ids?: unknown }>) {
-              const arr = Array.isArray(t.du_an_ids) ? t.du_an_ids : [];
-              for (const x of arr) if (typeof x === 'string') ids.add(x);
-            }
-          }
-        }
-        // Dự án gán trực tiếp: leader == tên mình hoặc staff_ids chứa mình
-        for (const p of ((data || []) as DuAnRow[])) {
-          if (vName && p.leader?.trim() === vName) ids.add(p.id);
-          const sids = Array.isArray(p.staff_ids) ? p.staff_ids : [];
-          if (vId && sids.map(String).includes(String(vId))) ids.add(p.id);
-        }
-        setScopedProjectIds([...ids]);
-      } catch {
-        setScopedProjectIds([]);
-      }
-    } else {
-      setScopedProjectIds(null);
-    }
     setLoading(false);
-  }, [viewer?.id, viewer?.name, viewer?.role, viewer?.vi_tri]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const scopeRows = useMemo(() => {
-    // Tổng quan scope (chưa gồm search/tab): Leader/NV chỉ tính dự án team mình
-    if (canViewAll || !scopedProjectIds) return rows;
-    return rows.filter((p) => scopedProjectIds.includes(p.id));
-  }, [rows, canViewAll, scopedProjectIds]);
+  const deleteProject = async (project: DuAnRow) => {
+    const label = project.ten_du_an?.trim() || tableMa(project);
+    if (!window.confirm(`Xóa dự án "${label}"? Các TKQC đang gắn với dự án có thể bị xóa theo quan hệ database. Thao tác này không thể hoàn tác.`)) return;
+
+    setDeletingId(project.id);
+    setError(null);
+    const { error: deleteError } = await supabase.from(DU_AN_TABLE).delete().eq('id', project.id);
+    setDeletingId(null);
+    if (deleteError) {
+      console.error('du_an delete:', deleteError);
+      setError(deleteError.code === '23503'
+        ? 'Không thể xóa dự án vì còn dữ liệu liên quan đang được giữ lại. Hãy gỡ liên kết dữ liệu đó rồi thử lại.'
+        : deleteError.message || 'Không xóa được dự án.');
+      return;
+    }
+
+    setRows((current) => current.filter((row) => row.id !== project.id));
+  };
 
   const marketsCount = useMemo(() => {
     const s = new Set<string>();
-    for (const p of scopeRows) {
+    for (const p of rows) {
       const t = p.thi_truong?.trim();
       if (t) s.add(t);
     }
     return s.size;
-  }, [scopeRows]);
+  }, [rows]);
 
-  const revenueSum = useMemo(() => scopeRows.reduce((a, p) => a + safeNum(p.doanh_thu_thang ?? p.tong_doanh_so), 0), [scopeRows]);
+  const revenueSum = useMemo(() => rows.reduce((a, p) => a + safeNum(p.doanh_thu_thang ?? p.tong_doanh_so), 0), [rows]);
 
-  const runningCount = useMemo(() => scopeRows.filter((p) => p.trang_thai === 'dang_chay').length, [scopeRows]);
+  const runningCount = useMemo(() => rows.filter((p) => p.trang_thai === 'dang_chay').length, [rows]);
   const runningPct = useMemo(
-    () => (scopeRows.length ? Math.round((runningCount / scopeRows.length) * 100) : 0),
-    [scopeRows.length, runningCount]
+    () => (rows.length ? Math.round((runningCount / rows.length) * 100) : 0),
+    [rows.length, runningCount]
   );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return scopeRows.filter((p) => {
+    return rows.filter((p) => {
       if (tab === 'dang_chay' && p.trang_thai !== 'dang_chay') return false;
       if (tab === 'tam_dung' && p.trang_thai !== 'tam_dung') return false;
       if (!q) return true;
@@ -196,7 +174,7 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
         (p.leader || '').toLowerCase().includes(q)
       );
     });
-  }, [scopeRows, search, tab, canViewAll, scopedProjectIds]);
+  }, [rows, search, tab]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -252,12 +230,6 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
             Dự án
           </h2>
           <p className="text-sm text-[var(--ld-on-surface-variant)] mt-1 leader-dash-label">Nguồn: {DU_AN_TABLE}</p>
-          {scopeBanner ? (
-            <p className="mt-2 inline-flex items-center gap-2 rounded-lg border border-[var(--ld-primary)]/25 bg-[color-mix(in_srgb,var(--ld-primary)_10%,transparent)] px-3 py-1.5 text-xs font-semibold text-[var(--ld-primary)]">
-              <span className="material-symbols-outlined text-sm">visibility</span>
-              {scopeBanner} · {scopeRows.length}/{rows.length} dự án
-            </p>
-          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -269,7 +241,6 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             Làm mới
           </button>
-          {canEdit ? (
           <button
             type="button"
             onClick={() => {
@@ -281,7 +252,6 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
             <span className="material-symbols-outlined">add_circle</span>
             Thêm dự án
           </button>
-          ) : null}
         </div>
       </div>
 
@@ -458,7 +428,6 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
                     {rows.length === 0 ? (
                       <div className="space-y-4">
                         <p>Chưa có dự án trong {DU_AN_TABLE}.</p>
-                        {canEdit ? (
                         <button
                           type="button"
                           onClick={() => {
@@ -470,7 +439,6 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
                           <span className="material-symbols-outlined text-lg">add</span>
                           Thêm dự án đầu tiên
                         </button>
-                        ) : null}
                       </div>
                     ) : (
                       'Không khớp tìm kiếm / bộ lọc.'
@@ -532,7 +500,6 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
                         </span>
                       </td>
                       <td className="px-6 py-5 text-right">
-                        {canEdit ? (
                         <button
                           type="button"
                           title="Sửa"
@@ -540,13 +507,20 @@ export const ProjectsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = 
                             setEditingProject(row);
                             setFormOpen(true);
                           }}
-                          className="text-[var(--ld-on-surface-variant)] hover:text-[var(--ld-primary)] transition-colors p-1"
+                          className="inline-flex items-center justify-center rounded-md p-2 text-[var(--ld-on-surface-variant)] hover:bg-[var(--ld-surface-container-highest)] hover:text-[var(--ld-primary)] transition-colors"
                         >
-                          <span className="material-symbols-outlined text-xl">edit_square</span>
+                          <Pencil size={16} />
                         </button>
-                        ) : (
-                          <span className="text-xs text-[var(--ld-on-surface-variant)]">Chỉ xem</span>
-                        )}
+                        <button
+                          type="button"
+                          title="Xóa"
+                          aria-label={`Xóa dự án ${row.ten_du_an}`}
+                          disabled={deletingId === row.id}
+                          onClick={() => void deleteProject(row)}
+                          className="inline-flex items-center justify-center rounded-md p-2 text-[var(--ld-on-surface-variant)] hover:bg-[color-mix(in_srgb,var(--ld-error)_12%,transparent)] hover:text-[var(--ld-error)] transition-colors disabled:opacity-50"
+                        >
+                          {deletingId === row.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        </button>
                       </td>
                     </tr>
                   );

@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { Employee, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { formatCompactVnd, formatReportDateVi } from '../mkt/mktDetailReportShared';
@@ -335,7 +336,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
     const [curFull, prevFull, empRes] = await Promise.all([
       fetchAllAdminDetailReports(rangeStart, rangeEnd),
       fetchAllAdminDetailReports(prevBounds.start, prevBounds.end),
-      supabase.from(EMPLOYEES_TABLE).select(STAFF_FOR_DASH_SELECT).limit(8000),
+      fetchAllRows<Employee>(supabase.from(EMPLOYEES_TABLE).select(STAFF_FOR_DASH_SELECT)),
     ]);
 
     let empList: Employee[] = [];
@@ -397,7 +398,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
       if (!codesAll) {
         q = q.gte('report_date', codesFrom).lte('report_date', codesTo);
       }
-      const { data, error } = await q.limit(50000);
+      const { data, error } = await fetchAllRows<{ code?: string | null; report_date?: string }>(q);
       if (error) {
         console.error('admin-dash codes:', error);
         setCodesList([]);

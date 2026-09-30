@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Flame, Loader2, RefreshCw, TrendingUp } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { Employee } from '../../../types';
 import { REPORTS_TABLE } from '../mkt/mktDetailReportShared';
 
@@ -65,12 +66,11 @@ export const AdminRankingView: React.FC = () => {
     const now = new Date();
     const dateFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
     const dateTo = `${dateFrom.slice(0, 7)}-${String(now.getDate()).padStart(2, '0')}`;
-    const { data: reportData, error: reportErr } = await supabase
+    const { data: reportData, error: reportErr } = await fetchAllRows<any>(supabase
       .from(REPORTS_TABLE)
       .select(REPORTS_FROM)
       .gte('report_date', dateFrom)
-      .lte('report_date', dateTo)
-      .limit(5000);
+      .lte('report_date', dateTo));
     if (reportErr) {
       console.error('admin-ranking detail_reports:', reportErr);
       setError(reportErr.message || 'KhÃ´ng táº£i Ä‘Æ°á»£c detail_reports.');
@@ -79,9 +79,9 @@ export const AdminRankingView: React.FC = () => {
       return;
     }
 
-    const { data, error: qErr } = await supabase
+    const { data, error: qErr } = await fetchAllRows<Employee>(supabase
       .from(EMPLOYEES_TABLE)
-      .select('id, name, team, avatar_url, du_an_ten, trang_thai, ma_ns, ngay_bat_dau');
+      .select('id, name, team, avatar_url, du_an_ten, trang_thai, ma_ns, ngay_bat_dau'));
 
     if (qErr) {
       console.error('admin-ranking employees:', qErr);

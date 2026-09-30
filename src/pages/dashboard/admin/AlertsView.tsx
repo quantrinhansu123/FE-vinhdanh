@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { DuAnRow, ReportRow } from '../../../types';
 import { formatCompactVnd } from '../mkt/mktDetailReportShared';
 import { ProjectFormModal } from './ProjectFormModal';
@@ -145,20 +146,19 @@ export const AlertsView: React.FC = () => {
     setLoading(true);
     setError(null);
     const [repRes, duRes] = await Promise.all([
-      supabase
+      fetchAllRows<ReportRow>(supabase
         .from(REPORTS_TABLE)
         .select(
           'report_date, name, email, team, ad_cost, revenue, mess_comment_count, tong_lead, order_count, tong_data_nhan'
         )
         .gte('report_date', monthStart)
-        .lte('report_date', monthEnd)
-        .limit(8000),
-      supabase
+        .lte('report_date', monthEnd)),
+      fetchAllRows<DuAnRow>(supabase
         .from(DU_AN_TABLE)
         .select(
           'id, ma_du_an, ten_du_an, don_vi, mo_ta, thi_truong, leader, so_mkt, ngan_sach_ke_hoach, chi_phi_marketing_thuc_te, tong_doanh_so, doanh_thu_thang, ty_le_ads_doanh_so, ngay_bat_dau, ngay_ket_thuc, trang_thai, staff_ids'
         )
-        .order('ten_du_an', { ascending: true }),
+        .order('ten_du_an', { ascending: true })),
     ]);
 
     if (repRes.error) {

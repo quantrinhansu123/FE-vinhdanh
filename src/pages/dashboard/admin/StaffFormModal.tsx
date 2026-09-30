@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { CrmTeamRow, Employee } from '../../../types';
 import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 
@@ -41,6 +42,31 @@ function toInputDate(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = iso.slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+}
+
+function getSaveErrorMessage(err: unknown): string {
+  const error = err && typeof err === 'object' ? err as {
+    code?: unknown;
+    message?: unknown;
+  } : null;
+  const code = typeof error?.code === 'string' ? error.code : '';
+  const message = typeof error?.message === 'string' ? error.message : '';
+
+  if (code === '42P01' || code === 'PGRST205' || /relation .* does not exist|table .* not found/i.test(message)) {
+    return 'Database chưa có bảng nhân sự. Chạy supabase/create_employees_table.sql trong Supabase SQL Editor rồi thử lại.';
+  }
+  if (code === '42703' || code === 'PGRST204' || /column .* does not exist|could not find the .* column/i.test(message)) {
+    return 'Database chưa có đủ cột nhân sự CRM. Chạy supabase/alter_employees_crm_staff_ui.sql trong Supabase SQL Editor rồi thử lại.';
+  }
+  if (code === '23505') {
+    return 'Mã nhân sự hoặc email đã được sử dụng. Hãy kiểm tra và nhập giá trị khác.';
+  }
+  if (code === '23514') {
+    return 'Một giá trị không hợp lệ (ví dụ trạng thái hoặc số fanpage). Hãy kiểm tra lại thông tin.';
+  }
+  if (message) return message;
+  if (typeof err === 'string' && err.trim()) return err;
+  return 'Lưu thất bại. Kiểm tra kết nối và cấu hình database rồi thử lại.';
 }
 
 type Props = {
@@ -112,10 +138,10 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
     let cancelled = false;
     const loadTeams = async () => {
       setTeamsLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await fetchAllRows<CrmTeamRow>(supabase
         .from(TEAMS_TABLE)
         .select('id, ma_team, ten_team')
-        .order('ten_team', { ascending: true });
+        .order('ten_team', { ascending: true }));
       if (!cancelled) {
         if (error) {
           console.error('crm_teams for staff form:', error);
@@ -232,8 +258,7 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
       onSaved();
       onClose();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Lưu thất bại.';
-      setFormError(msg);
+      setFormError(getSaveErrorMessage(err));
       console.error('employees save:', err);
     } finally {
       setSaving(false);

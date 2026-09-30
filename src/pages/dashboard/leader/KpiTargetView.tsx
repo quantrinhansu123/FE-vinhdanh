@@ -3,6 +3,7 @@ import '../../../styles/stitchSystem.css';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { AuthUser, Employee } from '../../../types';
 import { isPrivilegedViewer } from '../../../utils/roleScope';
 import { formatNumberDots, formatTypingGroupedInt } from '../mkt/mktDetailReportShared';
@@ -99,7 +100,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
   const loadStaffList = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const res = await supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true });
+    const res = await fetchAllRows<Employee>(supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true }));
     if (res.error) {
       console.error('kpi-target employees:', res.error);
       setError(res.error.message || 'Không tải được nhân sự.');
@@ -124,11 +125,11 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
         .eq('team_key', teamKey)
         .maybeSingle(),
       ids.length
-        ? supabase
+        ? fetchAllRows<{ employee_id: string; muc_tieu_vnd: number; muc_tieu_lead: number; muc_tieu_don_chot: number }>(supabase
             .from(KPI_STAFF_TABLE)
             .select('employee_id, muc_tieu_vnd, muc_tieu_lead, muc_tieu_don_chot')
             .eq('nam_thang', ym)
-            .in('employee_id', ids)
+            .in('employee_id', ids))
         : Promise.resolve({
             data: [] as { employee_id: string; muc_tieu_vnd: number; muc_tieu_lead: number; muc_tieu_don_chot: number }[],
             error: null,

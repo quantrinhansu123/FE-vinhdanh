@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calendar, Loader2, RefreshCw, TrendingUp, Zap } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import { REPORTS_TABLE, toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
 import '../../../styles/stitchSystem.css';
 
@@ -91,12 +92,11 @@ export const HeatmapView: React.FC = () => {
     setDayKeys(keys);
     const from = keys[0];
     const to = keys[keys.length - 1];
-    const { data, error: qErr } = await supabase
+    const { data, error: qErr } = await fetchAllRows<any>(supabase
       .from(REPORTS_TABLE)
       .select('email, name, report_date, ad_cost, revenue')
       .gte('report_date', from)
-      .lte('report_date', to)
-      .limit(8000);
+      .lte('report_date', to));
 
     if (qErr) {
       console.error('heatmap detail_reports:', qErr);
@@ -133,7 +133,7 @@ export const HeatmapView: React.FC = () => {
 
     let empMap = new Map<string, EmpMeta>();
     if (emailSet.size > 0) {
-      const empRes = await supabase.from(EMPLOYEES_TABLE).select('email, name, avatar_url, vi_tri').not('email', 'is', null).limit(600);
+      const empRes = await fetchAllRows<EmpMeta & { email: string }>(supabase.from(EMPLOYEES_TABLE).select('email, name, avatar_url, vi_tri').not('email', 'is', null));
       if (!empRes.error && empRes.data) {
         for (const row of empRes.data as { email?: string; name?: string; avatar_url?: string | null; vi_tri?: string | null }[]) {
           const em = String(row.email || '')

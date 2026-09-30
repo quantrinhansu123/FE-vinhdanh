@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { CrmTeamRow, DuAnRow, Employee } from '../../../types';
 import { formatNumberDots, formatTypingGroupedInt } from '../mkt/mktDetailReportShared';
 import { StitchButton, StitchInput, StitchModalFrame, StitchSelect, StitchState } from '../../../components/ui/StitchUI';
@@ -110,11 +111,11 @@ export const TeamFormModal: React.FC<Props> = ({ open, initial, onClose, onSaved
       setListsLoading(true);
       try {
         const [empRes, duRes] = await Promise.all([
-          supabase
+          fetchAllRows<Employee>(supabase
             .from(EMPLOYEES_TABLE)
             .select('id, name, team, email, vi_tri, ma_ns')
-            .order('name', { ascending: true }),
-          supabase.from(DU_AN_TABLE).select('id, ten_du_an, ma_du_an').order('ten_du_an', { ascending: true }),
+            .order('name', { ascending: true })),
+          fetchAllRows<DuAnRow>(supabase.from(DU_AN_TABLE).select('id, ten_du_an, ma_du_an').order('ten_du_an', { ascending: true })),
         ]);
         if (empRes.error) throw empRes.error;
         if (duRes.error) throw duRes.error;

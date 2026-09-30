@@ -4,7 +4,7 @@ import { Sidebar } from '../components/crm-dashboard/Sidebar';
 import { Topbar } from '../components/crm-dashboard/Topbar';
 import { NotificationPanel } from '../components/crm-dashboard/NotificationPanel';
 import { ViewId, UserInfo } from '../components/crm-dashboard/types';
-import { ADMIN_NAV, LEADER_NAV, MAP_NAV, MKT_NAV, VIEW_TITLES } from '../components/crm-dashboard/navData';
+import { ADMIN_NAV, LEADER_NAV, MKT_NAV, VIEW_TITLES } from '../components/crm-dashboard/navData';
 
 // Admin Views
 import { AdminDashboardView } from './dashboard/admin/AdminDashboardView';
@@ -60,6 +60,7 @@ const STITCH_DATA_VIEWS: ReadonlySet<ViewId> = new Set([
   'alerts',
   'projects',
   'project-qc-excel',
+  'teams',
   'reports-raw',
   'staff',
   'ad-accounts',
@@ -140,13 +141,15 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
 
   const availableNav = tier === 'admin'
     ? ADMIN_NAV
-    : [...MAP_NAV, ...(tier === 'leader' ? LEADER_NAV : []), ...MKT_NAV];
-  const seenViews = new Set<ViewId>();
+    : tier === 'leader'
+      ? [...LEADER_NAV, ...MKT_NAV]
+      : MKT_NAV;
+  const seenNavViews = new Set<string>();
   const navGroups = availableNav.map((group) => ({
         ...group,
         items: group.items.filter((item) => {
-          if (!tierAllowsView(tier, item.id) || seenViews.has(item.id)) return false;
-          seenViews.add(item.id);
+          if (!tierAllowsView(tier, item.id) || seenNavViews.has(item.id)) return false;
+          seenNavViews.add(item.id);
           return true;
         }),
       })).filter((group) => group.items.length > 0);
@@ -167,21 +170,21 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'admin-dash': return <AdminDashboardView viewer={reportUser ?? null} />;
       case 'burn-detect': return <BurnDetectionView />;
       case 'alerts': return <AlertsView />;
-      case 'projects': return <ProjectsView viewer={reportUser ?? null} />;
+      case 'projects': return <ProjectsView />;
       case 'project-qc-excel': return <ProjectQcExcelView />;
       case 'reports-raw': return <ReportsRawView />;
-      case 'teams': return <TeamsView viewer={reportUser ?? null} />;
+      case 'teams': return <TeamsView />;
       case 'staff':
         return <StaffView onEmployeesRefresh={onEmployeesRefresh} />;
-      case 'ad-accounts': return <AdAccountsView viewer={reportUser ?? null} />;
+      case 'ad-accounts': return <AdAccountsView />;
+      case 'kpis': return <AdminKpisView />;
       case 'agencies': return <AgenciesView />;
       case 'products': return <ProductsView />;
       case 'markets': return <MarketsView />;
-      case 'budget': return <BudgetView viewer={reportUser ?? null} />;
+      case 'budget': return <BudgetView />;
       case 'reconcile': return <ReconcileView />;
       case 'upcare-mkt': return <UpcareMktEmployeesView />;
       case 'admin-ranking': return <AdminRankingView />;
-      case 'kpis': return <AdminKpisView />;
       case 'compare': return <CompareView />;
 
       // Leader Views

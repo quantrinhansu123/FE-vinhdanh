@@ -119,7 +119,7 @@
   --P: #6d28d9;
   --Pd: #f5f3ff;
 }
-.stitch-data-page :is(.leader-dash-obsidian, .staff-hrm-flux, .staff-curator-crm, .acc-cc, .prod-mgmt-cc, .flux-market-cc),
+.stitch-data-page :is(.leader-dash-obsidian, .staff-hrm-flux, .staff-curator-crm, .acc-cc, .prod-mgmt-cc, .flux-market-cc, .teams-view),
 .stitch-system.stitch-legacy-modal {
   --ld-background: var(--stitch-canvas);
   --ld-surface-container-low: #fff;

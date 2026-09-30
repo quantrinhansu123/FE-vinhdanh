@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { ReportRow } from '../../../types';
-import { isMissingTienVietError } from '../../../utils/detailReportsVnd';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
@@ -140,7 +140,7 @@ export const BurnDetectionView: React.FC = () => {
   }, [fromDate, toDate, thisMonthStart, thisMonthEnd]);
 
   const loadRefs = useCallback(async () => {
-    const dRes = await supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true });
+    const dRes = await fetchAllRows<DuAnOpt>(supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true }));
     if (dRes.error) console.error('burn-detect du_an:', dRes.error);
     else setDuAnList((dRes.data || []) as DuAnOpt[]);
   }, []);
@@ -150,7 +150,7 @@ export const BurnDetectionView: React.FC = () => {
       setTkqcList([]);
       return;
     }
-    const q = await supabase.from(TKQC_TABLE).select('id, ma_tkqc').eq('id_du_an', projectId).order('ma_tkqc', { ascending: true });
+    const q = await fetchAllRows<TkqcOpt>(supabase.from(TKQC_TABLE).select('id, ma_tkqc').eq('id_du_an', projectId).order('ma_tkqc', { ascending: true }));
     if (q.error) {
       console.error('burn-detect tkqc:', q.error);
       setTkqcList([]);
@@ -162,32 +162,22 @@ export const BurnDetectionView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const baseSelect =
-      'name, email, code, team, ad_cost, revenue, tien_viet, mess_comment_count, tong_lead, order_count, tong_data_nhan, report_date, ma_tkqc';
-    const fallbackSelect =
-      'name, email, code, team, ad_cost, revenue, mess_comment_count, tong_lead, order_count, tong_data_nhan, report_date, ma_tkqc';
-    const runQuery = async (select: string) => {
-      let qq = supabase.from(REPORTS_TABLE).select(select).limit(120000);
-      if (!allDates) {
-        qq = qq.gte('report_date', bounds.start).lte('report_date', bounds.end);
-      }
-      return qq;
-    };
-    let { data, error: qErr } = await runQuery(baseSelect);
-
-    // DB chưa có cột tien_viet -> query lại không có cột này, logic fallback revenue*25k bên dưới vẫn đúng
-    if (qErr && isMissingTienVietError(qErr)) {
-      const retry = await runQuery(fallbackSelect);
-      data = retry.data;
-      qErr = retry.error;
+  let q = supabase
+      .from(REPORTS_TABLE)
+      .select(
+        'name, email, code, team, ad_cost, revenue, tien_viet, mess_comment_count, tong_lead, order_count, tong_data_nhan, report_date, ma_tkqc'
+      );
+    if (!allDates) {
+      q = q.gte('report_date', bounds.start).lte('report_date', bounds.end);
     }
+    const { data, error: qErr } = await fetchAllRows<ReportRow>(q);
 
     if (qErr) {
       console.error('burn-detect:', qErr);
       setError(qErr.message || 'Không tải được báo cáo.');
       setRows([]);
     } else {
-      setRows((data || []) as unknown as ReportRow[]);
+      setRows((data || []) as ReportRow[]);
     }
     setLoading(false);
   }, [bounds.start, bounds.end]);

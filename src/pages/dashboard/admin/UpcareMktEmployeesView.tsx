@@ -8,6 +8,7 @@ import {
   type UpcareMktEmployeeRow,
 } from '../../../api/upcareCrm';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import { isMissingTienVietError } from '../../../utils/detailReportsVnd';
 import { normalizeMaNsCode, REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboard/mkt/mktDetailReportShared';
 
@@ -139,11 +140,9 @@ export const UpcareMktEmployeesView: React.FC = () => {
       const mergedSameCodeOnPage = rowsWithCode.length - rowsAggregated.length;
 
       // Lấy các bản ghi đã có trong DB theo (report_date, code)
-      const { data: existing, error: selErr } = await supabase
-        .from(REPORTS_TABLE)
-        .select('id, report_date, code')
-        .in('report_date', dayKeys)
-        .limit(10000);
+      const { data: existing, error: selErr } = await fetchAllRows<{ id: string; report_date: string; code: string | null }>(
+        supabase.from(REPORTS_TABLE).select('id, report_date, code').in('report_date', dayKeys)
+      );
       if (selErr) throw selErr;
 
       const idByKey = new Map<string, string>();

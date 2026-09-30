@@ -1,36 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import {
-  Check,
-  CheckCircle2,
-  Circle,
-  Clock,
-  ExternalLink,
-  Eye,
-  FileSearch,
-  Info,
-  Loader2,
-  Megaphone,
-  PlusCircle,
-  RefreshCw,
-  Wallet,
-  X,
-  XCircle,
-} from 'lucide-react';
-import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { BudgetRequestFormModal } from '../../../components/crm-dashboard/BudgetRequestFormModal';
-import { MultiSelect } from '../../../components/common/MultiSelect';
 import { supabase } from '../../../api/supabase';
-import type { AuthUser, BudgetRequestRow, BudgetRequestStatus, ReportRow } from '../../../types';
+import { fetchAllRows } from '../../../api/fetchAllRows';
+import type { BudgetRequestRow, BudgetRequestStatus, ReportRow } from '../../../types';
 import { formatNumberDots } from '../mkt/mktDetailReportShared';
-import { isPrivilegedViewer, scopeBannerText } from '../../../utils/roleScope';
-import { isMissingBudgetApprovalColumn, stripBudgetApprovalColumns } from '../../../utils/budgetRequestsApproval';
 
 const BUDGET_TABLE = import.meta.env.VITE_SUPABASE_BUDGET_REQUESTS_TABLE?.trim() || 'budget_requests';
 const REPORTS_TABLE = 'detail_reports';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
 const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_TABLE?.trim() || 'tkqc';
-const AGENCIES_TABLE = import.meta.env.VITE_SUPABASE_AGENCIES_TABLE?.trim() || 'crm_agencies';
 const BUDGET_SELECT = `
   id,
   ngan_sach_xin,
@@ -43,17 +22,6 @@ const BUDGET_SELECT = `
   id_du_an,
   agency_id,
   updated_at,
-  giam_doc_da_duyet,
-  giam_doc_duyet_boi,
-  giam_doc_duyet_at,
-  ke_toan_da_duyet,
-  ke_toan_duyet_boi,
-  ke_toan_duyet_at,
-  da_giai_ngan,
-  giai_ngan_boi,
-  giai_ngan_at,
-  anh_giai_ngan_urls,
-  chung_tu_urls,
   tkqc_accounts ( id, don_vi, tkqc, page ),
   tkqc ( id, ma_tkqc, ten_pae, du_an ( ten_du_an, don_vi ) ),
   du_an ( id, ten_du_an, ma_du_an, don_vi ),
@@ -67,7 +35,6 @@ type TkqcOpt = {
   ten_pae: string | null;
   du_an?: { ten_du_an: string; ma_du_an: string | null } | null;
 };
-type AgencyOpt = { id: string; ten_agency: string | null; ma_agency?: string | null };
 
 function toLocalYyyyMmDd(d: Date): string {
   const y = d.getFullYear();
@@ -105,15 +72,6 @@ function formatReqDate(iso: string): string {
   return d.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function formatByAt(by?: string | null, at?: string | null): string {
-  const byText = by?.trim() || '';
-  const atText = at ? formatReqDate(at) : '';
-  if (byText && atText) return `${byText} · ${atText}`;
-  if (byText) return byText;
-  if (atText) return atText;
-  return '—';
-}
-
 function budgetAgencyLabel(r: BudgetRequestRow): string {
   const t = r.tkqc;
   if (t?.du_an?.don_vi?.trim()) return t.du_an.don_vi.trim();
@@ -127,45 +85,25 @@ function budgetAgencyLabel(r: BudgetRequestRow): string {
 function statusBadgeObsidian(trangThai: BudgetRequestStatus) {
   if (trangThai === 'cho_phe_duyet') {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-tertiary)_12%,transparent)] text-[var(--ld-tertiary)] border border-[var(--ld-tertiary)]/25 shrink-0">
-        <Clock className="w-3 h-3" />
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-tertiary)_12%,transparent)] text-[var(--ld-tertiary)] border border-[var(--ld-tertiary)]/25">
+        <span className="material-symbols-outlined text-[12px]">schedule</span>
         Chờ duyệt
       </span>
     );
   }
   if (trangThai === 'dong_y') {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-secondary)_12%,transparent)] text-[var(--ld-secondary)] border border-[var(--ld-secondary)]/25 shrink-0">
-        <CheckCircle2 className="w-3 h-3" />
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-secondary)_12%,transparent)] text-[var(--ld-secondary)] border border-[var(--ld-secondary)]/25">
+        <span className="material-symbols-outlined text-[12px]">check_circle</span>
         Đã duyệt
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-error)_12%,transparent)] text-[var(--ld-error)] border border-[var(--ld-error)]/25 shrink-0">
-      <XCircle className="w-3 h-3" />
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[color-mix(in_srgb,var(--ld-error)_12%,transparent)] text-[var(--ld-error)] border border-[var(--ld-error)]/25">
+      <span className="material-symbols-outlined text-[12px]">cancel</span>
       Từ chối
     </span>
-  );
-}
-
-function ApprovalStepBadge({ label, done, by, at }: { label: string; done: boolean; by?: string | null; at?: string | null }) {
-  const tooltip = done && (by || at) ? `${label}: ${by || ''} ${at ? '(' + formatReqDate(at) + ')' : ''}` : label;
-  return (
-    <div className="flex flex-col items-center gap-0.5 group/step relative" title={tooltip}>
-      <div
-        className={`w-5 h-5 rounded-full flex items-center justify-center border transition-colors ${
-          done
-            ? 'bg-[var(--ld-secondary)] border-[var(--ld-secondary)] text-[var(--ld-on-secondary)]'
-            : 'bg-transparent border-[var(--ld-outline-variant)] text-[var(--ld-on-surface-variant)] opacity-40'
-        }`}
-      >
-        {done ? <Check className="w-3 h-3" /> : <Circle className="w-2.5 h-2.5 opacity-60" />}
-      </div>
-      <span className={`text-[9px] font-bold uppercase tracking-tighter ${done ? 'text-[var(--ld-secondary)]' : 'text-[var(--ld-on-surface-variant)] opacity-40'}`}>
-        {label === 'Giám đốc' ? 'GĐ' : label === 'Kế toán' ? 'KT' : 'GN'}
-      </span>
-    </div>
   );
 }
 
@@ -196,21 +134,17 @@ const SummaryCard: React.FC<{
   </div>
 );
 
-export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = null }) => {
+export const LeaderBudgetView: React.FC = () => {
   const [duAnList, setDuAnList] = useState<DuAnOpt[]>([]);
   const [tkqcList, setTkqcList] = useState<TkqcOpt[]>([]);
-  const [agencyList, setAgencyList] = useState<AgencyOpt[]>([]);
   const [requests, setRequests] = useState<BudgetRequestRow[]>([]);
   const [reportRows, setReportRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [viewRequest, setViewRequest] = useState<BudgetRequestRow | null>(null);
   const [clockTick, setClockTick] = useState(0);
 
-  /* Filter: multi-select dự án và agency */
-  const [selectedDuAnIds, setSelectedDuAnIds] = useState<string[]>([]);
-  const [selectedAgencyIds, setSelectedAgencyIds] = useState<string[]>([]);
+  const [idDuAn, setIdDuAn] = useState('');
 
   const monthBounds = useMemo(() => {
     const t = new Date();
@@ -236,54 +170,21 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
   );
 
   const loadRefs = useCallback(async () => {
-    const [dRes, aRes] = await Promise.all([
-      supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an, leader, staff_ids').order('ten_du_an', { ascending: true }),
-      supabase.from(AGENCIES_TABLE).select('id, ma_agency, ten_agency').order('ten_agency', { ascending: true }),
-    ]);
+    const dRes = await fetchAllRows<DuAnOpt>(supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true }));
     if (dRes.error) console.error('du_an (leader budget):', dRes.error);
-    else {
-      const all = (dRes.data || []) as Array<DuAnOpt & { leader?: string | null; staff_ids?: unknown }>;
-      // Phân cấp: GĐ/QLDA/admin xem tất cả; Leader/NV mặc định lọc dự án thuộc team mình
-      if (viewer && !isPrivilegedViewer(viewer)) {
-        const vName = viewer.name?.trim() || '';
-        const vId = viewer.id || '';
-        let teamProjectIds = new Set<string>();
-        if (vName) {
-          const tRes = await supabase.from('crm_teams').select('du_an_ids').eq('leader', vName);
-          if (!tRes.error) {
-            for (const t of (tRes.data || []) as Array<{ du_an_ids?: unknown }>) {
-              const arr = Array.isArray(t.du_an_ids) ? t.du_an_ids : [];
-              for (const x of arr) if (typeof x === 'string') teamProjectIds.add(x);
-            }
-          }
-        }
-        const scoped = all.filter((d) => {
-          if (teamProjectIds.has(d.id)) return true;
-          if (vName && (d.leader || '').trim() === vName) return true;
-          const sids = Array.isArray(d.staff_ids) ? d.staff_ids.map(String) : [];
-          if (vId && sids.includes(String(vId))) return true;
-          return false;
-        });
-        setDuAnList(scoped);
-        setSelectedDuAnIds((prev) => (prev.length === 0 ? scoped.map((d) => d.id) : prev));
-      } else {
-        setDuAnList(all);
-      }
-    }
-    if (aRes.error) console.error('crm_agencies (leader budget):', aRes.error);
-    else setAgencyList((aRes.data || []) as AgencyOpt[]);
-  }, [viewer?.id, viewer?.name, viewer?.role, viewer?.vi_tri]);
+    else setDuAnList((dRes.data || []) as DuAnOpt[]);
+  }, []);
 
-  const loadTkqc = useCallback(async (projectIds: string[]) => {
-    if (projectIds.length === 0) {
+  const loadTkqc = useCallback(async (projectId: string) => {
+    if (!projectId) {
       setTkqcList([]);
       return;
     }
-    const q = await supabase
+    const q = await fetchAllRows<TkqcOpt>(supabase
       .from(TKQC_TABLE)
       .select('id, ma_tkqc, ten_pae, du_an ( ten_du_an, ma_du_an )')
-      .in('id_du_an', projectIds)
-      .order('ma_tkqc', { ascending: true });
+      .eq('id_du_an', projectId)
+      .order('ma_tkqc', { ascending: true }));
     if (q.error) {
       console.error('tkqc (leader budget):', q.error);
       setTkqcList([]);
@@ -295,44 +196,26 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const runBudgetQuery = (select: string) =>
-      supabase.from(BUDGET_TABLE).select(select).order('ngay_gio_xin', { ascending: false }).limit(200);
-    const [firstBudget, repRes] = await Promise.all([
-      runBudgetQuery(BUDGET_SELECT),
-      supabase
+    const [q, repRes] = await Promise.all([
+      fetchAllRows<BudgetRequestRow>(supabase.from(BUDGET_TABLE).select(BUDGET_SELECT).order('ngay_gio_xin', { ascending: false })),
+      fetchAllRows<ReportRow>(supabase
         .from(REPORTS_TABLE)
         .select('report_date, ad_cost, ma_tkqc')
         .gte('report_date', monthBounds.start)
-        .lte('report_date', monthBounds.end)
-        .limit(8000),
+        .lte('report_date', monthBounds.end)),
     ]);
-
-    let q = firstBudget;
-    let budgetWarn: string | null = null;
-    // DB chưa chạy migration alter_budget_requests_approval_flow.sql -> query lại không có các cột duyệt
-    if (q.error && isMissingBudgetApprovalColumn(q.error)) {
-      const retry = await runBudgetQuery(stripBudgetApprovalColumns(BUDGET_SELECT));
-      if (!retry.error) {
-        budgetWarn =
-          'Thiếu cột duyệt nhiều bước — đang hiển thị tạm (ẩn trạng thái Giám đốc/Kế toán/Giải ngân). Hãy chạy supabase/alter_budget_requests_approval_flow.sql.';
-      }
-      q = retry as typeof q;
-    }
 
     if (q.error) {
       console.error('budget_requests (leader):', q.error);
       const em = q.error.message || '';
       setError(
-        isMissingBudgetApprovalColumn(q.error)
-          ? `${em} — Hãy chạy supabase/alter_budget_requests_approval_flow.sql trong Supabase SQL Editor để tạo cột.`
-          : em.includes('tkqc_id') || em.includes('tkqc')
-            ? 'Thiếu cột hoặc quan hệ tkqc trên budget_requests — chạy supabase/alter_budget_requests_tkqc_id.sql trên Supabase.'
-            : em || 'Không tải được lịch sử yêu cầu.'
+        em.includes('tkqc_id') || em.includes('tkqc')
+          ? 'Thiếu cột hoặc quan hệ tkqc trên budget_requests — chạy supabase/alter_budget_requests_tkqc_id.sql trên Supabase.'
+          : em || 'Không tải được lịch sử yêu cầu.'
       );
       setRequests([]);
     } else {
-      setRequests((q.data || []) as unknown as BudgetRequestRow[]);
-      if (budgetWarn) setError(budgetWarn);
+      setRequests((q.data || []) as BudgetRequestRow[]);
     }
 
     if (repRes.error) {
@@ -354,28 +237,17 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
   }, [loadData]);
 
   useEffect(() => {
-    void loadTkqc(selectedDuAnIds);
-  }, [selectedDuAnIds, loadTkqc]);
+    void loadTkqc(idDuAn);
+  }, [idDuAn, loadTkqc]);
 
   const filteredHistory = useMemo(() => {
-    let list = requests;
-
-    /* Lọc theo agency */
-    if (selectedAgencyIds.length > 0) {
-      list = list.filter((r) => r.agency_id && selectedAgencyIds.includes(r.agency_id));
-    }
-
-    /* Lọc theo dự án */
-    if (selectedDuAnIds.length > 0) {
-      const allowed = new Set(tkqcList.map((t) => t.id));
-      list = list.filter((r) => {
-        if (r.id_du_an && selectedDuAnIds.includes(r.id_du_an)) return true;
-        return Boolean(r.tkqc_id && allowed.has(r.tkqc_id));
-      });
-    }
-
-    return list;
-  }, [requests, selectedDuAnIds, selectedAgencyIds, tkqcList]);
+    if (!idDuAn) return requests;
+    const allowed = new Set(tkqcList.map((t) => t.id));
+    return requests.filter((r) => {
+      if (r.id_du_an === idDuAn) return true;
+      return Boolean(r.tkqc_id && allowed.has(r.tkqc_id));
+    });
+  }, [requests, idDuAn, tkqcList]);
 
   const maTkqcSet = useMemo(
     () => new Set(tkqcList.map((t) => t.ma_tkqc?.trim()).filter(Boolean) as string[]),
@@ -383,7 +255,7 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
   );
 
   const adCostMonthScoped = useMemo(() => {
-    if (selectedDuAnIds.length > 0 && maTkqcSet.size > 0) {
+    if (idDuAn && maTkqcSet.size > 0) {
       return reportRows.reduce((acc, r) => {
         const ma = r.ma_tkqc?.trim();
         if (!ma || !maTkqcSet.has(ma)) return acc;
@@ -391,7 +263,7 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
       }, 0);
     }
     return reportRows.reduce((acc, r) => acc + safeNum(r.ad_cost), 0);
-  }, [reportRows, selectedDuAnIds, maTkqcSet]);
+  }, [reportRows, idDuAn, maTkqcSet]);
 
   const kpi = useMemo(() => {
     const list = filteredHistory;
@@ -414,32 +286,10 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
     };
   }, [filteredHistory, monthBounds, adCostMonthScoped]);
 
-  const hasFilter = selectedDuAnIds.length > 0 || selectedAgencyIds.length > 0;
-  const scopeBadgeText = hasFilter ? 'Theo bộ lọc đã chọn' : '200 yêu cầu mới nhất';
-
-  /* Chuyển list sang options cho MultiSelect */
-  const duAnOptions = useMemo(
-    () =>
-      duAnList.map((d) => ({
-        value: d.id,
-        label: d.ten_du_an,
-        sublabel: d.ma_du_an ?? undefined,
-      })),
-    [duAnList]
-  );
-
-  const agencyOptions = useMemo(
-    () =>
-      agencyList.map((a) => ({
-        value: a.id,
-        label: a.ten_agency || a.id,
-        sublabel: a.ma_agency ?? undefined,
-      })),
-    [agencyList]
-  );
+  const scopeBadgeText = idDuAn ? 'Theo dự án đã chọn' : '200 yêu cầu mới nhất';
 
   return (
-    <div className="leader-dash-obsidian dash-fade-up text-[var(--ld-on-surface)] p-6 sm:p-8 min-h-[min(100%,calc(100vh-8rem))] leader-obsidian-scrollbar overflow-y-auto overflow-x-hidden">
+    <div className="leader-dash-obsidian dash-fade-up text-[var(--ld-on-surface)] -m-[12px] p-6 sm:p-8 min-h-[min(100%,calc(100vh-8rem))] leader-obsidian-scrollbar overflow-y-auto">
       <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end gap-6 mb-10">
         <div>
           <h1 className="text-3xl font-extrabold text-[var(--ld-on-surface)] tracking-tight" style={{ fontFamily: '"Inter", sans-serif' }}>
@@ -453,34 +303,34 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
             </div>
           </div>
         </div>
-        <div className="flex flex-row flex-wrap lg:flex-nowrap gap-6 items-center w-full lg:w-auto">
-          <MultiSelect
-            options={agencyOptions}
-            value={selectedAgencyIds}
-            onChange={setSelectedAgencyIds}
-            placeholder="Tất cả agency"
-            label="Agency"
-            icon="business"
-            className="flex-1 lg:flex-none lg:min-w-[240px]"
-          />
-          <MultiSelect
-            options={duAnOptions}
-            value={selectedDuAnIds}
-            onChange={setSelectedDuAnIds}
-            placeholder="Tất cả dự án"
-            label="Dự án"
-            icon="folder_open"
-            className="flex-1 lg:flex-none lg:min-w-[240px]"
-          />
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="ld-glass-chip ld-ghost-border rounded-lg px-4 py-2 flex items-center gap-3 min-w-[min(100%,280px)]">
+            <span className="material-symbols-outlined text-[var(--ld-primary)] text-sm shrink-0">filter_alt</span>
+            <select
+              value={idDuAn}
+              onChange={(e) => setIdDuAn(e.target.value)}
+              className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 text-sm leader-dash-label text-[var(--ld-on-surface)] cursor-pointer outline-none"
+              aria-label="Phạm vi dự án"
+            >
+              <option value="" className="bg-[var(--ld-surface-container)] text-[var(--ld-on-surface)]">
+                — Tất cả dự án —
+              </option>
+              {duAnList.map((d) => (
+                <option key={d.id} value={d.id} className="bg-[var(--ld-surface-container)] text-[var(--ld-on-surface)]">
+                  {[d.ma_du_an, d.ten_du_an].filter(Boolean).join(' · ') || d.ten_du_an}
+                </option>
+              ))}
+            </select>
+            <span className="material-symbols-outlined text-[var(--ld-on-surface-variant)] text-xs shrink-0">expand_more</span>
+          </div>
         </div>
       </div>
 
       <p className="text-[10px] text-[var(--ld-on-surface-variant)] leading-relaxed mb-8 max-w-4xl">
         <strong className="text-[var(--ld-on-surface)]">Nguồn:</strong>{' '}
         <code className="text-[var(--ld-primary)]/90">{BUDGET_TABLE}</code> ·{' '}
-        <code className="text-[var(--ld-primary)]/90">{REPORTS_TABLE}</code> (ad_cost){selectedDuAnIds.length > 0 ? ', lọc ma_tkqc theo dự án' : ''} ·{' '}
+        <code className="text-[var(--ld-primary)]/90">{REPORTS_TABLE}</code> (ad_cost){idDuAn ? ', lọc ma_tkqc theo dự án' : ''} ·{' '}
         <code className="text-[var(--ld-primary)]/90">{TKQC_TABLE}</code>
-        {scopeBannerText(viewer) ? ` · ${scopeBannerText(viewer)}` : ''}
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
@@ -495,21 +345,21 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
           valueSub={<span className="text-[var(--ld-primary)]">VND {formatVndDots(kpi.pendingSum)}</span>}
           footnote="Trong phạm vi bảng"
           footnoteItalic
-          icon={<Clock className="w-20 h-20" />}
+          icon="pending_actions"
         />
         <SummaryCard
           label="Đã duyệt tháng này"
           valueMain={String(kpi.approvedCount)}
           valueSub={<span className="text-[var(--ld-secondary)]">VND {formatVndDots(kpi.approvedSum)}</span>}
           footnote={`Tháng ${monthBounds.label}`}
-          icon={<CheckCircle2 className="w-20 h-20" />}
+          icon="check_circle"
         />
         <SummaryCard
           label="Chi ads khai báo (tháng)"
           valueMain={formatVndDots(adCostMonthScoped)}
           valueSub={<span className="text-[var(--ld-tertiary)]">VNĐ</span>}
-          footnote={selectedDuAnIds.length > 0 ? 'Theo ma_tkqc TKQC dự án' : 'Mọi dòng trong tháng'}
-          icon={<Megaphone className="w-20 h-20" />}
+          footnote={idDuAn ? 'Theo ma_tkqc TKQC dự án' : 'Mọi dòng trong tháng'}
+          icon="campaign"
         />
         <SummaryCard
           label="Đã duyệt − chi khai báo"
@@ -554,16 +404,14 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
               </div>
             </div>
 
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.5fr)] gap-2 px-4 sm:px-6 py-4 bg-[color-mix(in_srgb,var(--ld-surface-container-highest)_30%,transparent)] rounded-t-lg mb-2 text-left max-sm:hidden">
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 px-4 sm:px-6 py-4 bg-[color-mix(in_srgb,var(--ld-surface-container-highest)_30%,transparent)] rounded-t-lg mb-2 text-left max-sm:hidden">
               <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest">Mã YC</span>
               <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest">Agency / đơn vị</span>
               <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest text-right">
                 Số tiền
               </span>
               <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest">Ngày gửi</span>
-              <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest text-center">Tiến độ duyệt</span>
               <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest">Trạng thái</span>
-              <span className="text-xs leader-dash-label font-bold text-[var(--ld-on-surface-variant)] uppercase tracking-widest">Chi tiết duyệt / giải ngân</span>
             </div>
 
             {loading && !filteredHistory.length ? (
@@ -580,51 +428,30 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
                   Chưa có yêu cầu
                 </h3>
                 <p className="text-[var(--ld-on-surface-variant)] text-sm text-center max-w-sm px-4">
-                  {hasFilter
-                    ? 'Không có yêu cầu khớp với bộ lọc đã chọn.'
+                  {idDuAn
+                    ? 'Không có yêu cầu cho dự án đã chọn (theo id_du_an hoặc TKQC thuộc dự án).'
                     : 'Bắt đầu bằng việc tạo yêu cầu ngân sách mới.'}
                 </p>
               </div>
             ) : (
               <div className="flex-1 overflow-x-auto leader-dash-no-scrollbar -mx-2">
-                <div className="min-w-[980px] space-y-2 px-2">
-                  {filteredHistory.map((r) => {
-                    const disbursementUrls = (r.anh_giai_ngan_urls || []).filter((u) => typeof u === 'string' && u.trim().length > 0);
-                    return (
-                      <div
-                        key={r.id}
-                        className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.5fr)] gap-2 items-center px-4 sm:px-6 py-3.5 rounded-xl bg-[color-mix(in_srgb,var(--ld-surface-container-highest)_25%,transparent)] border border-[var(--ld-outline-variant)]/10 hover:border-[var(--ld-primary)]/15 transition-colors"
-                      >
-                        <span className="font-bold text-[var(--ld-primary)] text-sm">{displayMa(r.id)}</span>
-                        <span className="text-sm text-[var(--ld-on-surface)] truncate" title={budgetAgencyLabel(r)}>
-                          {budgetAgencyLabel(r)}
-                        </span>
-                        <span className="text-sm font-mono font-bold text-[var(--ld-on-surface)] text-right tabular-nums">
-                          {formatVndDots(Number(r.ngan_sach_xin))}
-                        </span>
-                        <span className="text-xs text-[var(--ld-on-surface-variant)]">{formatReqDate(r.ngay_gio_xin)}</span>
-
-                        <div className="flex items-center justify-center gap-4 border-x border-[var(--ld-outline-variant)]/10 px-2">
-                          <ApprovalStepBadge label="Giám đốc" done={!!r.giam_doc_da_duyet} by={r.giam_doc_duyet_boi} at={r.giam_doc_duyet_at} />
-                          <ApprovalStepBadge label="Kế toán" done={!!r.ke_toan_da_duyet} by={r.ke_toan_duyet_boi} at={r.ke_toan_duyet_at} />
-                          <ApprovalStepBadge label="Giải ngân" done={!!r.da_giai_ngan} by={r.giai_ngan_boi} at={r.giai_ngan_at} />
-                        </div>
-
-                        <div className="flex justify-start">{statusBadgeObsidian(r.trang_thai)}</div>
-
-                        <div className="flex justify-start">
-                          <button
-                            type="button"
-                            onClick={() => setViewRequest(r)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--ld-surface-container-highest)] text-[var(--ld-primary)] text-[10px] font-bold leader-dash-label border border-[var(--ld-outline-variant)]/20 hover:brightness-110 transition-all"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            Xem chi tiết
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="min-w-[640px] space-y-2 px-2">
+                  {filteredHistory.map((r) => (
+                    <div
+                      key={r.id}
+                      className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center px-4 sm:px-6 py-3.5 rounded-xl bg-[color-mix(in_srgb,var(--ld-surface-container-highest)_25%,transparent)] border border-[var(--ld-outline-variant)]/10 hover:border-[var(--ld-primary)]/15 transition-colors"
+                    >
+                      <span className="font-bold text-[var(--ld-primary)] text-sm">{displayMa(r.id)}</span>
+                      <span className="text-sm text-[var(--ld-on-surface)] truncate" title={budgetAgencyLabel(r)}>
+                        {budgetAgencyLabel(r)}
+                      </span>
+                      <span className="text-sm font-mono font-bold text-[var(--ld-on-surface)] text-right tabular-nums">
+                        {formatVndDots(Number(r.ngan_sach_xin))}
+                      </span>
+                      <span className="text-xs text-[var(--ld-on-surface-variant)]">{formatReqDate(r.ngay_gio_xin)}</span>
+                      <div className="flex justify-start">{statusBadgeObsidian(r.trang_thai)}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -671,106 +498,6 @@ export const LeaderBudgetView: React.FC<{ viewer?: AuthUser | null }> = ({ viewe
           </div>
         </div>
       </div>
-
-      {viewRequest && createPortal(
-        <div className={`${STITCH_PORTAL_CLASS} fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md leader-dash-obsidian`}>
-          <div className="bg-[var(--ld-surface-container-high)] w-full max-w-lg rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-[var(--ld-outline-variant)]/20 overflow-hidden">
-            <div className="px-6 py-4 border-b border-[var(--ld-outline-variant)]/10 flex justify-between items-center">
-              <h3 className="font-bold text-[var(--ld-on-surface)]">Thông tin chi tiết</h3>
-              <button type="button" onClick={() => setViewRequest(null)} className="text-[var(--ld-on-surface-variant)] hover:text-[var(--ld-on-surface)]">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto leader-obsidian-scrollbar">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <p className="text-[10px] uppercase font-bold text-[var(--ld-on-surface-variant)] tracking-wider">Mã yêu cầu</p>
-                  <p className="font-mono text-[var(--ld-primary)] font-bold">#{displayMa(viewRequest.id)}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] uppercase font-bold text-[var(--ld-on-surface-variant)] tracking-wider">Trạng thái</p>
-                  <div>{statusBadgeObsidian(viewRequest.trang_thai)}</div>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] uppercase font-bold text-[var(--ld-on-surface-variant)] tracking-wider">Số tiền</p>
-                  <p className="font-bold text-[var(--ld-on-surface)]">{formatVndDots(Number(viewRequest.ngan_sach_xin))} VNĐ</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] uppercase font-bold text-[var(--ld-on-surface-variant)] tracking-wider">Ngày gửi</p>
-                  <p className="text-sm text-[var(--ld-on-surface)]">{formatReqDate(viewRequest.ngay_gio_xin)}</p>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-[var(--ld-surface-container)] border border-[var(--ld-outline-variant)]/10 space-y-3">
-                <p className="text-[10px] uppercase font-bold text-[var(--ld-on-surface-variant)] tracking-widest border-b border-[var(--ld-outline-variant)]/10 pb-2">Tiến trình phê duyệt</p>
-                <div className="space-y-2.5">
-                  {[
-                    { label: 'Giám đốc', done: viewRequest.giam_doc_da_duyet, by: viewRequest.giam_doc_duyet_boi, at: viewRequest.giam_doc_duyet_at },
-                    { label: 'Kế toán', done: viewRequest.ke_toan_da_duyet, by: viewRequest.ke_toan_duyet_boi, at: viewRequest.ke_toan_duyet_at },
-                    { label: 'Giải ngân', done: viewRequest.da_giai_ngan, by: viewRequest.giai_ngan_boi, at: viewRequest.giai_ngan_at },
-                  ].map(({ label, done, by, at }) => (
-                    <div key={label} className="flex justify-between items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${done ? 'bg-[var(--ld-secondary)] shadow-[0_0_6px_var(--ld-secondary)]' : 'bg-[var(--ld-on-surface-variant)]/30'}`} />
-                        <span className="text-xs font-bold text-[var(--ld-on-surface)]">{label}:</span>
-                      </div>
-                      <span className="text-[11px] text-[var(--ld-on-surface-variant)] text-right">{formatByAt(by, at)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {viewRequest.ly_do_tu_choi && (
-                <div className="p-4 rounded-xl bg-[color-mix(in_srgb,var(--ld-error)_8%,transparent)] border border-[var(--ld-error)]/20">
-                  <p className="text-[10px] uppercase font-bold text-[var(--ld-error)] tracking-widest mb-1">Lý do từ chối</p>
-                  <p className="text-xs text-[var(--ld-on-surface)] leading-relaxed">{viewRequest.ly_do_tu_choi}</p>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <p className="text-[10px] uppercase font-bold text-[var(--ld-on-surface-variant)] tracking-widest">Ảnh minh chứng / Giải ngân</p>
-                {(() => {
-                  const images = [...(viewRequest.chung_tu_urls || []), ...(viewRequest.anh_giai_ngan_urls || [])].filter(Boolean);
-                  if (images.length === 0) return (
-                    <div className="py-8 text-center border-2 border-dashed border-[var(--ld-outline-variant)]/20 rounded-xl text-[var(--ld-on-surface-variant)] text-xs italic">
-                      Không có hình ảnh đính kèm.
-                    </div>
-                  );
-                  return (
-                    <div className="grid grid-cols-1 gap-3">
-                      {images.map((url, idx) => (
-                        <div key={idx} className="relative group rounded-xl overflow-hidden border border-[var(--ld-outline-variant)]/20 aspect-video bg-black/40">
-                          <img src={url} alt={`Evidence ${idx + 1}`} className="w-full h-full object-contain" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <button
-                              type="button"
-                              onClick={() => window.open(url, '_blank')}
-                              className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-full text-white text-xs font-bold hover:bg-white/20 transition-all flex items-center gap-2"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              Mở ảnh gốc
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-            <div className="p-4 border-t border-[var(--ld-outline-variant)]/10">
-              <button
-                type="button"
-                onClick={() => setViewRequest(null)}
-                className="w-full py-2.5 rounded-xl bg-[var(--ld-surface-container-highest)] text-[var(--ld-on-surface)] font-bold text-sm hover:brightness-110 transition-all"
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 };

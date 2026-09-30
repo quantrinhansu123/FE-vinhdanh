@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Eye, EyeOff, FileSpreadsheet, Loader2, Trash2, Upload } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { Employee } from '../../../types';
 import { StaffFormModal } from './StaffFormModal';
 import { StaffDetailModal } from './StaffDetailModal';
@@ -16,6 +17,17 @@ function displayMaNs(row: Employee): string {
   const m = row.ma_ns?.trim();
   if (m) return m;
   return row.id.slice(0, 8).toUpperCase();
+}
+
+function getDeleteErrorMessage(error: { code?: string; message?: string }): string {
+  const message = error.message || '';
+  if (
+    (error.code === '23502' || /not-null constraint/i.test(message)) &&
+    /finance_transactions|owner_user_id/i.test(message)
+  ) {
+    return 'Không thể xóa nhân sự này vì có giao dịch tài chính đang gắn với chủ sở hữu. Hãy chuyển các giao dịch sang người phụ trách khác trước khi xóa để giữ nguyên lịch sử tài chính.';
+  }
+  return message || 'Không xóa được nhân sự.';
 }
 
 function initialsFromName(name: string): string {
@@ -90,7 +102,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const res = await supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true });
+    const res = await fetchAllRows<Employee>(supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true }));
 
     if (res.error) {
       console.error('employees staff:', res.error);
@@ -258,7 +270,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
 
       if (delErr) {
         console.error('employees delete:', delErr);
-        setError(delErr.message || 'Không xoá được nhân sự.');
+        setError(getDeleteErrorMessage(delErr));
         return;
       }
 
@@ -319,7 +331,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
     setBulkDeleting(false);
     if (deleteError) {
       console.error('employees bulk delete:', deleteError);
-      setError(deleteError.message || 'Không xóa được các nhân sự đã chọn.');
+      setError(getDeleteErrorMessage(deleteError));
       return;
     }
 

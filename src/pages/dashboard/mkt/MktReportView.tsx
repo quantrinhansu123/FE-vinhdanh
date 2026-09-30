@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { AuthUser, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import '../../../styles/stitchSystem.css';
@@ -179,16 +180,16 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
     setCatalogErr(null);
     void (async () => {
       const [pRes, mRes] = await Promise.all([
-        supabase
+        fetchAllRows<{ ma_san_pham: string | null; ten_san_pham: string | null }>(supabase
           .from(PRODUCTS_TABLE)
           .select('ma_san_pham, ten_san_pham')
           .eq('trang_thai', 'dang_ban')
-          .order('ten_san_pham', { ascending: true }),
-        supabase
+          .order('ten_san_pham', { ascending: true })),
+        fetchAllRows<{ ma_thi_truong: string | null; ten_thi_truong: string | null }>(supabase
           .from(MARKETS_TABLE)
           .select('ma_thi_truong, ten_thi_truong')
           .eq('trang_thai', 'hoat_dong')
-          .order('ten_thi_truong', { ascending: true }),
+          .order('ten_thi_truong', { ascending: true })),
       ]);
       if (cancelled) return;
       let missingTbl: string | null = null;
@@ -318,13 +319,12 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
       if (!silent) setLoading(true);
       setLoadErr(null);
       const email = reportUser.email.trim().toLowerCase();
-      const { data: rows, error } = await supabase
+      const { data: rows, error } = await fetchAllRows<ReportRow>(supabase
         .from(REPORTS_TABLE)
         .select('*')
         .ilike('email', email)
         .eq('report_date', reportDateStr)
-        .order('created_at', { ascending: false })
-        .limit(200);
+        .order('created_at', { ascending: false }));
 
       let list: ReportRow[] = [];
       if (error) {

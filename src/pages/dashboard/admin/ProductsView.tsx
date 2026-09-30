@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { CrmProductRow } from '../../../types';
 import { ProductFormModal } from './ProductFormModal';
 
@@ -85,7 +86,7 @@ export const ProductsView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const res = await supabase.from(PRODUCTS_TABLE).select(SELECT).order('ten_san_pham', { ascending: true });
+    const res = await fetchAllRows<CrmProductRow>(supabase.from(PRODUCTS_TABLE).select(SELECT).order('ten_san_pham', { ascending: true }));
 
     if (res.error) {
       console.error('crm_products:', res.error);

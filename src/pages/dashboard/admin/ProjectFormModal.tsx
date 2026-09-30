@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { DuAnRow, Employee } from '../../../types';
 import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 
@@ -129,10 +130,10 @@ export const ProjectFormModal: React.FC<Props> = ({ open, initial, onClose, onSa
     const loadEmployees = async () => {
       setEmployeesLoading(true);
       try {
-        const { data, error } = await supabase
+        const { data, error } = await fetchAllRows<Employee>(supabase
           .from(EMPLOYEES_TABLE)
           .select('id, name, team, email, avatar_url')
-          .order('name', { ascending: true });
+          .order('name', { ascending: true }));
 
         if (error) throw error;
         if (!cancelled) setEmployees((data || []) as Employee[]);

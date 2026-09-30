@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { CrmProductRow } from '../../../types';
 import { formatNumberDots, formatTypingGroupedInt } from '../mkt/mktDetailReportShared';
 import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
@@ -52,7 +53,7 @@ export const ProductFormModal: React.FC<Props> = ({ open, initial, onClose, onSa
   const [formError, setFormError] = useState<string | null>(null);
 
   const loadDuAn = useCallback(async () => {
-    const res = await supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true });
+    const res = await fetchAllRows<DuAnOpt>(supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true }));
     if (res.error) {
       console.warn('du_an for product form:', res.error);
       setDuAnList([]);

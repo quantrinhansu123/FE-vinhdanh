@@ -4,8 +4,8 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { AuthUser, Employee } from '../../../types';
-import { isPrivilegedViewer, scopeBannerText } from '../../../utils/roleScope';
 import {
   REPORTS_TABLE,
 } from '../mkt/mktDetailReportShared';
@@ -104,16 +104,14 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
     }
 
     const { start, end } = monthBounds(ym);
-    const privileged = isPrivilegedViewer(viewer);
 
-    // Ưu tiên team leader đang phụ trách từ CRM teams, fallback về viewer.team.
-    // GĐ/QLDA/admin (privileged): bỏ lọc team → xem toàn bộ MKT
+    // Ưu tiên team leader đang phụ trách từ CRM teams, fallback về viewer.team
     let teamKeys: string[] = [];
-    if (!privileged && viewerName) {
-      const teamRes = await supabase
+    if (viewerName) {
+      const teamRes = await fetchAllRows<{ ten_team: string | null; leader: string | null }>(supabase
         .from(TEAMS_TABLE)
         .select('ten_team, leader')
-        .eq('leader', viewerName);
+        .eq('leader', viewerName));
       if (!teamRes.error) {
         teamKeys = (teamRes.data || [])
           .map((r) => safeTrim((r as { ten_team?: string }).ten_team))
@@ -122,23 +120,21 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
         console.warn('leader-mkt teams:', teamRes.error);
       }
     }
-    if (!privileged && !teamKeys.length && fallbackTeam) teamKeys = [fallbackTeam];
+    if (!teamKeys.length && fallbackTeam) teamKeys = [fallbackTeam];
     teamKeys = [...new Set(teamKeys.map((x) => x.trim()).filter(Boolean))];
-    setManagedTeams(privileged ? [] : teamKeys);
+    setManagedTeams(teamKeys);
 
-    if (!privileged && !teamKeys.length) {
+    if (!teamKeys.length) {
       setError('Không xác định được team phụ trách của tài khoản leader.');
       setLoading(false);
       return;
     }
 
-    let empQuery = supabase
+    const empRes = await fetchAllRows<Employee>(supabase
       .from(EMPLOYEES_TABLE)
       .select('id, name, email, team, ma_ns, ngay_bat_dau, du_an_ten, vi_tri, trang_thai')
-      .order('name', { ascending: true });
-    const empRes = privileged
-      ? await empQuery
-      : await empQuery.in('team', teamKeys);
+      .in('team', teamKeys)
+      .order('name', { ascending: true }));
 
     if (empRes.error) {
       console.error('leader-mkt employees:', empRes.error);
@@ -158,11 +154,11 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
     // Load KPI targets
     const targetMap = new Map<string, number>();
     if (ids.length) {
-      const kpiRes = await supabase
+      const kpiRes = await fetchAllRows<{ employee_id: string; muc_tieu_vnd: number }>(supabase
         .from(KPI_STAFF_TABLE)
         .select('employee_id, muc_tieu_vnd')
         .eq('nam_thang', ym)
-        .in('employee_id', ids);
+        .in('employee_id', ids));
 
       if (!kpiRes.error) {
         for (const r of (kpiRes.data || []) as { employee_id: string; muc_tieu_vnd: number }[]) {
@@ -177,12 +173,12 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
     // Load performance from detail_reports (revenue sum by email)
     const revMap = new Map<string, number>();
     if (emailSet.size) {
-      const repRes = await supabase
+      const repRes = await fetchAllRows<{ email: string; revenue: number }>(supabase
         .from(REPORTS_TABLE)
         .select('email, revenue')
         .gte('report_date', start)
         .lte('report_date', end)
-        .in('email', [...emailSet]);
+        .in('email', [...emailSet]));
 
       if (!repRes.error) {
         for (const r of (repRes.data || []) as { email: string; revenue: number }[]) {
@@ -200,10 +196,10 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
     const msByEmp = new Map<string, string[]>();
     const msIds: string[] = [];
     if (ids.length) {
-      const msRes = await supabase
+      const msRes = await fetchAllRows<{ id: string; employee_id: string | null }>(supabase
         .from(MARKETING_STAFF_TABLE)
         .select('id, employee_id')
-        .in('employee_id', ids);
+        .in('employee_id', ids));
 
       if (!msRes.error) {
         for (const r of (msRes.data || []) as { id: string; employee_id: string | null }[]) {
@@ -222,10 +218,10 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
 
     const tkqcCountMap = new Map<string, number>();
     if (msIds.length) {
-      const tkqcRes = await supabase
+      const tkqcRes = await fetchAllRows<{ id: string; id_marketing_staff: string }>(supabase
         .from(TKQC_TABLE)
         .select('id, id_marketing_staff')
-        .in('id_marketing_staff', msIds);
+        .in('id_marketing_staff', msIds));
 
       if (!tkqcRes.error) {
         // Reverse lookup map: marketing_staff id -> employee_id

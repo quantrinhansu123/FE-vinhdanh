@@ -77,6 +77,13 @@ export const MAP_NAV: NavGroup[] = [
 
 export const MKT_NAV: NavGroup[] = [
   {
+    label: 'Dashboard',
+    items: [
+      { id: 'mkt-dash', label: 'Dashboard cá nhân', icon: '📊' },
+      { id: 'leader-dash', label: 'Dashboard team', icon: '' },
+    ],
+  },
+  {
     label: 'Báo cáo',
     items: [
       { id: 'mkt-history', label: 'Tải báo cáo Excel', icon: '📥' },

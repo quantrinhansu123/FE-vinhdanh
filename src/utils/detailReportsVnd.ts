@@ -1,37 +1,36 @@
 /**
- * Fallback khi DB chưa chạy migration supabase/alter_detail_reports_tien_viet.sql.
- * Supabase/PostgREST trả lỗi dạng:
- *  - "column detail_reports.tien_viet does not exist"
- *  - "Could not find the 'tien_viet' column..."
+ * Detect a missing tien_viet column when a database has not applied its migration.
  */
-
 export function isMissingTienVietError(err: unknown): boolean {
-  const msg =
+  const message =
     err && typeof err === 'object' && 'message' in err
       ? String((err as { message?: unknown }).message || '')
       : String(err || '');
-  const m = msg.toLowerCase();
-  return m.includes('tien_viet') && (m.includes('does not exist') || m.includes('could not find') || m.includes('column'));
+  const normalized = message.toLowerCase();
+  return normalized.includes('tien_viet') && (
+    normalized.includes('does not exist') ||
+    normalized.includes('could not find') ||
+    normalized.includes('column')
+  );
 }
 
-/** Bỏ `tien_viet` khỏi chuỗi select để query lại khi cột chưa tồn tại. */
+/** Remove tien_viet from a select list for schemas that have not applied its migration. */
 export function stripTienVietFromSelect(select: string): string {
   return select
     .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s !== 'tien_viet')
+    .map((column) => column.trim())
+    .filter((column) => column !== 'tien_viet')
     .join(', ');
 }
 
-/** Doanh thu VND: ưu tiên tien_viet, fallback revenue * 25,000 (dùng khi cột chưa có). */
+/** Prefer tien_viet; fall back to revenue converted at 25,000 VND per unit. */
 export function reportRevenueVndFallback(row: { tien_viet?: unknown; revenue?: unknown }): number {
-  const tv = row?.tien_viet;
-  if (tv != null && tv !== '') {
-    const n = Number(String(tv).trim().replace(/[\$,]/g, '').replace(/\s+/g, ''));
-    if (Number.isFinite(n)) return n;
+  const tienViet = row?.tien_viet;
+  if (tienViet != null && tienViet !== '') {
+    const value = Number(String(tienViet).trim().replace(/[$,]/g, '').replace(/\s+/g, ''));
+    if (Number.isFinite(value)) return value;
   }
-  const r = row?.revenue;
-  const rn = r == null ? 0 : Number(String(r).trim().replace(/[\$,]/g, '').replace(/\s+/g, ''));
-  if (!Number.isFinite(rn) || rn === 0) return 0;
-  return Math.round(rn * 25000);
+  const revenue = row?.revenue;
+  const value = revenue == null ? 0 : Number(String(revenue).trim().replace(/[$,]/g, '').replace(/\s+/g, ''));
+  return Number.isFinite(value) && value !== 0 ? Math.round(value * 25000) : 0;
 }

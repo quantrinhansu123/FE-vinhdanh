@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Eye, Loader2, RefreshCw, Users, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 import type { AuthUser, Employee } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
@@ -401,7 +402,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
         : fallbackTeam;
     setTeamName(teamLabel);
 
-    const empRes = await supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true });
+    const empRes = await fetchAllRows<Employee>(supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true }));
     if (empRes.error) {
       console.error('leader-dash employees:', empRes.error);
       setError(empRes.error.message || 'Không tải được nhân sự.');
@@ -943,14 +944,15 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
           return stop;
         }).join(', ');
       })()
-    : '#e2e8e5 0% 100%';
+    : '#1c3450 0% 100%';
   const progressRows = tableRows.map((row) => {
-    const target = (staffTargets.get(row.m.id) || 0) * targetRangeFactor;
+    const monthlyTarget = staffTargets.get(row.m.id) || 0;
+    const target = monthlyTarget * targetRangeFactor;
     const pct = target > 0 ? (row.a.rev / target) * 100 : null;
     const forecast = elapsedDays > 0 ? (row.a.rev / elapsedDays) * rangeDays : 0;
     const forecastPct = target > 0 ? (forecast / target) * 100 : null;
     const state = forecastPct == null ? 'unassigned' : forecastPct >= 100 ? 'on' : forecastPct >= 80 ? 'slow' : 'risk';
-    return { ...row, target, pct, forecast, forecastPct, state };
+    return { ...row, monthlyTarget, target, pct, forecast, forecastPct, state };
   });
   const supportMember = [...progressRows].sort((a, b) => {
     const aGap = a.target > 0 ? (a.pct ?? 0) - periodPacePct : Infinity;
@@ -1031,13 +1033,13 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
           </section>
 
           <section className="team-dashboard-card team-dashboard-progress">
-            <div className="team-dashboard-panel-title"><div><h2>Tiến độ theo nhân sự</h2><p>Vạch dọc trên thanh là nhịp kỳ vọng đã qua: {periodPacePct.toFixed(0)}% · Dự báo dựa trên doanh số bình quân mỗi ngày</p></div></div>
+            <div className="team-dashboard-panel-title"><div><h2>Tiến độ theo nhân sự</h2><p>DS mục tiêu lấy từ KPI tháng · Vạch dọc là nhịp kỳ vọng đã qua: {periodPacePct.toFixed(0)}% · Dự báo theo doanh số bình quân mỗi ngày</p></div></div>
             <div className="team-dashboard-table-wrap"><table className="team-dashboard-table team-dashboard-progress-table"><thead><tr><th>Nhân sự</th><th>DS hiện tại</th><th>DS mục tiêu</th><th>Tiến độ</th><th>%</th><th>DS/ngày</th><th>Dự báo</th><th>Trạng thái</th></tr></thead><tbody>
               {progressRows.map((row) => {
                 const dailyRevenue = elapsedDays > 0 ? row.a.rev / elapsedDays : 0;
                 const barColor = row.state === 'on' ? 'green' : row.state === 'slow' ? 'orange' : row.state === 'risk' ? 'red' : 'orange';
                 const stateText = row.state === 'on' ? 'Đúng nhịp' : row.state === 'slow' ? 'Chậm nhịp' : row.state === 'risk' ? 'Nguy cơ hụt' : 'Chưa gán KPI';
-                return <tr key={row.m.id}><td className="person">{mktNameWithCode(row.m, mktNameByCode)}</td><td>{formatVndDots(row.a.rev)}</td><td>{row.target > 0 ? formatVndDots(row.target) : '—'}</td>
+                return <tr key={row.m.id}><td className="person">{mktNameWithCode(row.m, mktNameByCode)}</td><td>{formatVndDots(row.a.rev)}</td><td>{row.monthlyTarget > 0 ? formatVndDots(row.monthlyTarget) : 'Chưa gán KPI'}</td>
                   <td><div className="team-dashboard-track"><i className="team-dashboard-marker" style={{ left: `${periodPacePct}%` }} /><i className={`team-dashboard-fill ${barColor}`} style={{ width: `${Math.min(100, Math.max(0, row.pct || 0))}%` }} /></div></td>
                   <td className={`td-progress-pct ${row.state === 'on' ? 'td-good' : row.state === 'slow' ? 'td-warn' : row.state === 'risk' ? 'td-bad' : ''}`}>{row.pct == null ? '—' : `${row.pct.toFixed(1)}%`}</td><td>{formatVndDots(dailyRevenue)}</td><td className={row.forecastPct != null && row.forecastPct >= 100 ? 'td-good' : row.forecastPct != null && row.forecastPct < 80 ? 'td-bad' : 'td-warn'}>{row.forecastPct == null ? '—' : `${row.forecastPct.toFixed(0)}%`}</td><td><span className={`team-dashboard-status ${row.state}`}>{stateText}</span></td></tr>;
               })}

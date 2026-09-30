@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, CalendarDays, Loader2, RefreshCw, Wallet } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { ReportRow } from '../../../types';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
@@ -144,11 +145,11 @@ export const CompareView: React.FC = () => {
     setError(null);
     const since = addDays(new Date(), -120);
     const sinceStr = toLocalYyyyMmDd(since);
-    const { data, error: qErr } = await supabase
+    const { data, error: qErr } = await fetchAllRows<ReportRow>(supabase
       .from(REPORTS_TABLE)
       .select('report_date, revenue, ad_cost')
       .gte('report_date', sinceStr)
-      .order('report_date', { ascending: true });
+      .order('report_date', { ascending: true }));
 
     if (qErr) {
       console.error('compare reports:', qErr);

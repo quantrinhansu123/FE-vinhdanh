@@ -31,6 +31,7 @@ import {
   YAxis,
 } from 'recharts';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { AuthUser } from '../../../types';
 import { crmNavTierFromUser } from '../../../utils/crmNavAccess';
 import {
@@ -267,11 +268,11 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
     let cancelled = false;
     setPeopleLoading(true);
     setPeopleError(null);
-    void supabase
+    void fetchAllRows<{ id: string; name: string | null; email: string | null; ma_ns: string | null }>(supabase
       .from(EMPLOYEES_TABLE)
       .select('id, name, email, ma_ns')
       .not('email', 'is', null)
-      .order('name', { ascending: true })
+      .order('name', { ascending: true }))
       .then(({ data, error: peopleError }) => {
         if (cancelled) return;
         if (peopleError) {
@@ -328,14 +329,13 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
     setError(null);
     const previous = previousRange(range);
     const identityFilter = [`email.ilike.${email}`, ...(selectedPerson.ma_ns ? [`code.eq.${selectedPerson.ma_ns}`] : [])].join(',');
-    const fetchRows = (period: DateRange) => supabase
+    const fetchRows = (period: DateRange) => fetchAllRows<any>(supabase
       .from(REPORTS_TABLE)
       .select('id, report_date, revenue, tien_viet, ad_cost, mess_comment_count, tong_data_nhan, tong_lead, order_count, email, code')
       .gte('report_date', period.from)
       .lte('report_date', period.to)
       .or(identityFilter)
-      .order('report_date', { ascending: true })
-      .limit(10000);
+      .order('report_date', { ascending: true }));
 
     const [currentRes, previousRes, targetRes] = await Promise.all([
       fetchRows(range),

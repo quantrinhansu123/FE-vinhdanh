@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { SectionCard, RankItem, ProgressRow, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { AuthUser, Employee } from '../../../types';
 import { REPORTS_TABLE, formatCompactVnd, formatKpiMoney } from '../mkt/mktDetailReportShared';
 
@@ -119,7 +120,7 @@ export const LeaderRankingView: React.FC<LeaderRankingViewProps> = ({ viewer = n
 
     setLoading(true);
     setError(null);
-    const empRes = await supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true });
+    const empRes = await fetchAllRows<Employee>(supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true }));
     if (empRes.error) {
       console.error('leader-rank employees:', empRes.error);
       setError(empRes.error.message || 'Không tải được nhân sự.');
@@ -160,12 +161,11 @@ export const LeaderRankingView: React.FC<LeaderRankingViewProps> = ({ viewer = n
         : Promise.resolve({ data: [] as { employee_id: string; muc_tieu_vnd: number }[], error: null }),
 
       emailSet.size
-        ? supabase
+        ? fetchAllRows<Record<string, unknown>>(supabase
             .from(REPORTS_TABLE)
             .select('email, name, ad_account, ma_tkqc, ad_cost, revenue, tong_lead, tong_data_nhan, mess_comment_count, order_count')
             .gte('report_date', start)
-            .lte('report_date', end)
-            .limit(15000)
+            .lte('report_date', end))
         : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
     ]);
 

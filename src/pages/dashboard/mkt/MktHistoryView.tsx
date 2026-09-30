@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { AuthUser, Employee, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { fetchUpcareMktEmployees, isUpcareMktConfigured } from '../../../api/upcareCrm';
@@ -146,15 +147,15 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
       const email = reportUser?.email?.trim().toLowerCase();
 
       const [pRes, mRes, rRes] = await Promise.all([
-        supabase.from(PRODUCTS_TABLE).select('ten_san_pham').eq('trang_thai', 'dang_ban').order('ten_san_pham', { ascending: true }),
-        supabase.from(MARKETS_TABLE).select('ten_thi_truong').eq('trang_thai', 'hoat_dong').order('ten_thi_truong', { ascending: true }),
+        fetchAllRows<{ ten_san_pham: string | null }>(supabase.from(PRODUCTS_TABLE).select('ten_san_pham').eq('trang_thai', 'dang_ban').order('ten_san_pham', { ascending: true })),
+        fetchAllRows<{ ten_thi_truong: string | null }>(supabase.from(MARKETS_TABLE).select('ten_thi_truong').eq('trang_thai', 'hoat_dong').order('ten_thi_truong', { ascending: true })),
         email
-          ? supabase
+          ? fetchAllRows<{ product?: string | null; market?: string | null }>(supabase
               .from(REPORTS_TABLE)
               .select('product, market')
               .ilike('email', email)
               .order('report_date', { ascending: false })
-              .limit(2000)
+            )
           : Promise.resolve({ data: [] as { product?: string | null; market?: string | null }[], error: null as null }),
       ]);
 
@@ -225,13 +226,12 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
       .gte('report_date', applied.from)
       .lte('report_date', applied.to)
       .order('report_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(1000);
+      .order('created_at', { ascending: false });
 
     if (applied.product) q = q.eq('product', applied.product);
     if (applied.market) q = q.eq('market', applied.market);
 
-    const { data, error: qErr } = await q;
+    const { data, error: qErr } = await fetchAllRows<ReportRow>(q);
     if (qErr) {
       console.error('mkt-history:', qErr);
       setError(

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { AuthUser, DuAnQcExcelRow } from '../../../types';
 import { formatFullVnd, formatReportDateVi } from '../mkt/mktDetailReportShared';
 import { QC_EXCEL_TABLE, downloadQcExcelTemplate, parseQcExcelFile } from '../admin/projectQcExcel';
@@ -47,7 +48,7 @@ export const LeaderTkqcView: React.FC<LeaderTkqcViewProps> = ({ viewer = null })
     }
     setLoading(true);
     setError(null);
-    const { data, error: qErr } = await supabase
+    const { data, error: qErr } = await fetchAllRows<QcRow>(supabase
       .from(QC_EXCEL_TABLE)
       .select('id, ma_nv, ngay, ten_chien_dich, so_tien_da_chi_tieu_vnd, so_tro_chuyen_tin_nhan, source_file, created_at')
       .eq('ma_nv', leaderCode)
@@ -55,8 +56,7 @@ export const LeaderTkqcView: React.FC<LeaderTkqcViewProps> = ({ viewer = null })
       .lte('ngay', applied.to)
       .not('ten_chien_dich', 'ilike', 'all')
       .order('ngay', { ascending: false, nullsFirst: true })
-      .order('created_at', { ascending: false })
-      .limit(800);
+      .order('created_at', { ascending: false }));
     if (qErr) {
       console.error('leader-tkqc:', qErr);
       setError(qErr.message?.includes('does not exist') || qErr.message?.includes('schema cache')

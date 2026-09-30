@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Download, FileSpreadsheet, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { DuAnQcExcelRow } from '../../../types';
 import { REPORTS_TABLE, formatFullVnd, formatReportDateVi, extractMaNvFromBracketPage } from '../mkt/mktDetailReportShared';
 import {
@@ -75,10 +76,9 @@ export const ProjectQcExcelView: React.FC = () => {
       .lte('report_date', applied.to)
       .order('report_date', { ascending: false })
       .order('ma_nv', { ascending: true })
-      .order('ten_chien_dich', { ascending: true })
-      .limit(1000);
+      .order('ten_chien_dich', { ascending: true });
     if (applied.maNv) q = q.eq('ma_nv', applied.maNv);
-    const { data, error: qErr } = await q;
+    const { data, error: qErr } = await fetchAllRows<typeof dailyDetails[number]>(q);
     if (qErr) {
       setDailyError(qErr.message);
       setDailyDetails([]);
@@ -103,12 +103,11 @@ export const ProjectQcExcelView: React.FC = () => {
       .lte('ngay', applied.to)
       .not('ten_chien_dich', 'ilike', 'all')
       .order('ngay', { ascending: false, nullsFirst: true })
-      .order('created_at', { ascending: false })
-      .limit(800);
+      .order('created_at', { ascending: false });
 
     if (applied.maNv) q = q.eq('ma_nv', applied.maNv);
 
-    const { data, error: qErr } = await q;
+    const { data, error: qErr } = await fetchAllRows<RowWithCode>(q);
     if (qErr) {
       console.error('project-qc-excel:', qErr);
       setError(
@@ -177,7 +176,7 @@ export const ProjectQcExcelView: React.FC = () => {
       }
       setExcelMsg(`Đã nhập ${done} dòng từ «${file.name}».`);
       // Hiển thị ngay các dòng vừa nhập, tránh bị lọc ngoài khoảng ngày
-      const { data: justInserted } = await supabase
+      const { data: justInserted } = await fetchAllRows<RowWithCode>(supabase
         .from(QC_EXCEL_TABLE)
         .select(
           `id, ma_nv, ngay, ten_chien_dich, so_tien_da_chi_tieu_vnd,
@@ -188,7 +187,7 @@ export const ProjectQcExcelView: React.FC = () => {
         .lte('ngay', applied.to)
         .not('ten_chien_dich', 'ilike', 'all')
         .order('ngay', { ascending: false, nullsFirst: true })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false }));
       if (justInserted) {
         setRows((justInserted || []) as RowWithCode[]);
       } else {
@@ -272,28 +271,24 @@ export const ProjectQcExcelView: React.FC = () => {
       const summaries = Array.from(byEmployeeDay.values());
       const reportDates = Array.from(new Set(summaries.map((row) => row.report_date)));
       const [staffRes, reportRes] = await Promise.all([
-        supabase
-          .from(EMPLOYEES_TABLE)
-          .select('ma_ns, name, email, team')
-          .limit(10000),
-        supabase
-          .from(REPORTS_TABLE)
-          .select('id, report_date, code, email')
-          .in('report_date', reportDates)
-          .limit(10000),
+        fetchAllRows<{ ma_ns: string | null; name: string | null; email: string | null; team: string | null }>(
+          supabase.from(EMPLOYEES_TABLE).select('ma_ns, name, email, team')
+        ),
+        fetchAllRows<{ id: string; report_date: string; code: string | null; email: string | null }>(
+          supabase.from(REPORTS_TABLE).select('id, report_date, code, email').in('report_date', reportDates)
+        ),
       ]);
       if (staffRes.error) throw staffRes.error;
       if (reportRes.error) throw reportRes.error;
 
-      const staffByCode = new Map<string, { name: string; email: string; team: string | null }>();
+      const staffByCode = new Map<string, { name: string; email: string | null; team: string | null }>();
       for (const staff of staffRes.data || []) {
         const key = normalizeEmployeeCode(staff.ma_ns);
         if (!key || staffByCode.has(key)) continue;
         const email = String(staff.email || '').trim().toLowerCase();
-        if (!email) continue;
         staffByCode.set(key, {
-          name: String(staff.name || email).trim() || email,
-          email,
+          name: String(staff.name || email || staff.ma_ns).trim() || String(staff.ma_ns),
+          email: email || null,
           team: staff.team?.trim() || null,
         });
       }
@@ -315,6 +310,7 @@ export const ProjectQcExcelView: React.FC = () => {
       let updatedReports = 0;
       let createdReports = 0;
       let skippedNoEmployee = 0;
+      let skippedNoEmail = 0;
       const reportChunk = 60;
       const reportUpdates: { id: string; patch: { ad_cost: number; mess_comment_count: number; code: string } }[] = [];
       const reportInserts: Record<string, unknown>[] = [];
@@ -331,6 +327,10 @@ export const ProjectQcExcelView: React.FC = () => {
         }
         if (!staff) {
           skippedNoEmployee++;
+          continue;
+        }
+        if (!staff.email) {
+          skippedNoEmail++;
           continue;
         }
         reportInserts.push({
@@ -363,8 +363,11 @@ export const ProjectQcExcelView: React.FC = () => {
       const skippedTail = skippedNoEmployee
         ? ` ${skippedNoEmployee} d\u00f2ng kh\u00f4ng c\u00f3 nh\u00e2n vi\u00ean kh\u1edbp M\u00e3 NV trong employees n\u00ean b\u1ecb b\u1ecf qua.`
         : '';
+      const missingEmailTail = skippedNoEmail
+        ? ` ${skippedNoEmail} d\u00f2ng kh\u1edbp M\u00e3 NV nh\u01b0ng nh\u00e2n s\u1ef1 ch\u01b0a c\u00f3 email; th\u00eam email trong Qu\u1ea3n l\u00fd nh\u00e2n s\u1ef1 r\u1ed3i b\u1ea5m \u0110\u1ed3ng b\u1ed9 l\u1ea1i.`
+        : '';
       setExcelMsg(
-        `\u0110\u00e3 \u0111\u1ed3ng b\u1ed9 ${payload.length} chi ti\u1ebft QC; Marketing Report: c\u1eadp nh\u1eadt ${updatedReports}, t\u1ea1o m\u1edbi ${createdReports} d\u00f2ng.${skippedTail}`
+        `\u0110\u00e3 \u0111\u1ed3ng b\u1ed9 ${payload.length} chi ti\u1ebft QC; Marketing Report: c\u1eadp nh\u1eadt ${updatedReports}, t\u1ea1o m\u1edbi ${createdReports} d\u00f2ng.${skippedTail}${missingEmailTail}`
       );
       await loadDailyDetails();
     } catch (e) {

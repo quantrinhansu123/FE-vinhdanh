@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, Save, Upload, X } from 'lucide-react';
 import { supabase } from '../../api/supabase';
+import { fetchAllRows } from '../../api/fetchAllRows';
 import type { CrmAgencyRow } from '../../types';
 import { formatTypingGroupedInt } from '../../pages/dashboard/mkt/mktDetailReportShared';
 import { STITCH_PORTAL_CLASS } from '../ui/StitchUI';
@@ -90,12 +91,12 @@ export const BudgetRequestFormModal: React.FC<Props> = ({ open, onClose, onSubmi
 
   const loadRefs = useCallback(async () => {
     const [dRes, aRes, fRes] = await Promise.all([
-      supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true }),
-      supabase.from(AGENCIES_TABLE).select('id, ma_agency, ten_agency').order('ten_agency', { ascending: true }),
-      supabase
+      fetchAllRows<DuAnOpt>(supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true })),
+      fetchAllRows<CrmAgencyRow>(supabase.from(AGENCIES_TABLE).select('id, ma_agency, ten_agency').order('ten_agency', { ascending: true })),
+      fetchAllRows<FinanceAccount>(supabase
         .from(FIN_ACCOUNTS_TABLE)
         .select('id, account_number, bank_name, account_name')
-        .order('account_name', { ascending: true }),
+        .order('account_name', { ascending: true })),
     ]);
     if (dRes.error) console.error('BudgetRequestFormModal du_an:', dRes.error);
     else setDuAnList((dRes.data || []) as DuAnOpt[]);
@@ -118,11 +119,11 @@ export const BudgetRequestFormModal: React.FC<Props> = ({ open, onClose, onSubmi
       setTkqcList([]);
       return;
     }
-    const q = await supabase
+    const q = await fetchAllRows<TkqcOpt>(supabase
       .from(TKQC_TABLE)
       .select('id, ma_tkqc, ten_pae')
       .eq('id_du_an', projectId)
-      .order('ma_tkqc', { ascending: true });
+      .order('ma_tkqc', { ascending: true }));
     if (q.error) {
       console.error('BudgetRequestFormModal tkqc:', q.error);
       setTkqcList([]);

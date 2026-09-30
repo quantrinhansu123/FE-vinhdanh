@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, RefreshCw, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import { STITCH_PORTAL_CLASS, StitchButton } from '../../../components/ui/StitchUI';
 import '../../../styles/stitchSystem.css';
 
@@ -39,11 +40,10 @@ export const AdminKpisView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setStaffError(null);
-    const { data, error: queryError } = await supabase
+    const { data, error: queryError } = await fetchAllRows<StaffOption>(supabase
       .from(EMPLOYEES_TABLE)
       .select('id, name, ma_ns')
-      .order('name')
-      .limit(8000);
+      .order('name'));
 
     if (queryError) {
       console.error('admin-kpis staff:', queryError);

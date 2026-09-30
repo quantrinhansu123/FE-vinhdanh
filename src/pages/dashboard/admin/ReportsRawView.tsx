@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { ReportRow } from '../../../types';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
@@ -136,8 +137,7 @@ export const ReportsRawView: React.FC = () => {
       )
       .gte('report_date', applied.from)
       .lte('report_date', applied.to)
-      .order('report_date', { ascending: false })
-      .limit(5000);
+      .order('report_date', { ascending: false });
     if (applied.email) q = q.ilike('email', `%${applied.email}%`);
     if (applied.code) q = q.ilike('code', `%${applied.code}%`);
     if (applied.q) {
@@ -151,7 +151,7 @@ export const ReportsRawView: React.FC = () => {
         ].join(',')
       );
     }
-    const { data, error: qErr } = await q;
+    const { data, error: qErr } = await fetchAllRows<ReportRow>(q);
     if (qErr) {
       setError(qErr.message || 'Không tải được dữ liệu.');
       setRows([]);

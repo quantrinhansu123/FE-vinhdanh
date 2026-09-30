@@ -109,7 +109,7 @@ function parseDate(value: unknown): string | null | undefined {
 }
 
 export function downloadStaffExcelTemplate(): void {
-  const ws = XLSX.utils.aoa_to_sheet([[...HEADERS], Array(HEADERS.length).fill('')]);
+  const ws = XLSX.utils.aoa_to_sheet([HEADERS, Array(HEADERS.length).fill('')]);
   ws['!cols'] = [16, 28, 20, 22, 24, 30, 22].map((wch) => ({ wch }));
   const help = XLSX.utils.aoa_to_sheet([
     ['Hướng dẫn nhập nhân sự'],

@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Edit3, Loader2, Plus, RefreshCw, Search, Users } from 'lucide-react';
-import { StitchBadge, StitchButton, StitchCard, StitchInput, StitchState, StitchTable } from '../../../components/ui/StitchUI';
+import { Loader2, RefreshCw } from 'lucide-react';
+import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
-import type { AuthUser, CrmTeamRow, DuAnRow } from '../../../types';
+import { fetchAllRows } from '../../../api/fetchAllRows';
+import type { CrmTeamRow, DuAnRow } from '../../../types';
 import { TeamFormModal } from './TeamFormModal';
-import { canEditProjects, canViewAllTeams, scopeBannerText } from '../../../utils/roleScope';
-import './stitchTeams.css';
 
 const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
@@ -45,7 +44,7 @@ function teamBadge(trangThai: string | undefined): { label: string; type: 'G' | 
   }
 }
 
-export const TeamsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = null }) => {
+export const TeamsView: React.FC = () => {
   const [rows, setRows] = useState<CrmTeamRow[]>([]);
   const [duAnById, setDuAnById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -58,11 +57,11 @@ export const TeamsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = nul
     setLoading(true);
     setError(null);
     const [teamsRes, duRes] = await Promise.all([
-      supabase
+      fetchAllRows<CrmTeamRow>(supabase
         .from(TEAMS_TABLE)
         .select('id, ma_team, ten_team, leader, so_thanh_vien, member_ids, du_an_ids, doanh_so_thang, trang_thai')
-        .order('ten_team', { ascending: true }),
-      supabase.from(DU_AN_TABLE).select('id, ten_du_an'),
+        .order('ten_team', { ascending: true })),
+      fetchAllRows<Pick<DuAnRow, 'id' | 'ten_du_an'>>(supabase.from(DU_AN_TABLE).select('id, ten_du_an')),
     ]);
 
     if (teamsRes.error) {
@@ -99,101 +98,144 @@ export const TeamsView: React.FC<{ viewer?: AuthUser | null }> = ({ viewer = nul
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const canViewAll = canViewAllTeams(viewer);
-    const vName = viewer?.name?.trim() || '';
-    const vId = viewer?.id || '';
-    const vTeam = viewer?.team?.trim() || '';
-    const scoped = canViewAll
-      ? rows
-      : rows.filter((r) => {
-          if (vName && r.leader?.trim() === vName) return true;
-          const mids = asStringIdArray(r.member_ids).map(String);
-          if (vId && mids.includes(String(vId))) return true;
-          if (vTeam && r.ten_team?.trim() === vTeam) return true;
-          return false;
-        });
-    if (!q) return scoped;
-    return scoped.filter((r) => {
+    if (!q) return rows;
+    return rows.filter((r) => {
       const hay = [r.ma_team, r.ten_team, r.leader, projectLabel(r.du_an_ids)]
         .map((x) => (x || '').toString().toLowerCase())
         .join(' ');
       return hay.includes(q);
     });
-  }, [rows, search, projectLabel, viewer?.id, viewer?.name, viewer?.role, viewer?.team, viewer?.vi_tri]);
+  }, [rows, search, projectLabel]);
 
   return (
-    <div className="stitch-teams dash-fade-up">
-      <div className="stitch-teams-header">
-        <div className="stitch-teams-heading">
-          <span className="stitch-teams-eyebrow">QUẢN TRỊ HỆ THỐNG <span>/</span> MODULE 2</span>
-          <h1>Quản lý Team</h1>
-          <p>Quản lý thành viên, người phụ trách và các dự án của từng team.</p>
-          {scopeBannerText(viewer) ? <p className="stitch-teams-scope">{scopeBannerText(viewer)} · {filtered.length}/{rows.length} team</p> : null}
+    <div className="dash-fade-up teams-view">
+      {/* Page header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
+        <div className="space-y-1">
+          <p className="text-[var(--ld-primary)] font-bold text-[11px] uppercase tracking-widest">Enterprise Tier</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--ld-on-surface)] tracking-tight">Module 2 — Quản lý Team</h1>
         </div>
-        <div className="stitch-teams-actions">
-          <StitchButton variant="secondary" type="button" onClick={() => void load()} disabled={loading}>
-            {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Làm mới
-          </StitchButton>
-          {canEditProjects(viewer) ? (
-            <StitchButton type="button" onClick={() => { setEditing(null); setFormOpen(true); }}>
-              <Plus size={16} /> Thêm team
-            </StitchButton>
-          ) : null}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            className="flex items-center gap-2 bg-[var(--ld-surface-container)] px-3 py-2 rounded-xl text-[var(--ld-on-surface-variant)] border border-[var(--ld-outline-variant)]/20 hover:text-[var(--ld-on-surface)] disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <span className="material-symbols-outlined text-sm">refresh</span>}
+            Làm mới
+          </button>
+          <button
+            className="bg-[var(--ld-primary)] text-[var(--ld-on-primary)] px-4 py-2 rounded-xl font-bold hover:brightness-110 active:scale-95"
+            onClick={() => { setEditing(null); setFormOpen(true); }}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-sm align-[-3px] mr-1">add_circle</span>
+            Thêm team
+          </button>
         </div>
       </div>
 
-      <StitchCard className="stitch-teams-filter">
-        <div className="stitch-teams-filter-copy">
-          <span className="stitch-teams-filter-icon"><Users size={17} /></span>
-          <div><strong>Danh sách team</strong><small>{filtered.length} team hiển thị</small></div>
+      {/* Filter bar */}
+      <div className="bg-[var(--ld-surface-container-low)] rounded-xl p-3 mb-4 flex flex-col sm:flex-row gap-3 items-center">
+        <div className="relative flex-1 w-full">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ld-outline)]">search</span>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm kiếm theo tên team, leader hoặc dự án…"
+            className="w-full bg-[var(--ld-surface-container-highest)] border-none rounded-xl pl-10 pr-4 py-2.5 text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)]"
+            type="text"
+          />
         </div>
-        <div className="stitch-teams-search">
-          <Search size={16} aria-hidden="true" />
-          <StitchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm mã, tên team, leader hoặc dự án…" aria-label="Tìm kiếm team" type="search" />
-        </div>
-      </StitchCard>
+      </div>
 
-      <StitchCard className="stitch-teams-table-card">
-        {error ? <StitchState tone="error" role="alert"><AlertCircle size={16} />{error}</StitchState> : null}
+      <SectionCard bodyPadding={false}>
+        {error && <div className="p-[14px_16px] text-[11px] text-[var(--R)] border-b border-[var(--border)]">{error}</div>}
         {loading && !rows.length ? (
-          <StitchState tone="loading" role="status"><Loader2 className="animate-spin" size={20} />Đang tải team…</StitchState>
+          <div className="flex items-center justify-center gap-2 py-16 text-[var(--text3)] text-[12px]">
+            <Loader2 className="animate-spin" size={20} />
+            Đang tải team…
+          </div>
         ) : (
-          <div className="stitch-table-wrap">
-            <StitchTable className="stitch-teams-table">
-              <thead><tr>
-                <th>Mã Team</th><th>Tên Team</th><th>Leader</th>
-                <th className="stitch-align-center">Số thành viên</th><th>Dự án phụ trách</th>
-                <th className="stitch-align-right">Doanh số tháng</th><th>Trạng thái</th><th className="stitch-align-right">Thao tác</th>
-              </tr></thead>
-              <tbody>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-[10px] font-bold tracking-widest uppercase text-[var(--text3)] text-left">
+                  <th className="p-[12px_16px]">Mã Team</th>
+                  <th className="p-[12px_16px]">Tên Team</th>
+                  <th className="p-[12px_16px]">Leader</th>
+                  <th className="p-[12px_16px] text-center">Số thành viên</th>
+                  <th className="p-[12px_16px]">Dự án phụ trách</th>
+                  <th className="p-[12px_16px] text-right">Doanh số tháng</th>
+                  <th className="p-[12px_16px]">Trạng thái</th>
+                  <th className="p-[12px_16px] text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="text-[12px] text-[var(--text2)]">
                 {filtered.length === 0 && !loading ? (
-                  <tr><td colSpan={8}><StitchState tone="empty">Không tìm thấy team phù hợp.</StitchState></td></tr>
-                ) : filtered.map((row) => {
-                  const st = teamBadge(row.trang_thai);
-                  const memCount = row.so_thanh_vien != null ? row.so_thanh_vien : asStringIdArray(row.member_ids).length;
-                  return (
-                    <tr key={row.id}>
-                      <td><span className="stitch-team-code">{row.ma_team || '—'}</span></td>
-                      <td><strong className="stitch-team-name">{row.ten_team}</strong></td>
-                      <td title={row.leader || ''}><span className="stitch-team-leader"><span className="stitch-team-avatar">{(row.leader || '—').trim().slice(0, 1).toUpperCase()}</span><span>{row.leader || '—'}</span></span></td>
-                      <td className="stitch-align-center stitch-team-number">{memCount}</td>
-                      <td title={projectLabel(row.du_an_ids)}><span className="stitch-team-projects">{projectLabel(row.du_an_ids)}</span></td>
-                      <td className="stitch-align-right stitch-team-revenue">{formatCompactVnd(row.doanh_so_thang)}</td>
-                      <td><StitchBadge tone={st.type === 'G' ? 'success' : st.type === 'Y' ? 'warning' : st.type === 'R' ? 'danger' : 'neutral'}>{st.label}</StitchBadge></td>
-                      <td className="stitch-align-right">
-                        {canEditProjects(viewer) ? (
-                          <StitchButton variant="quiet" size="small" type="button" onClick={() => { setEditing(row); setFormOpen(true); }}><Edit3 size={13} /> Sửa</StitchButton>
-                        ) : <span className="stitch-team-readonly">Chỉ xem</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
+                  <tr>
+                    <td colSpan={8} className="p-[24px_16px] text-center text-[var(--text3)] space-y-3">
+                      Không tìm thấy team phù hợp.
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((row) => {
+                    const st = teamBadge(row.trang_thai);
+                    const memCount =
+                      row.so_thanh_vien != null
+                        ? row.so_thanh_vien
+                        : asStringIdArray(row.member_ids).length;
+                    return (
+                      <tr
+                        key={row.id}
+                        className="border-b border-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+                      >
+                        <td className="p-[12px_16px] font-bold text-[var(--ld-primary)]">{row.ma_team || '—'}</td>
+                        <td className="p-[12px_16px] font-extrabold text-[var(--ld-on-surface)] tracking-[0.2px]">{row.ten_team}</td>
+                        <td className="p-[12px_16px] max-w-[180px] truncate" title={row.leader || ''}>
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-[var(--ld-primary-container)] flex items-center justify-center text-[10px] font-bold text-[var(--ld-on-primary-container)]">
+                              {(row.leader || '—').trim().slice(0, 1).toUpperCase()}
+                            </div>
+                            <span>{row.leader || '—'}</span>
+                          </div>
+                        </td>
+                        <td className="p-[12px_16px] text-center font-medium tabular-nums">{memCount}</td>
+                        <td
+                          className="p-[12px_16px] font-medium text-[var(--text2)] max-w-[220px] truncate"
+                          title={projectLabel(row.du_an_ids)}
+                        >
+                          {projectLabel(row.du_an_ids)}
+                        </td>
+                        <td className="p-[12px_16px] text-right font-bold text-[var(--ld-secondary)] tabular-nums">
+                          {formatCompactVnd(row.doanh_so_thang)}
+                        </td>
+                        <td className="p-[12px_16px]">
+                          <Badge type={st.type}>{st.label}</Badge>
+                        </td>
+                        <td className="p-[12px_16px] text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditing(row);
+                              setFormOpen(true);
+                            }}
+                            className="text-[var(--ld-primary)] hover:bg-[color-mix(in_srgb,var(--ld-primary)_10%,transparent)] p-[6px_10px] rounded-lg border border-[var(--ld-outline-variant)]/20 text-[11px] font-bold"
+                          >
+                            <span className="material-symbols-outlined text-sm align-[-3px] mr-1">edit</span>
+                            Sửa
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
-            </StitchTable>
+            </table>
           </div>
         )}
-        <div className="stitch-teams-table-footer"><span>Hiển thị {filtered.length} / {rows.length} team</span><span className="stitch-teams-swipe-hint">Vuốt ngang để xem đầy đủ bảng →</span></div>
-      </StitchCard>
+      </SectionCard>
 
       <TeamFormModal
         open={formOpen}
