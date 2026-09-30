@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
-import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
+import { ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, CalendarDays, Loader2, RefreshCw, Wallet } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { ReportRow } from '../../../types';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
@@ -80,29 +80,60 @@ function formatPct(p: number | null): string {
   return `${sign}${p.toFixed(1)}%`;
 }
 
+import { StitchButton } from '../../../components/ui/StitchUI';
+import '../../../styles/stitchSystem.css';
+import './compare.css';
+
 type CmpCardProps = {
-  label: string;
-  value: string;
-  sub: string;
+  currentLabel: string;
+  currentValue: string;
+  previousLabel: string;
+  previousValue: string;
+  change: string;
   subTone?: 'up' | 'down' | 'neutral';
-  valueClassName?: string;
 };
 
-const CmpCard: React.FC<CmpCardProps> = ({ label, value, sub, subTone = 'neutral', valueClassName }) => {
-  const subCls =
+const CmpCard: React.FC<CmpCardProps> = ({ currentLabel, currentValue, previousLabel, previousValue, change, subTone = 'neutral' }) => {
+  const tonePill =
     subTone === 'up'
-      ? 'text-[var(--G)]'
+      ? 'compare-delta compare-delta--up'
       : subTone === 'down'
-        ? 'text-[var(--R)]'
-        : 'text-[var(--text3)]';
+        ? 'compare-delta compare-delta--down'
+        : 'compare-delta compare-delta--neutral';
+  const DeltaIcon = subTone === 'up' ? ArrowUpRight : subTone === 'down' ? ArrowDownRight : ArrowRight;
+
   return (
-    <div className="bg-[var(--bg3)] rounded-[8px] border border-[var(--border)] p-[12px_14px]">
-      <div className="text-[9.5px] font-extrabold tracking-[0.8px] uppercase text-[var(--text3)] mb-[8px]">{label}</div>
-      <div className={`font-[var(--mono)] text-[18px] font-extrabold text-[var(--text)] ${valueClassName || ''}`}>{value}</div>
-      <div className={`text-[10.5px] font-bold mt-[6px] ${subCls}`}>{sub}</div>
-    </div>
+    <article className="compare-card">
+      <div className="compare-card-heading">
+        <span className="compare-period-label">{currentLabel}</span>
+        <span className={tonePill}><DeltaIcon size={14} strokeWidth={2.5} />{change}</span>
+      </div>
+      <div className="compare-value-grid">
+        <div className="compare-current-value">
+          <span className="compare-value-caption">Kỳ hiện tại</span>
+          <strong>{currentValue}</strong>
+        </div>
+        <div className="compare-value-divider" aria-hidden="true"><ArrowRight size={15} /></div>
+        <div className="compare-previous-value">
+          <span className="compare-value-caption">{previousLabel}</span>
+          <strong>{previousValue}</strong>
+        </div>
+      </div>
+    </article>
   );
 };
+
+function StitchCompareSection({ title, description, icon, children }: { title: string; description: string; icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="compare-section">
+      <header className="compare-section-header">
+        <span className="compare-section-icon" aria-hidden="true">{icon}</span>
+        <div><h2>{title}</h2><p>{description}</p></div>
+      </header>
+      {children}
+    </section>
+  );
+}
 
 export const CompareView: React.FC = () => {
   const [rows, setRows] = useState<ReportRow[]>([]);
@@ -114,11 +145,11 @@ export const CompareView: React.FC = () => {
     setError(null);
     const since = addDays(new Date(), -120);
     const sinceStr = toLocalYyyyMmDd(since);
-    const { data, error: qErr } = await supabase
+    const { data, error: qErr } = await fetchAllRows<ReportRow>(supabase
       .from(REPORTS_TABLE)
       .select('report_date, revenue, ad_cost')
       .gte('report_date', sinceStr)
-      .order('report_date', { ascending: true });
+      .order('report_date', { ascending: true }));
 
     if (qErr) {
       console.error('compare reports:', qErr);
@@ -182,121 +213,92 @@ export const CompareView: React.FC = () => {
     };
   }, [rows]);
 
-  const weekSubThis =
-    stats.dW == null
-      ? stats.revLastW === 0
-        ? 'Không có dữ liệu tuần trước'
-        : 'So với tuần trước: —'
-      : `${stats.dW >= 0 ? '▲' : '▼'} ${formatPct(stats.dW)} so với tuần trước`;
-
   const weekTone: CmpCardProps['subTone'] =
     stats.dW == null ? 'neutral' : stats.dW >= 0 ? 'up' : 'down';
-
-  const monthSubThis =
-    stats.dM == null
-      ? stats.revLastM === 0
-        ? 'Không có dữ liệu tháng trước'
-        : 'So với tháng trước: —'
-      : `${stats.dM >= 0 ? '▲' : '▼'} ${formatPct(stats.dM)} so với tháng trước`;
-
   const monthTone: CmpCardProps['subTone'] =
     stats.dM == null ? 'neutral' : stats.dM >= 0 ? 'up' : 'down';
+  const changeLabel = (delta: number | null, baseline: number) =>
+    delta == null ? (baseline === 0 ? 'Chưa có dữ liệu đối chiếu' : 'Chưa thể so sánh') : formatPct(delta);
 
   return (
-    <div className="dash-fade-up space-y-[14px]">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[10px] text-[var(--text3)] max-w-[520px] leading-relaxed">
-          Số liệu cộng từ bảng <code className="text-[var(--text2)]">{REPORTS_TABLE}</code> (cột{' '}
-          <code className="text-[var(--text2)]">revenue</code>, <code className="text-[var(--text2)]">ad_cost</code>), nhóm theo{' '}
-          <strong className="text-[var(--text2)]">report_date</strong>. Tuần bắt đầu Thứ Hai.
-        </p>
-        <button
-          type="button"
+    <div className="compare-page dash-fade-up">
+      <div className="compare-hero">
+        <div className="compare-hero-copy">
+          <span className="compare-eyebrow"><BarChart3 size={14} /> PHÂN TÍCH HIỆU SUẤT</span>
+          <h1>So sánh hiệu suất</h1>
+          <p>Theo dõi biến động doanh thu và chi phí quảng cáo theo tuần, tháng.</p>
+          <span className="compare-range"><CalendarDays size={14} /> Dữ liệu trong 120 ngày gần nhất</span>
+        </div>
+        <StitchButton
+          variant="secondary"
+          size="small"
+          className="compare-refresh"
           onClick={() => void load()}
           disabled={loading}
-          className="flex items-center gap-[6px] bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.1)] text-[var(--text2)] py-[6px] px-[10px] rounded-[6px] text-[11px] font-bold border border-[rgba(255,255,255,0.08)] disabled:opacity-50 shrink-0"
         >
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          Làm mới
-        </button>
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Cập nhật dữ liệu
+        </StitchButton>
       </div>
 
       {error && (
-        <div className="text-[11px] text-[var(--R)] border border-[rgba(224,61,61,0.25)] rounded-[var(--r)] px-3 py-2 bg-[var(--Rd)]/20">
+        <div className="compare-error">
           {error}
         </div>
       )}
 
       {loading && !rows.length ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-[var(--text3)] text-[12px]">
-          <Loader2 className="animate-spin" size={20} />
-          Đang tải báo cáo…
+        <div className="compare-loading">
+          <Loader2 className="animate-spin" size={22} />
+          <span>Đang tải dữ liệu hiệu suất…</span>
         </div>
       ) : (
         <>
-          <SectionCard title="📈 Doanh thu (revenue) — tuần">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-[10px]">
+          <StitchCompareSection title="Doanh thu" description="So sánh doanh thu kỳ hiện tại với kỳ liền trước." icon={<BarChart3 size={18} />}>
+            <div className="compare-card-grid">
               <CmpCard
-                label="Tuần này"
-                value={`${formatCompactVnd(stats.revThisW)} đ`}
-                sub={weekSubThis}
+                currentLabel="Tuần này"
+                currentValue={`${formatCompactVnd(stats.revThisW)} đ`}
+                previousLabel="Tuần trước"
+                previousValue={`${formatCompactVnd(stats.revLastW)} đ`}
+                change={changeLabel(stats.dW, stats.revLastW)}
                 subTone={weekTone}
               />
-              <CmpCard label="Tuần trước" value={`${formatCompactVnd(stats.revLastW)} đ`} sub="Baseline tuần trước" />
-            </div>
-          </SectionCard>
-
-          <SectionCard title="📈 Doanh thu (revenue) — tháng">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-[10px]">
               <CmpCard
-                label="Tháng này"
-                value={`${formatCompactVnd(stats.revThisM)} đ`}
-                sub={monthSubThis}
+                currentLabel="Tháng này"
+                currentValue={`${formatCompactVnd(stats.revThisM)} đ`}
+                previousLabel="Tháng trước"
+                previousValue={`${formatCompactVnd(stats.revLastM)} đ`}
+                change={changeLabel(stats.dM, stats.revLastM)}
                 subTone={monthTone}
-                valueClassName="!text-[var(--G)]"
               />
-              <CmpCard label="Tháng trước" value={`${formatCompactVnd(stats.revLastM)} đ`} sub="Baseline tháng trước" />
             </div>
-          </SectionCard>
+          </StitchCompareSection>
 
-          <SectionCard title="💸 Chi phí Ads (ad_cost)">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-[10px] mb-[10px]">
-              <div className="md:col-span-2 text-[10px] font-bold text-[var(--text3)] uppercase tracking-wide">Tuần</div>
+          <StitchCompareSection title="Chi phí quảng cáo" description="Theo dõi mức chi và chiều hướng thay đổi qua từng kỳ." icon={<Wallet size={18} />}>
+            <div className="compare-card-grid">
               <CmpCard
-                label="Tuần này"
-                value={`${formatCompactVnd(stats.adThisW)} đ`}
-                sub={
-                  stats.adDW == null
-                    ? stats.adLastW === 0
-                      ? '—'
-                      : 'So với tuần trước: —'
-                    : `${stats.adDW >= 0 ? '▲' : '▼'} ${formatPct(stats.adDW)} tuần trước`
-                }
+                currentLabel="Tuần này"
+                currentValue={`${formatCompactVnd(stats.adThisW)} đ`}
+                previousLabel="Tuần trước"
+                previousValue={`${formatCompactVnd(stats.adLastW)} đ`}
+                change={changeLabel(stats.adDW, stats.adLastW)}
                 subTone={stats.adDW == null ? 'neutral' : stats.adDW <= 0 ? 'up' : 'down'}
               />
-              <CmpCard label="Tuần trước" value={`${formatCompactVnd(stats.adLastW)} đ`} sub="Baseline" />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-[10px] pt-[10px] border-t border-[var(--border)]">
-              <div className="md:col-span-2 text-[10px] font-bold text-[var(--text3)] uppercase tracking-wide">Tháng</div>
               <CmpCard
-                label="Tháng này"
-                value={`${formatCompactVnd(stats.adThisM)} đ`}
-                sub={
-                  stats.adDM == null
-                    ? stats.adLastM === 0
-                      ? '—'
-                      : 'So với tháng trước: —'
-                    : `${stats.adDM >= 0 ? '▲' : '▼'} ${formatPct(stats.adDM)} tháng trước`
-                }
+                currentLabel="Tháng này"
+                currentValue={`${formatCompactVnd(stats.adThisM)} đ`}
+                previousLabel="Tháng trước"
+                previousValue={`${formatCompactVnd(stats.adLastM)} đ`}
+                change={changeLabel(stats.adDM, stats.adLastM)}
                 subTone={stats.adDM == null ? 'neutral' : stats.adDM <= 0 ? 'up' : 'down'}
               />
-              <CmpCard label="Tháng trước" value={`${formatCompactVnd(stats.adLastM)} đ`} sub="Baseline" />
             </div>
-          </SectionCard>
+          </StitchCompareSection>
 
           {rows.length === 0 && !loading && !error && (
-            <div className="text-[11px] text-[var(--text3)] text-center py-4">
-              Chưa có dòng báo cáo trong 120 ngày gần đây.
+            <div className="compare-empty">
+              Chưa có dữ liệu báo cáo trong khoảng thời gian này.
             </div>
           )}
         </>

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { BudgetRequestFormModal } from '../../../components/crm-dashboard/BudgetRequestFormModal';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { BudgetRequestRow, BudgetRequestStatus, ReportRow } from '../../../types';
 import { formatNumberDots } from '../mkt/mktDetailReportShared';
 
@@ -113,7 +114,7 @@ const SummaryCard: React.FC<{
   valueSub: React.ReactNode;
   footnote: string;
   footnoteItalic?: boolean;
-  icon: string;
+  icon: React.ReactNode;
 }> = ({ label, badge, valueMain, valueSub, footnote, footnoteItalic, icon }) => (
   <div className="bg-[var(--ld-surface-container-low)] p-6 rounded-xl ld-ghost-border relative overflow-hidden group hover:bg-[var(--ld-surface-container)] transition-colors">
     <div className="flex justify-between items-start mb-4 gap-2">
@@ -127,8 +128,8 @@ const SummaryCard: React.FC<{
       <div className="text-lg font-semibold">{valueSub}</div>
       <span className={`text-xs text-[var(--ld-on-surface-variant)] mt-2 ${footnoteItalic ? 'italic' : ''}`}>{footnote}</span>
     </div>
-    <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
-      <span className="material-symbols-outlined text-8xl text-[var(--ld-on-surface)]">{icon}</span>
+    <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none text-[var(--ld-on-surface)]">
+      <div className="w-24 h-24 flex items-center justify-center [&>svg]:w-24 [&>svg]:h-24">{icon}</div>
     </div>
   </div>
 );
@@ -169,7 +170,7 @@ export const LeaderBudgetView: React.FC = () => {
   );
 
   const loadRefs = useCallback(async () => {
-    const dRes = await supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true });
+    const dRes = await fetchAllRows<DuAnOpt>(supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true }));
     if (dRes.error) console.error('du_an (leader budget):', dRes.error);
     else setDuAnList((dRes.data || []) as DuAnOpt[]);
   }, []);
@@ -179,11 +180,11 @@ export const LeaderBudgetView: React.FC = () => {
       setTkqcList([]);
       return;
     }
-    const q = await supabase
+    const q = await fetchAllRows<TkqcOpt>(supabase
       .from(TKQC_TABLE)
       .select('id, ma_tkqc, ten_pae, du_an ( ten_du_an, ma_du_an )')
       .eq('id_du_an', projectId)
-      .order('ma_tkqc', { ascending: true });
+      .order('ma_tkqc', { ascending: true }));
     if (q.error) {
       console.error('tkqc (leader budget):', q.error);
       setTkqcList([]);
@@ -196,13 +197,12 @@ export const LeaderBudgetView: React.FC = () => {
     setLoading(true);
     setError(null);
     const [q, repRes] = await Promise.all([
-      supabase.from(BUDGET_TABLE).select(BUDGET_SELECT).order('ngay_gio_xin', { ascending: false }).limit(200),
-      supabase
+      fetchAllRows<BudgetRequestRow>(supabase.from(BUDGET_TABLE).select(BUDGET_SELECT).order('ngay_gio_xin', { ascending: false })),
+      fetchAllRows<ReportRow>(supabase
         .from(REPORTS_TABLE)
         .select('report_date, ad_cost, ma_tkqc')
         .gte('report_date', monthBounds.start)
-        .lte('report_date', monthBounds.end)
-        .limit(8000),
+        .lte('report_date', monthBounds.end)),
     ]);
 
     if (q.error) {
@@ -372,7 +372,7 @@ export const LeaderBudgetView: React.FC = () => {
           valueSub={<span className="text-[var(--ld-on-surface-variant)] text-sm font-normal">VNĐ ước lượng</span>}
           footnote="Cùng phạm vi lọc"
           footnoteItalic
-          icon="account_balance_wallet"
+          icon={<Wallet className="w-20 h-20" />}
         />
       </div>
 
@@ -422,7 +422,7 @@ export const LeaderBudgetView: React.FC = () => {
             ) : filteredHistory.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center py-16 sm:py-20">
                 <div className="w-28 h-32 sm:w-32 sm:h-32 bg-[var(--ld-surface-container)] mb-6 rounded-full flex items-center justify-center border border-[var(--ld-outline-variant)]/10">
-                  <span className="material-symbols-outlined text-5xl text-[var(--ld-outline-variant)]">find_in_page</span>
+                  <FileSearch className="w-12 h-12 text-[var(--ld-outline-variant)] stroke-[1.5]" />
                 </div>
                 <h3 className="text-[var(--ld-on-surface-variant)] font-semibold mb-1 text-center" style={{ fontFamily: '"Inter", sans-serif' }}>
                   Chưa có yêu cầu
@@ -464,13 +464,13 @@ export const LeaderBudgetView: React.FC = () => {
             onClick={() => setCreateOpen(true)}
             className="w-full min-h-[6rem] bg-gradient-to-br from-[var(--ld-primary)] to-[var(--ld-primary-container)] text-[var(--ld-on-primary-container)] rounded-2xl flex flex-col items-center justify-center gap-2 group hover:shadow-[0_0_20px_rgba(59,191,250,0.3)] transition-all px-4 py-4 border border-[var(--ld-primary-container)]/30"
           >
-            <span className="material-symbols-outlined text-3xl group-hover:scale-110 transition-transform">add_circle</span>
+            <PlusCircle className="w-8 h-8 group-hover:scale-110 transition-transform" />
             <span className="font-bold text-base text-center leading-snug">Tạo yêu cầu xin ngân sách</span>
           </button>
 
           <div className="bg-[var(--ld-surface-container)] p-6 rounded-2xl border border-[var(--ld-outline-variant)]/10">
             <div className="flex items-center gap-3 mb-4">
-              <span className="material-symbols-outlined text-[var(--ld-tertiary)]">info</span>
+              <Info className="w-5 h-5 text-[var(--ld-tertiary)]" />
               <h4 className="font-bold text-[var(--ld-on-surface)] text-sm" style={{ fontFamily: '"Inter", sans-serif' }}>
                 Hướng dẫn nhanh
               </h4>

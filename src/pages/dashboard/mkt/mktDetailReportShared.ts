@@ -78,6 +78,12 @@ export function formatCompactVnd(n: number | null | undefined): string {
   return `${Math.round(x)}`;
 }
 
+/** Full VND amount with thousands separators, for tables where abbreviations hide the value. */
+export function formatFullVnd(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(Number(n));
+}
+
 /**
  * Từ Page / tên quảng cáo dạng "[HaiLe] [X9000] - 28/03 - Pur - …" → "HaiLe" (nội dung trong [...] đầu tiên).
  */
@@ -93,6 +99,17 @@ export function extractMaNvFromBracketPage(text: string | null | undefined): str
 /** Nhân viên khớp khi so sánh nội dung […] với employees.ma_ns (không phân biệt hoa thường). */
 export type MaNsLookupMatch = { id: string; name: string; ma_ns: string };
 
+/** Chuẩn hóa mã nhân sự, không phân biệt hoa/thường và ký tự Unicode tương đương. */
+export function normalizeMaNsCode(raw: string | null | undefined): string {
+  return String(raw ?? '')
+    .normalize('NFKC')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .replace(/\u00a0/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
 export function buildMaNsLookup(
   rows: { id: string; name?: string; ma_ns?: string | null }[]
 ): Map<string, MaNsLookupMatch> {
@@ -100,7 +117,7 @@ export function buildMaNsLookup(
   for (const r of rows) {
     const raw = r.ma_ns?.trim();
     if (!raw) continue;
-    m.set(raw.toLowerCase(), { id: r.id, name: (r.name || '').trim() || '—', ma_ns: raw });
+    m.set(normalizeMaNsCode(raw), { id: r.id, name: (r.name || '').trim() || '—', ma_ns: raw });
   }
   return m;
 }
@@ -110,19 +127,19 @@ export function matchEmployeeByBracketTag(
   tag: string | null | undefined,
   lookup: Map<string, MaNsLookupMatch>
 ): MaNsLookupMatch | null {
-  const t = tag?.trim();
+  const t = normalizeMaNsCode(tag);
   if (!t) return null;
-  return lookup.get(t.toLowerCase()) ?? null;
+  return lookup.get(t) ?? null;
 }
 
-/** Chuẩn hoá tên để khớp lỏng (API Upcare vs employees). */
+/** Chuẩn hoá tên để khớp lỏng (API Fabico vs employees). */
 export function normalizePersonNameKey(raw: string | null | undefined): string {
   const s = (raw || '').trim().toLowerCase().normalize('NFKC').replace(/\s+/g, ' ');
   return s;
 }
 
 /**
- * Map amount theo id Upcare (số) và theo tên (đã chuẩn hoá).
+ * Map amount theo id Fabico (số) và theo tên (đã chuẩn hoá).
  * Dùng cho đồng bộ doanh số từ /api/employee/mkt.
  */
 export function buildUpcareAmountLookup(
@@ -141,10 +158,10 @@ export function buildUpcareAmountLookup(
 }
 
 /**
- * Gán amount từ lookup Upcare cho một dòng báo cáo:
- * 1) [số] trong Page → id nhân viên Upcare
- * 2) [mã_ns] khớp bảng employees → khớp tên với Upcare
- * 3) [text] là tên (hoặc tag) → khớp tên Upcare đã chuẩn hoá
+ * Gán amount từ lookup Fabico cho một dòng báo cáo:
+ * 1) [số] trong Page → id nhân viên Fabico
+ * 2) [mã_ns] khớp bảng employees → khớp tên với Fabico
+ * 3) [text] là tên (hoặc tag) → khớp tên Fabico đã chuẩn hoá
  */
 export function resolveUpcareAmountForReportRow(
   row: { page?: string | null },

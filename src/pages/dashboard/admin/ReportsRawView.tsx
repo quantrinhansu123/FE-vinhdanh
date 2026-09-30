@@ -1,14 +1,89 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { ReportRow } from '../../../types';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 const PAGE_SIZE = 50;
 
+/** Bỏ ký tự [ ] ở hai đầu (lặp) rồi trim — vd [FBC.HuyNN] → FBC.HuyNN, [FBC → FBC. */
+function stripOuterBrackets(raw: string): string {
+  const edge = new Set(['[', ']']);
+  let t = raw.trim();
+  let changed = true;
+  while (changed && t.length) {
+    changed = false;
+    while (t.length && edge.has(t[0])) {
+      t = t.slice(1);
+      changed = true;
+    }
+    while (t.length && edge.has(t[t.length - 1])) {
+      t = t.slice(0, -1);
+      changed = true;
+    }
+    t = t.trim();
+  }
+  return t;
+}
+
+/**
+ * Ưu tiên các khối `[...]` trong chuỗi: tiền tố trước `.` đầu tiên bên trong
+ * (vd `Chạy thiếu[FBC.ChayPhu] - …[FBC.HaiLe] …` → FBC).
+ * Không có `[...]` hoặc không có `.` trong khối → fallback bỏ ngoặc hai đầu cả chuỗi rồi tách `.`.
+ */
+function maDuAnFromPage(page: string | null | undefined): string | null {
+  if (page == null) return null;
+  const raw = page.replace(/\u00a0/g, ' ');
+  const bracketInners = [...raw.matchAll(/\[[^\]]+\]/g)]
+    .map((m) => m[0].slice(1, -1).trim())
+    .filter((s) => s.length > 0);
+  for (const inner of bracketInners) {
+    const dot = inner.indexOf('.');
+    if (dot !== -1) {
+      const prefix = inner.slice(0, dot).trim();
+      if (prefix.length) return prefix;
+    }
+  }
+  if (bracketInners.length > 0) {
+    const s = bracketInners[0].trim();
+    return s.length ? s : null;
+  }
+  const t = stripOuterBrackets(raw.trim());
+  if (!t) return null;
+  const dot = t.indexOf('.');
+  const prefix = dot === -1 ? t : t.slice(0, dot);
+  const s = prefix.trim();
+  return s.length ? s : null;
+}
+
+function normMaDuAnStored(v: string | null | undefined): string | null {
+  if (v == null) return null;
+  const t = String(v).trim();
+  return t.length ? t : null;
+}
+
 function formatVndDots(n: number): string {
   if (!Number.isFinite(n)) return '0';
   return Math.round(n).toLocaleString('vi-VN');
+}
+
+function formatRawMoney(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+}
+
+function reportExchangeRate(r: ReportRow): number | null {
+  const amount = Number(r.revenue);
+  const amountVnd = Number(r.tien_viet);
+  if (!Number.isFinite(amount) || amount === 0 || !Number.isFinite(amountVnd) || r.tien_viet == null) return null;
+  return amountVnd / amount;
+}
+
+function reportCurrencyUnit(r: ReportRow): string {
+  const rate = reportExchangeRate(r);
+  if (rate == null) return r.revenue == null ? '—' : 'USD';
+  return Math.abs(rate - 1) < 0.01 ? 'VND' : 'USD';
 }
 
 function toYmd(d: Date): string {
@@ -29,6 +104,7 @@ export const ReportsRawView: React.FC = () => {
   const [draftSearch, setDraftSearch] = useState('');
 
   const [applied, setApplied] = useState({ from: monthAgo, to: today, email: '', code: '', q: '' });
+  const loadVersion = useRef(0);
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +113,7 @@ export const ReportsRawView: React.FC = () => {
   const [deleting, setDeleting] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
+  const [fillingMaDuAn, setFillingMaDuAn] = useState(false);
 
   const totals = useMemo(() => {
     let mess = 0;
@@ -51,23 +128,24 @@ export const ReportsRawView: React.FC = () => {
   }, [rows]);
 
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
     setLoading(true);
     setError(null);
+    setRows([]);
+    setSelectedIds(new Set());
     let q = supabase
       .from(REPORTS_TABLE)
       .select(
-        'id, report_date, name, email, team, product, market, page, ma_tkqc, ad_account, ad_cost, revenue, tien_viet, mess_comment_count, order_count, tong_lead, tong_data_nhan, code'
+        'id, report_date, team, product, market, page, ma_du_an, ma_tkqc, ad_account, ad_cost, revenue, tien_viet, mess_comment_count, order_count, tong_lead, tong_data_nhan, code'
       )
       .gte('report_date', applied.from)
       .lte('report_date', applied.to)
-      .order('report_date', { ascending: false })
-      .limit(5000);
+      .order('report_date', { ascending: false });
     if (applied.email) q = q.ilike('email', `%${applied.email}%`);
     if (applied.code) q = q.ilike('code', `%${applied.code}%`);
     if (applied.q) {
       q = q.or(
         [
-          `name.ilike.%${applied.q}%`,
           `product.ilike.%${applied.q}%`,
           `market.ilike.%${applied.q}%`,
           `page.ilike.%${applied.q}%`,
@@ -76,7 +154,8 @@ export const ReportsRawView: React.FC = () => {
         ].join(',')
       );
     }
-    const { data, error: qErr } = await q;
+    const { data, error: qErr } = await fetchAllRows<ReportRow>(q);
+    if (version !== loadVersion.current) return;
     if (qErr) {
       setError(qErr.message || 'Không tải được dữ liệu.');
       setRows([]);
@@ -99,6 +178,7 @@ export const ReportsRawView: React.FC = () => {
   }, [rows, page, totalPages]);
 
   const apply = () => {
+    setSelectedIds(new Set());
     setApplied({
       from: draftFrom,
       to: draftTo,
@@ -138,13 +218,26 @@ export const ReportsRawView: React.FC = () => {
     if (!window.confirm(`Xóa ${ids.length} dòng khỏi ${REPORTS_TABLE}?`)) return;
     setDeleting(true);
     try {
-      const { error: delErr } = await supabase.from(REPORTS_TABLE).delete().in('id', ids);
+      const { data: deletedRows, error: delErr } = await supabase
+        .from(REPORTS_TABLE)
+        .delete()
+        .in('id', ids)
+        .select('id');
       if (delErr) {
         window.alert(`Lỗi xóa: ${delErr.message}`);
         return;
       }
-      setRows((prev) => prev.filter((r) => !r.id || !selectedIds.has(r.id)));
+      const deletedIds = new Set((deletedRows || []).map((r: { id: string }) => r.id));
+      if (deletedIds.size === 0) {
+        window.alert('Supabase không xóa dòng nào. Hãy kiểm tra quyền DELETE / RLS của bảng detail_reports.');
+        await load();
+        return;
+      }
+      if (deletedIds.size < ids.length) {
+        window.alert(`Chỉ xóa được ${deletedIds.size}/${ids.length} dòng. Các dòng còn lại có thể bị RLS chặn.`);
+      }
       setSelectedIds(new Set());
+      await load();
     } finally {
       setDeleting(false);
     }
@@ -169,7 +262,6 @@ export const ReportsRawView: React.FC = () => {
       if (applied.q) {
         q = q.or(
           [
-            `name.ilike.%${applied.q}%`,
             `product.ilike.%${applied.q}%`,
             `market.ilike.%${applied.q}%`,
             `page.ilike.%${applied.q}%`,
@@ -178,14 +270,23 @@ export const ReportsRawView: React.FC = () => {
           ].join(',')
         );
       }
-      const { error: delErr } = await q;
+      const { data: deletedRows, error: delErr } = await q.select('id');
       if (delErr) {
         window.alert(`Lỗi xóa toàn bộ: ${delErr.message}`);
         return;
       }
-      setRows([]);
+      const deletedCount = deletedRows?.length || 0;
+      if (deletedCount === 0) {
+        window.alert('Supabase không xóa dòng nào. Hãy kiểm tra quyền DELETE / RLS của bảng detail_reports.');
+        await load();
+        return;
+      }
+      if (deletedCount < rows.length) {
+        window.alert(`Chỉ xóa được ${deletedCount}/${rows.length} dòng đang hiển thị. Các dòng còn lại có thể bị RLS chặn.`);
+      }
       setSelectedIds(new Set());
       setPage(1);
+      await load();
     } finally {
       setDeletingAll(false);
     }
@@ -245,6 +346,54 @@ export const ReportsRawView: React.FC = () => {
     }
   };
 
+  const backfillMaDuAnFromPage = async () => {
+    if (!rows.length) return;
+    const updates: { id: string; ma_du_an: string | null }[] = [];
+    for (const r of rows) {
+      if (!r.id) continue;
+      const next = maDuAnFromPage(r.page);
+      const cur = normMaDuAnStored(r.ma_du_an);
+      if (cur !== next) updates.push({ id: r.id, ma_du_an: next });
+    }
+    if (updates.length === 0) {
+      window.alert('Không có dòng nào cần đổi ma_du_an (đã khớp page hoặc thiếu id).');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Điền ma_du_an từ page (ưu tiên nội dung trong [...] có dấu "." — vd Chạy thiếu[FBC.ChayPhu]… → FBC) cho ${updates.length} dòng (trong ${rows.length} dòng lọc)? Dòng không có page → ma_du_an trống.`
+      )
+    )
+      return;
+    setFillingMaDuAn(true);
+    try {
+      const chunk = 200;
+      let done = 0;
+      for (let i = 0; i < updates.length; i += chunk) {
+        const part = updates.slice(i, i + chunk);
+        const results = await Promise.all(
+          part.map((u) =>
+            supabase.from(REPORTS_TABLE).update({ ma_du_an: u.ma_du_an }).eq('id', u.id)
+          )
+        );
+        const err = results.find((x) => x.error)?.error;
+        if (err) throw err;
+        done += part.length;
+      }
+      window.alert(`Đã cập nhật ma_du_an cho ${done} dòng.`);
+      await load();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const hint =
+        msg.includes('ma_du_an') || msg.includes('column')
+          ? ' Chạy supabase/alter_detail_reports_ma_du_an.sql trên database.'
+          : '';
+      window.alert(`Lỗi điền ma_du_an: ${msg}${hint}`);
+    } finally {
+      setFillingMaDuAn(false);
+    }
+  };
+
   return (
     <div className="dash-fade-up">
       <div className="flex items-end flex-wrap gap-3 mb-4">
@@ -289,7 +438,7 @@ export const ReportsRawView: React.FC = () => {
           <input
             value={draftSearch}
             onChange={(e) => setDraftSearch(e.target.value)}
-            placeholder="name / product / market / page / ad_account / team…"
+            placeholder="product / market / page / ad_account / team…"
             className="bg-[var(--ld-surface-container-highest)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] px-3 py-2"
           />
         </label>
@@ -327,7 +476,34 @@ export const ReportsRawView: React.FC = () => {
         >
           {backfilling ? 'Đang đồng bộ VND…' : 'Đồng bộ tiền Việt (lọc)'}
         </button>
+        <button
+          type="button"
+          onClick={() => void backfillMaDuAnFromPage()}
+          disabled={loading || fillingMaDuAn || rows.length === 0}
+          className="rounded-lg border border-[var(--ld-outline-variant)]/25 bg-[var(--ld-surface-container)] text-[var(--ld-on-surface-variant)] px-3 py-2 text-sm font-bold"
+          title="ma_du_an: tìm [CODE.tên] trong page, lấy CODE trước .; không có thì như cũ ([FBC.x] hoặc FBC.x)"
+        >
+          {fillingMaDuAn ? 'Đang điền mã DA…' : 'Điền mã DA từ page (lọc)'}
+        </button>
       </div>
+
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--ld-error)]/20 bg-[color-mix(in_srgb,var(--ld-error)_5%,white)] px-4 py-3">
+          <span className="text-sm font-semibold text-[var(--ld-on-surface)]">
+            Đã chọn <strong className="text-[var(--ld-error)]">{selectedIds.size}</strong> dòng trong kết quả lọc.
+          </span>
+          <button
+            type="button"
+            onClick={() => void deleteSelected()}
+            disabled={deleting || loading}
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--ld-error)] px-4 py-2 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50"
+            title="Xóa các dòng đã tích chọn"
+          >
+            {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+            {deleting ? 'Đang xóa…' : `Xóa đã chọn (${selectedIds.size})`}
+          </button>
+        </div>
+      )}
 
       {/* Summary totals */}
       <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -353,7 +529,7 @@ export const ReportsRawView: React.FC = () => {
         ) : rows.length === 0 ? (
           <div className="p-6 text-[var(--ld-on-surface-variant)]">Không có dòng nào.</div>
         ) : (
-          <table className="w-full border-collapse min-w-[1400px] text-left">
+          <table className="w-full border-collapse min-w-[1320px] text-left">
             <thead>
               <tr className="border-b border-[var(--ld-outline-variant)]/15 text-[10px] font-extrabold uppercase tracking-widest text-[var(--ld-on-surface-variant)]">
                 <th className="p-2 w-[36px]">
@@ -366,13 +542,15 @@ export const ReportsRawView: React.FC = () => {
                   />
                 </th>
                 <th className="p-2">Ngày</th>
-                <th className="p-2">Name</th>
-                <th className="p-2">Email</th>
                 <th className="p-2">Code</th>
+                <th className="p-2 text-right">Giá tiền</th>
+                <th className="p-2">Đơn vị</th>
+                <th className="p-2 text-right">Tỉ giá</th>
                 <th className="p-2 text-right">Ads chi</th>
                 <th className="p-2 text-right">Doanh thu (VNĐ)</th>
+                <th className="p-2 text-right">Số đơn</th>
                 <th className="p-2 text-right">Mess</th>
-                <th className="p-2 text-right">Đơn</th>
+                <th className="p-2 text-right">Giá mess</th>
                 <th className="p-2 text-right">Lead</th>
               </tr>
             </thead>
@@ -388,13 +566,19 @@ export const ReportsRawView: React.FC = () => {
                     />
                   </td>
                   <td className="p-2">{r.report_date?.slice(0, 10)}</td>
-                  <td className="p-2 max-w-[200px] truncate" title={r.name || ''}>{r.name || '—'}</td>
-                  <td className="p-2 max-w-[220px] truncate" title={r.email || ''}>{r.email || '—'}</td>
-                  <td className="p-2">{(r as any).code || '—'}</td>
+                  <td className="p-2">{(r as { code?: string | null }).code || '—'}</td>
+                  <td className="p-2 text-right">{formatRawMoney(r.revenue)}</td>
+                  <td className="p-2">{reportCurrencyUnit(r)}</td>
+                  <td className="p-2 text-right">{formatRawMoney(reportExchangeRate(r))}</td>
                   <td className="p-2 text-right">{Number(r.ad_cost || 0).toLocaleString('vi-VN')}</td>
                   <td className="p-2 text-right">{Number(r.tien_viet || 0).toLocaleString('vi-VN')}</td>
+                  <td className="p-2 text-right">{r.order_count == null ? '—' : Number(r.order_count).toLocaleString('vi-VN')}</td>
                   <td className="p-2 text-right">{r.mess_comment_count ?? '—'}</td>
-                  <td className="p-2 text-right">{r.order_count ?? '—'}</td>
+                  <td className="p-2 text-right">
+                    {Number(r.mess_comment_count) > 0
+                      ? formatVndDots(Number(r.tien_viet || 0) / Number(r.mess_comment_count))
+                      : '—'}
+                  </td>
                   <td className="p-2 text-right">{r.tong_lead ?? r.tong_data_nhan ?? '—'}</td>
                 </tr>
               ))}
@@ -427,14 +611,6 @@ export const ReportsRawView: React.FC = () => {
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             >
               Sau →
-            </button>
-            <button
-              className="ml-3 px-3 py-1 rounded border border-[var(--ld-error)]/40 text-[var(--ld-error)] hover:bg-[color-mix(in_srgb,var(--ld-error)_10%,transparent)] disabled:opacity-50"
-              disabled={selectedIds.size === 0 || deleting}
-              onClick={() => void deleteSelected()}
-              title="Xóa các dòng đã chọn"
-            >
-              {deleting ? 'Đang xóa…' : 'Xóa đã chọn'}
             </button>
           </div>
         </div>

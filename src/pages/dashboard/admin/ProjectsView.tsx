@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { DuAnRow } from '../../../types';
 import { ProjectFormModal } from './ProjectFormModal';
 
@@ -98,16 +99,17 @@ export const ProjectsView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'all' | 'dang_chay' | 'tam_dung'>('all');
   const [page, setPage] = useState(1);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: qErr } = await supabase
+    const { data, error: qErr } = await fetchAllRows<DuAnRow>(supabase
       .from(DU_AN_TABLE)
       .select(
         'id, ma_du_an, ten_du_an, don_vi, mo_ta, thi_truong, leader, so_mkt, ngan_sach_ke_hoach, chi_phi_marketing_thuc_te, tong_doanh_so, doanh_thu_thang, ty_le_ads_doanh_so, ngay_bat_dau, ngay_ket_thuc, trang_thai, staff_ids'
       )
-      .order('ten_du_an', { ascending: true });
+      .order('ten_du_an', { ascending: true }));
 
     if (qErr) {
       console.error('Supabase du_an:', qErr);
@@ -122,6 +124,25 @@ export const ProjectsView: React.FC = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const deleteProject = async (project: DuAnRow) => {
+    const label = project.ten_du_an?.trim() || tableMa(project);
+    if (!window.confirm(`Xóa dự án "${label}"? Các TKQC đang gắn với dự án có thể bị xóa theo quan hệ database. Thao tác này không thể hoàn tác.`)) return;
+
+    setDeletingId(project.id);
+    setError(null);
+    const { error: deleteError } = await supabase.from(DU_AN_TABLE).delete().eq('id', project.id);
+    setDeletingId(null);
+    if (deleteError) {
+      console.error('du_an delete:', deleteError);
+      setError(deleteError.code === '23503'
+        ? 'Không thể xóa dự án vì còn dữ liệu liên quan đang được giữ lại. Hãy gỡ liên kết dữ liệu đó rồi thử lại.'
+        : deleteError.message || 'Không xóa được dự án.');
+      return;
+    }
+
+    setRows((current) => current.filter((row) => row.id !== project.id));
+  };
 
   const marketsCount = useMemo(() => {
     const s = new Set<string>();
@@ -206,7 +227,7 @@ export const ProjectsView: React.FC = () => {
             <span className="text-[var(--ld-primary)]/90">Quản lý dự án</span>
           </nav>
           <h2 className="text-3xl font-extrabold tracking-tight text-[var(--ld-on-surface)]" style={{ fontFamily: '"Inter", sans-serif' }}>
-            Dự án (Module 1)
+            Dự án
           </h2>
           <p className="text-sm text-[var(--ld-on-surface-variant)] mt-1 leader-dash-label">Nguồn: {DU_AN_TABLE}</p>
         </div>
@@ -486,9 +507,19 @@ export const ProjectsView: React.FC = () => {
                             setEditingProject(row);
                             setFormOpen(true);
                           }}
-                          className="text-[var(--ld-on-surface-variant)] hover:text-[var(--ld-primary)] transition-colors p-1"
+                          className="inline-flex items-center justify-center rounded-md p-2 text-[var(--ld-on-surface-variant)] hover:bg-[var(--ld-surface-container-highest)] hover:text-[var(--ld-primary)] transition-colors"
                         >
-                          <span className="material-symbols-outlined text-xl">edit_square</span>
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          title="Xóa"
+                          aria-label={`Xóa dự án ${row.ten_du_an}`}
+                          disabled={deletingId === row.id}
+                          onClick={() => void deleteProject(row)}
+                          className="inline-flex items-center justify-center rounded-md p-2 text-[var(--ld-on-surface-variant)] hover:bg-[color-mix(in_srgb,var(--ld-error)_12%,transparent)] hover:text-[var(--ld-error)] transition-colors disabled:opacity-50"
+                        >
+                          {deletingId === row.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                         </button>
                       </td>
                     </tr>

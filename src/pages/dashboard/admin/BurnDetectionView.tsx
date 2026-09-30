@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { ReportRow } from '../../../types';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
@@ -139,7 +140,7 @@ export const BurnDetectionView: React.FC = () => {
   }, [fromDate, toDate, thisMonthStart, thisMonthEnd]);
 
   const loadRefs = useCallback(async () => {
-    const dRes = await supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true });
+    const dRes = await fetchAllRows<DuAnOpt>(supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true }));
     if (dRes.error) console.error('burn-detect du_an:', dRes.error);
     else setDuAnList((dRes.data || []) as DuAnOpt[]);
   }, []);
@@ -149,7 +150,7 @@ export const BurnDetectionView: React.FC = () => {
       setTkqcList([]);
       return;
     }
-    const q = await supabase.from(TKQC_TABLE).select('id, ma_tkqc').eq('id_du_an', projectId).order('ma_tkqc', { ascending: true });
+    const q = await fetchAllRows<TkqcOpt>(supabase.from(TKQC_TABLE).select('id, ma_tkqc').eq('id_du_an', projectId).order('ma_tkqc', { ascending: true }));
     if (q.error) {
       console.error('burn-detect tkqc:', q.error);
       setTkqcList([]);
@@ -165,12 +166,11 @@ export const BurnDetectionView: React.FC = () => {
       .from(REPORTS_TABLE)
       .select(
         'name, email, code, team, ad_cost, revenue, tien_viet, mess_comment_count, tong_lead, order_count, tong_data_nhan, report_date, ma_tkqc'
-      )
-      .limit(120000);
+      );
     if (!allDates) {
       q = q.gte('report_date', bounds.start).lte('report_date', bounds.end);
     }
-    const { data, error: qErr } = await q;
+    const { data, error: qErr } = await fetchAllRows<ReportRow>(q);
 
     if (qErr) {
       console.error('burn-detect:', qErr);
@@ -319,7 +319,7 @@ export const BurnDetectionView: React.FC = () => {
         </div>
       ) : null}
 
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(260px,0.8fr)_minmax(0,2fr)] xl:items-center">
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight text-[var(--ld-on-surface)] mb-1" style={{ fontFamily: '"Inter", sans-serif' }}>
             Phát hiện đốt tiền
@@ -328,40 +328,31 @@ export const BurnDetectionView: React.FC = () => {
             Phân tích hiệu quả ngân sách &amp; cảnh báo rủi ro · {bounds.start} → {bounds.end}
           </p>
         </div>
-        <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex flex-col gap-1">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4 sm:items-end">
+            <div className="flex min-w-0 flex-col gap-1">
               <label className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-primary)] leader-dash-label">Từ ngày</label>
               <input
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)] py-2 px-4"
+                className="h-10 w-full min-w-0 bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)] px-3"
               />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-0 flex-col gap-1">
               <label className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-primary)] leader-dash-label">Đến ngày</label>
               <input
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)] py-2 px-4 min-w-[160px] outline-none"
+                className="h-10 w-full min-w-0 bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)] px-3 outline-none"
               />
             </div>
-            <label className="flex items-center gap-2 text-[12px] text-[var(--ld-on-surface-variant)]">
-              <input
-                type="checkbox"
-                checked={allDates}
-                onChange={(e) => setAllDates(e.target.checked)}
-                className="accent-[var(--ld-primary)]"
-              />
-              Bỏ lọc ngày (lấy tất cả)
-            </label>
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             <label className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-primary)] leader-dash-label">Dự án</label>
             <select
               value={idDuAn}
               onChange={(e) => setIdDuAn(e.target.value)}
-              className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)] py-2 px-4 min-w-[160px] outline-none"
+              className="h-10 w-full min-w-0 bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)] px-3 outline-none"
             >
               <option value="">Tất cả dự án</option>
               {duAnList.map((d) => (
@@ -371,19 +362,19 @@ export const BurnDetectionView: React.FC = () => {
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             <label className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-primary)] leader-dash-label">Trạng thái</label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as 'all' | 'crit' | 'normal')}
-              className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)] py-2 px-4 min-w-[150px] outline-none"
+              className="h-10 w-full min-w-0 bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/20 rounded-lg text-sm text-[var(--ld-on-surface)] focus:ring-1 focus:ring-[var(--ld-primary)] px-3 outline-none"
             >
               <option value="all">Tất cả</option>
               <option value="crit">Cảnh báo cao</option>
               <option value="normal">Bình thường</option>
             </select>
           </div>
-          <div className="flex flex-col gap-1 min-w-[200px] flex-1 max-w-xs">
+          <div className="flex min-w-0 flex-col gap-1 sm:col-span-2">
             <label className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-primary)] leader-dash-label">Tìm MKT / team</label>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[var(--ld-on-surface-variant)] pointer-events-none">
@@ -392,16 +383,25 @@ export const BurnDetectionView: React.FC = () => {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-[var(--ld-surface-container-highest)] border-none rounded-lg pl-10 pr-3 py-2 text-sm text-[var(--ld-on-surface)] focus:ring-2 focus:ring-[var(--ld-primary)] outline-none placeholder:text-[var(--ld-on-surface-variant)]/70"
+                className="h-10 w-full bg-[var(--ld-surface-container-highest)] border-none rounded-lg pl-10 pr-3 text-sm text-[var(--ld-on-surface)] focus:ring-2 focus:ring-[var(--ld-primary)] outline-none placeholder:text-[var(--ld-on-surface-variant)]/70"
                 placeholder="Tìm kiếm…"
                 type="search"
               />
             </div>
           </div>
+          <label className="flex min-h-10 items-center gap-2 text-[12px] text-[var(--ld-on-surface-variant)]">
+            <input
+              type="checkbox"
+              checked={allDates}
+              onChange={(e) => setAllDates(e.target.checked)}
+              className="accent-[var(--ld-primary)]"
+            />
+            Bỏ lọc ngày (lấy tất cả)
+          </label>
           <button
             type="button"
             onClick={setReviewHighRisk}
-            className="bg-[var(--ld-primary)] text-[var(--ld-on-primary)] font-bold py-3 px-4 rounded-lg text-xs uppercase tracking-widest hover:opacity-90 transition-opacity leader-dash-label shrink-0"
+            className="h-10 w-full bg-[var(--ld-primary)] text-[var(--ld-on-primary)] font-bold px-3 rounded-lg text-xs uppercase tracking-widest hover:opacity-90 transition-opacity leader-dash-label"
           >
             Rà soát rủi ro cao
           </button>

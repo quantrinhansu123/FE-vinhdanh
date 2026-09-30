@@ -3,8 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { AuthUser, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
+import '../../../styles/stitchSystem.css';
 import {
   REPORTS_TABLE,
   toLocalYyyyMmDd,
@@ -178,16 +180,16 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
     setCatalogErr(null);
     void (async () => {
       const [pRes, mRes] = await Promise.all([
-        supabase
+        fetchAllRows<{ ma_san_pham: string | null; ten_san_pham: string | null }>(supabase
           .from(PRODUCTS_TABLE)
           .select('ma_san_pham, ten_san_pham')
           .eq('trang_thai', 'dang_ban')
-          .order('ten_san_pham', { ascending: true }),
-        supabase
+          .order('ten_san_pham', { ascending: true })),
+        fetchAllRows<{ ma_thi_truong: string | null; ten_thi_truong: string | null }>(supabase
           .from(MARKETS_TABLE)
           .select('ma_thi_truong, ten_thi_truong')
           .eq('trang_thai', 'hoat_dong')
-          .order('ten_thi_truong', { ascending: true }),
+          .order('ten_thi_truong', { ascending: true })),
       ]);
       if (cancelled) return;
       let missingTbl: string | null = null;
@@ -317,13 +319,12 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
       if (!silent) setLoading(true);
       setLoadErr(null);
       const email = reportUser.email.trim().toLowerCase();
-      const { data: rows, error } = await supabase
+      const { data: rows, error } = await fetchAllRows<ReportRow>(supabase
         .from(REPORTS_TABLE)
         .select('*')
         .ilike('email', email)
         .eq('report_date', reportDateStr)
-        .order('created_at', { ascending: false })
-        .limit(200);
+        .order('created_at', { ascending: false }));
 
       let list: ReportRow[] = [];
       if (error) {
@@ -868,12 +869,12 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
           </div>
         </div>
 
-        <div className="mt-[24px] flex gap-[12px] flex-wrap">
+        <div className="mt-6 flex gap-3 flex-wrap">
           <button
             type="button"
             disabled={saving || syncing || !reportUser?.email}
             onClick={() => void persistReport()}
-            className="bg-[var(--accent)] text-[#fff] flex-1 min-w-[140px] py-[11px] rounded-[10px] text-[13px] font-black flex items-center justify-center gap-[8px] shadow-lg shadow-[rgba(61,142,240,0.3)] hover:brightness-110 active:scale-[0.98] transition-all whitespace-nowrap disabled:opacity-50"
+            className="bg-[#006e51] text-white flex-1 min-w-[140px] py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-xs hover:bg-[#005840] active:scale-[0.99] transition-all whitespace-nowrap disabled:opacity-50"
           >
             {saving ? <Loader2 className="animate-spin" size={18} /> : '💾'}
             {draftLineId ? 'Lưu dòng này' : 'Thêm & lưu dòng'}
@@ -881,7 +882,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
           <button
             type="button"
             onClick={() => navigate(crmAdminPathForView('mkt-bill'))}
-            className="bg-[var(--bg3)] border border-[var(--border)] text-[var(--text2)] flex-1 min-w-[140px] py-[10px] rounded-[10px] text-[13px] font-extrabold flex items-center justify-center gap-[6px] hover:bg-[var(--bg4)] transition-all"
+            className="bg-[#f8faf9] border border-[#e2e8e5] text-[#191c1b] flex-1 min-w-[140px] py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-[#f0f4f1] transition-all"
           >
             📋 Xem bill
           </button>

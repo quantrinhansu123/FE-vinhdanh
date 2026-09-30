@@ -8,6 +8,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react';
 import { BudgetRequestFormModal } from '../../../components/crm-dashboard/BudgetRequestFormModal';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { BudgetRequestRow, ReportRow } from '../../../types';
 
 const BUDGET_TABLE = import.meta.env.VITE_SUPABASE_BUDGET_REQUESTS_TABLE?.trim() || 'budget_requests';
@@ -192,8 +193,8 @@ export const BudgetView: React.FC = () => {
     const sinceStr = toLocalYyyyMmDd(since);
 
     const [budRes, repRes] = await Promise.all([
-      supabase.from(BUDGET_TABLE).select(BUDGET_SELECT).order('ngay_gio_xin', { ascending: false }).limit(200),
-      supabase.from(REPORTS_TABLE).select('report_date, ad_cost').gte('report_date', sinceStr),
+      fetchAllRows<BudgetRequestRow>(supabase.from(BUDGET_TABLE).select(BUDGET_SELECT).order('ngay_gio_xin', { ascending: false })),
+      fetchAllRows<ReportRow>(supabase.from(REPORTS_TABLE).select('report_date, ad_cost').gte('report_date', sinceStr)),
     ]);
 
     if (budRes.error) {

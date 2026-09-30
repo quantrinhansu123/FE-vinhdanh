@@ -1,10 +1,32 @@
 import React from 'react';
-import { BillCard, SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
+import { BillCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
+import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
+import { StitchButton } from '../../../components/ui/StitchUI';
+import '../../../styles/stitchSystem.css';
 
 export const MktBillView: React.FC = () => {
+  const navigate = useNavigate();
+
   return (
-    <div className="dash-fade-up">
-      <div className="flex flex-wrap gap-[16px] items-start">
+    <div className="dash-fade-up space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-[#e2e8e5]">
+        <div>
+          <h1 className="text-2xl font-extrabold text-[#191c1b] tracking-tight">Bill Hiệu suất MKT</h1>
+          <p className="mt-1 text-xs text-[#476355]">Phiếu sao kê hiệu suất và công thức quy đổi chỉ số báo cáo</p>
+        </div>
+        <StitchButton
+          variant="secondary"
+          size="small"
+          onClick={() => navigate(crmAdminPathForView('mkt-report'))}
+        >
+          <ArrowLeft size={14} />
+          Quay lại Báo cáo MKT
+        </StitchButton>
+      </div>
+
+      <div className="flex flex-wrap gap-6 items-start">
         <BillCard 
           name="Nguyễn Thị Lan" 
           team="Team A · BIOKAMA" 
@@ -33,59 +55,65 @@ export const MktBillView: React.FC = () => {
           }} 
         />
 
-        <div className="flex-1 min-w-[280px] flex flex-col gap-[14px]">
-          <SectionCard title="📐 Công thức chuẩn hóa">
-            <div className="flex flex-col gap-[8px]">
-              <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_13px] flex justify-between items-center h-[40px]">
-                <div className="text-[11px] text-[var(--text2)] font-medium">% Ads / Doanh số</div>
-                <div className="font-[var(--mono)] text-[10.5px] text-[var(--accent)] font-bold">Chi phí Ads ÷ Doanh số</div>
+        <div className="flex-1 min-w-[300px] flex flex-col gap-6">
+          <section className="bg-white rounded-2xl border border-[#e2e8e5] p-5 shadow-xs">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-[#191c1b] mb-4">
+              📐 Công thức chuẩn hóa
+            </h2>
+            <div className="flex flex-col gap-2">
+              <div className="bg-[#f8faf9] border border-[#e2e8e5] rounded-xl px-4 py-2.5 flex justify-between items-center h-10">
+                <span className="text-xs text-[#476355] font-semibold">% Ads / Doanh số</span>
+                <span className="font-mono text-xs text-[#006e51] font-bold">Chi phí Ads ÷ Doanh số</span>
               </div>
-              <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_13px] flex justify-between items-center h-[40px]">
-                <div className="text-[11px] text-[var(--text2)] font-medium">Tỷ lệ xin số</div>
-                <div className="font-[var(--mono)] text-[10.5px] text-[var(--accent)] font-bold">Tổng Lead ÷ Tổng Mess</div>
+              <div className="bg-[#f8faf9] border border-[#e2e8e5] rounded-xl px-4 py-2.5 flex justify-between items-center h-10">
+                <span className="text-xs text-[#476355] font-semibold">Tỷ lệ xin số</span>
+                <span className="font-mono text-xs text-[#006e51] font-bold">Tổng Lead ÷ Tổng Mess</span>
               </div>
-              <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_13px] flex justify-between items-center h-[40px]">
-                <div className="text-[11px] text-[var(--text2)] font-medium">AOV</div>
-                <div className="font-[var(--mono)] text-[10.5px] text-[var(--accent)] font-bold">Doanh số ÷ Tổng đơn chốt</div>
+              <div className="bg-[#f8faf9] border border-[#e2e8e5] rounded-xl px-4 py-2.5 flex justify-between items-center h-10">
+                <span className="text-xs text-[#476355] font-semibold">AOV</span>
+                <span className="font-mono text-xs text-[#006e51] font-bold">Doanh số ÷ Tổng đơn chốt</span>
               </div>
-              <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_13px] flex justify-between items-center h-[40px]">
-                <div className="text-[11px] text-[var(--text2)] font-medium">CPO</div>
-                <div className="font-[var(--mono)] text-[10.5px] text-[var(--accent)] font-bold">Chi phí Ads ÷ Tổng đơn chốt</div>
+              <div className="bg-[#f8faf9] border border-[#e2e8e5] rounded-xl px-4 py-2.5 flex justify-between items-center h-10">
+                <span className="text-xs text-[#476355] font-semibold">CPO</span>
+                <span className="font-mono text-xs text-[#006e51] font-bold">Chi phí Ads ÷ Tổng đơn chốt</span>
               </div>
-              <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_13px] flex justify-between items-center h-[40px]">
-                <div className="text-[11px] text-[var(--text2)] font-medium">CPL</div>
-                <div className="font-[var(--mono)] text-[10.5px] text-[var(--accent)] font-bold">Chi phí Ads ÷ Tổng lead</div>
+              <div className="bg-[#f8faf9] border border-[#e2e8e5] rounded-xl px-4 py-2.5 flex justify-between items-center h-10">
+                <span className="text-xs text-[#476355] font-semibold">CPL</span>
+                <span className="font-mono text-xs text-[#006e51] font-bold">Chi phí Ads ÷ Tổng lead</span>
               </div>
-              <div className="bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_13px] flex justify-between items-center h-[40px]">
-                <div className="text-[11px] text-[var(--text2)] font-medium">CPA</div>
-                <div className="font-[var(--mono)] text-[10.5px] text-[var(--accent)] font-bold">Chi phí Ads ÷ Tổng mess</div>
+              <div className="bg-[#f8faf9] border border-[#e2e8e5] rounded-xl px-4 py-2.5 flex justify-between items-center h-10">
+                <span className="text-xs text-[#476355] font-semibold">CPA</span>
+                <span className="font-mono text-xs text-[#006e51] font-bold">Chi phí Ads ÷ Tổng mess</span>
               </div>
             </div>
-          </SectionCard>
+          </section>
 
-          <SectionCard title="📊 So sánh hôm nay vs hôm qua" bodyPadding={true}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-[14px]">
-              <div className="bg-[var(--bg4)] rounded-[12px] border border-[var(--border)] p-[16px_18px] transition-all hover:bg-[rgba(255,255,255,0.01)] relative overflow-hidden group">
-                <div className="absolute top-0 left-0 w-[3px] h-full bg-[var(--G)] opacity-60"></div>
-                <div className="text-[10px] font-extrabold tracking-[1px] uppercase text-[var(--text3)] mb-[10px]">Hôm nay</div>
-                <div className="flex items-baseline gap-[6px]">
-                  <div className="font-[var(--mono)] text-[22px] font-black text-[var(--G)]">12.4M đ</div>
+          <section className="bg-white rounded-2xl border border-[#e2e8e5] p-5 shadow-xs">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-[#191c1b] mb-4">
+              📊 So sánh hôm nay vs hôm qua
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-[#f8faf9] rounded-xl border border-[#e2e8e5] p-4 relative overflow-hidden border-l-4 border-l-[#006e51]">
+                <div className="text-[10px] font-extrabold tracking-widest uppercase text-[#476355] mb-2">Hôm nay</div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-mono text-2xl font-black text-[#006e51]">12.4M đ</span>
                 </div>
-                <div className="text-[10px] text-[var(--text3)] mt-[4px] font-medium">Ads 15.2% · CPO 171k</div>
-                <div className="text-[11px] font-black text-[var(--G)] mt-[8px] flex items-center gap-[4px]">
+                <div className="text-xs text-[#476355] mt-1 font-medium">Ads 15.2% · CPO 171k</div>
+                <div className="text-xs font-bold text-[#059669] mt-2 flex items-center gap-1">
                   <span>▲</span> +18% doanh số
                 </div>
               </div>
 
-              <div className="bg-[var(--bg4)] rounded-[12px] border border-[var(--border)] p-[16px_18px] transition-all hover:bg-[rgba(255,255,255,0.01)] relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-[3px] h-full bg-[var(--text3)] opacity-30"></div>
-                <div className="text-[10px] font-extrabold tracking-[1px] uppercase text-[var(--text3)] mb-[10px]">Hôm qua</div>
-                <div className="font-[var(--mono)] text-[22px] font-black text-[var(--text2)]">10.5M đ</div>
-                <div className="text-[10px] text-[var(--text3)] mt-[4px] font-medium">Ads 16.4% · CPO 191k</div>
-                <div className="text-[11px] font-bold text-[var(--text3)] mt-[8px]">Baseline</div>
+              <div className="bg-[#f8faf9] rounded-xl border border-[#e2e8e5] p-4 relative overflow-hidden border-l-4 border-l-[#8b9b94]">
+                <div className="text-[10px] font-extrabold tracking-widest uppercase text-[#476355] mb-2">Hôm qua</div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-mono text-2xl font-black text-[#191c1b]">10.5M đ</span>
+                </div>
+                <div className="text-xs text-[#476355] mt-1 font-medium">Ads 16.4% · CPO 191k</div>
+                <div className="text-xs font-medium text-[#476355] mt-2">Baseline so sánh</div>
               </div>
             </div>
-          </SectionCard>
+          </section>
         </div>
       </div>
     </div>

@@ -66,6 +66,7 @@ export function tierAllowsRole(tier: CrmNavTier, role: Role): boolean {
 }
 
 export function tierAllowsView(tier: CrmNavTier, view: ViewId): boolean {
+  if (tier === 'mkt' && view === 'leader-dash') return true;
   return tierAllowsRole(tier, viewToRole(view));
 }
 

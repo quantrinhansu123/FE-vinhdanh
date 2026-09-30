@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { CrmAgencyRow } from '../../../types';
 import { AgencyFormModal } from './AgencyFormModal';
 
@@ -113,7 +114,7 @@ export const AgenciesView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const res = await supabase.from(AGENCIES_TABLE).select(SELECT).order('ten_agency', { ascending: true });
+    const res = await fetchAllRows<CrmAgencyRow>(supabase.from(AGENCIES_TABLE).select(SELECT).order('ten_agency', { ascending: true }));
 
     if (res.error) {
       console.error('crm_agencies:', res.error);
@@ -245,7 +246,7 @@ export const AgenciesView: React.FC = () => {
               <nav className="mb-2 flex items-center gap-2 font-[Manrope,sans-serif] text-[10px] uppercase tracking-[0.2em] text-[#a5aac2]">
                 <span>Management</span>
                 <span className="material-symbols-outlined text-[12px]">chevron_right</span>
-                <span className="font-bold text-[#3bbffa]">Agency (Module 5)</span>
+                <span className="font-bold text-[#3bbffa]">Agency</span>
               </nav>
               <h2 className="text-3xl font-bold tracking-tight text-[#dfe4fe]">Agency Ecosystem</h2>
             </div>

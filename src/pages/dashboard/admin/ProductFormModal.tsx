@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { CrmProductRow } from '../../../types';
 import { formatNumberDots, formatTypingGroupedInt } from '../mkt/mktDetailReportShared';
+import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 
 const PRODUCTS_TABLE = import.meta.env.VITE_SUPABASE_PRODUCTS_TABLE?.trim() || 'crm_products';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
@@ -51,7 +53,7 @@ export const ProductFormModal: React.FC<Props> = ({ open, initial, onClose, onSa
   const [formError, setFormError] = useState<string | null>(null);
 
   const loadDuAn = useCallback(async () => {
-    const res = await supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true });
+    const res = await fetchAllRows<DuAnOpt>(supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true }));
     if (res.error) {
       console.warn('du_an for product form:', res.error);
       setDuAnList([]);
@@ -160,7 +162,7 @@ export const ProductFormModal: React.FC<Props> = ({ open, initial, onClose, onSa
 
   return createPortal(
     <div
-      className="dash-theme project-form-modal-root fixed inset-0 z-[10050] font-[family-name:var(--f)]"
+      className={`${STITCH_PORTAL_CLASS} dash-theme project-form-modal-root fixed inset-0 z-[10050] font-[family-name:var(--f)]`}
       role="presentation"
     >
       <div

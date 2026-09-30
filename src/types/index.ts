@@ -5,7 +5,7 @@
 export interface Employee {
   id: string;
   name: string;
-  /** Mã/biệt danh nội bộ, ví dụ FBC.DucNT (từ API Upcare) */
+  /** Mã/biệt danh nội bộ, ví dụ FBC.DucNT (từ API Fabico) */
   code?: string;
   team: string;
   score: number;
@@ -29,13 +29,15 @@ export type ReportRow = {
   report_date: string;
   name?: string | null;
   email?: string | null;
-  /** Mã/biệt danh nhân sự — đồng bộ từ Upcare hoặc từ file Excel (trích trong [...]) */
+  /** Mã/biệt danh nhân sự — đồng bộ từ Fabico hoặc từ file Excel (trích trong [...]) */
   code?: string | null;
   team?: string | null;
   product?: string | null;
   market?: string | null;
   /** Page / fanpage — migration alter_detail_reports_page_multiline.sql */
   page?: string | null;
+  /** Mã dự án — ưu tiên [CODE.tên] trong page; fallback bỏ [ ] hai đầu rồi tiền tố trước . — alter_detail_reports_ma_du_an.sql */
+  ma_du_an?: string | null;
   /** Mã TKQC — migration alter_detail_reports_ma_tkqc.sql */
   ma_tkqc?: string | null;
   ad_account?: string | null;
@@ -71,7 +73,25 @@ export type ProjectRow = {
 
 export type ChartGranularity = 'day' | 'week' | 'month' | 'year';
 
-export type UserRole = 'admin' | 'manager' | 'director' | 'user';
+export type UserRole =
+  | 'admin'
+  | 'director'
+  | 'project_manager'
+  | 'manager'
+  | 'leader'
+  | 'mkt'
+  | 'user';
+
+/** Labels shown for normalized login roles. */
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Hệ thống cấp cao',
+  director: 'Giám đốc',
+  project_manager: 'Quản lý dự án',
+  manager: 'Quản lý dự án',
+  leader: 'Leader',
+  mkt: 'Nhân viên MKT',
+  user: 'Người dùng',
+};
 
 export interface AuthUser {
   id: string;
@@ -123,6 +143,16 @@ export type BudgetRequestRow = {
   noi_dung_chuyen_khoan?: string | null;
   muc_dich_chi_tiet?: string | null;
   chung_tu_urls?: string[] | null;
+  giam_doc_da_duyet?: boolean;
+  giam_doc_duyet_boi?: string | null;
+  giam_doc_duyet_at?: string | null;
+  ke_toan_da_duyet?: boolean;
+  ke_toan_duyet_boi?: string | null;
+  ke_toan_duyet_at?: string | null;
+  da_giai_ngan?: boolean;
+  giai_ngan_boi?: string | null;
+  giai_ngan_at?: string | null;
+  anh_giai_ngan_urls?: string[] | null;
   tkqc_accounts?: {
     id: string;
     don_vi: string | null;
@@ -198,22 +228,14 @@ export type MarketingChannelDetailRow = {
   ghi_chu: string | null;
 };
 
-/** Import Excel QC (Meta) — bảng public.du_an_qc_excel_rows */
+/** Import Excel QC Meta — public.du_an_qc_excel_rows */
 export type DuAnQcExcelRow = {
   id: string;
-  du_an_id: string | null;
-  ten_tai_khoan: string | null;
-  ten_quang_cao: string | null;
+  ma_nv: string | null;
+  ten_chien_dich: string | null;
   ngay: string | null;
-  don_vi_tien_te: string | null;
-  so_tien_chi_tieu_vnd: number | null;
-  chi_phi_mua: number | null;
-  cpm: number | null;
-  ctr_tat_ca: string | null;
-  luot_tro_chuyen_tin_nhan: number | null;
-  cpc: number | null;
-  bao_cao_tu: string | null;
-  bao_cao_den: string | null;
+  so_tien_da_chi_tieu_vnd: number | null;
+  so_tro_chuyen_tin_nhan: number | null;
   source_file: string | null;
   created_at: string | null;
 };

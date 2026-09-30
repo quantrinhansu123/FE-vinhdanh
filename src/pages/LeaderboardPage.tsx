@@ -22,7 +22,7 @@ import type { Employee } from '../types';
 
 interface LeaderboardPageProps {
   employees: Employee[];
-  /** Nguồn dữ liệu BXH: Upcare /api/employee/mkt hoặc Supabase employees */
+  /** Nguồn dữ liệu BXH: Fabico /api/employee/mkt hoặc Supabase employees */
   boardSource?: 'upcare' | 'supabase';
   loading: boolean;
   showMenuBar: boolean;
@@ -110,7 +110,7 @@ export function LeaderboardPage({
 
               {boardSource === 'upcare' ? (
                 <p className="relative z-10 text-center text-[10px] text-cyan-200/70 uppercase tracking-widest mb-1 lg:mb-0 lg:absolute lg:top-2">
-                  Doanh số MKT — Upcare (7 ngày gần nhất)
+                  Doanh số MKT — Fabico (7 ngày gần nhất)
                 </p>
               ) : null}
 
@@ -141,8 +141,8 @@ export function LeaderboardPage({
                       Bảng Xếp Hạng
                     </h2>
                     {boardSource === 'upcare' ? (
-                      <p className="text-[8px] text-cyan-300/80 font-normal normal-case tracking-normal mt-0.5 truncate" title="Doanh số theo khoảng 7 ngày gần nhất từ crm.upcare.asia">
-                        Upcare MKT · 7 ngày
+                      <p className="text-[8px] text-cyan-300/80 font-normal normal-case tracking-normal mt-0.5 truncate" title="Doanh số theo khoảng 7 ngày gần nhất từ crm.fabico.cloud">
+                        Fabico MKT · 7 ngày
                       </p>
                     ) : null}
                   </div>

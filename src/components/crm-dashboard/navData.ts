@@ -4,7 +4,9 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     label: 'Tổng quan',
     items: [
-      { id: 'admin-dash', label: 'Dashboard', icon: '📊' },
+      { id: 'admin-dash', label: 'Dashboard tổng quan', icon: '📊' },
+      { id: 'mkt-dash', label: 'Dashboard C\u00e1 nh\u00e2n', icon: '' },
+      { id: 'leader-dash', label: 'Dashboard team', icon: '' },
       { id: 'burn-detect', label: 'Phát hiện đốt tiền', icon: '🔥' },
       { id: 'alerts', label: 'Cảnh báo hệ thống', icon: '🚨' },
     ]
@@ -12,12 +14,12 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     label: 'Quản lý',
     items: [
-      { id: 'projects', label: 'Dự án (Module 1)', icon: '📁' },
-      { id: 'project-qc-excel', label: 'Dữ liệu QC Excel', icon: '📊' },
-      { id: 'teams', label: 'Team (Module 2)', icon: '👥' },
-      { id: 'staff', label: 'Nhân sự (Module 3)', icon: '👤' },
-      { id: 'ad-accounts', label: 'TK Ads (Module 4)', icon: '🎯' },
-      { id: 'agencies', label: 'Agency (Module 5)', icon: '🏢' },
+      { id: 'projects', label: 'Dự án', icon: '📁' },
+      { id: 'teams', label: 'Team', icon: '👥' },
+      { id: 'staff', label: 'Nhân sự', icon: '👤' },
+      { id: 'ad-accounts', label: 'TK Ads', icon: '🎯' },
+      { id: 'kpis', label: 'KPIs', icon: '📊' },
+      { id: 'agencies', label: 'Agency', icon: '🏢' },
       { id: 'products', label: 'Sản phẩm', icon: '📦' },
       { id: 'markets', label: 'Thị trường', icon: '🌍' },
     ]
@@ -25,14 +27,15 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     label: 'Tài chính',
     items: [
-      { id: 'budget', label: 'Ngân sách (Module 6)', icon: '💰', badge: { text: '3', type: 'y' } },
+      { id: 'budget', label: 'Ngân sách', icon: '💰', badge: { text: '3', type: 'y' } },
       { id: 'reconcile', label: 'Đối chiếu 3 lớp', icon: '⚖️' },
     ]
   },
   {
     label: 'Báo cáo',
     items: [
-      { id: 'upcare-mkt', label: 'MKT Upcare (API)', icon: '🌐' },
+      { id: 'upcare-mkt', label: 'MKT Fabico', icon: '🌐' },
+      { id: 'project-qc-excel', label: 'Dữ liệu QC Excel', icon: '📊' },
       { id: 'reports-raw', label: 'Bảng detail_reports', icon: '🧾' },
       { id: 'admin-ranking', label: 'Bảng xếp hạng', icon: '🏆' },
       { id: 'compare', label: 'So sánh tuần/tháng', icon: '📈' },
@@ -60,14 +63,30 @@ export const LEADER_NAV: NavGroup[] = [
   }
 ];
 
+/** Menu MAP gọn cho khu vực marketing và quản lý team. */
+export const MAP_NAV: NavGroup[] = [
+  {
+    label: 'Dashboard',
+    items: [
+      { id: 'mkt-dash', label: 'Dashboard cá nhân', icon: '' },
+      { id: 'leader-dash', label: 'Dashboard team', icon: '' },
+      { id: 'heatmap', label: 'Chỉ số bán hàng', icon: '' },
+    ],
+  },
+];
+
 export const MKT_NAV: NavGroup[] = [
   {
-    label: 'Của tôi',
+    label: 'Dashboard',
     items: [
       { id: 'mkt-dash', label: 'Dashboard cá nhân', icon: '📊' },
-      { id: 'mkt-report', label: 'Nhập báo cáo', icon: '✏️' },
-      { id: 'mkt-bill', label: 'Bill hiệu suất', icon: '📋' },
-      { id: 'mkt-history', label: 'Lịch sử', icon: '📅' },
+      { id: 'leader-dash', label: 'Dashboard team', icon: '' },
+    ],
+  },
+  {
+    label: 'Báo cáo',
+    items: [
+      { id: 'mkt-history', label: 'Tải báo cáo Excel', icon: '📥' },
     ]
   },
   {
@@ -79,30 +98,31 @@ export const MKT_NAV: NavGroup[] = [
 ];
 
 export const VIEW_TITLES: Record<string, string> = {
-  'admin-dash': 'Dashboard Toàn Hệ Thống',
+  'admin-dash': 'Dashboard tổng quan',
   'burn-detect': 'Phát hiện Đốt tiền',
   'alerts': 'Cảnh báo Hệ thống',
-  'projects': 'Dự án (Module 1)',
-  'project-qc-excel': 'Dữ liệu QC Excel (dự án)',
-  'teams': 'Team (Module 2)',
-  'staff': 'Nhân sự (Module 3)',
+  'projects': 'Dự án',
+  'project-qc-excel': 'Dữ liệu QC Excel',
+  'teams': 'Team',
+  'staff': 'Nhân sự',
   'ad-accounts': 'Agency Control Center',
+  'kpis': 'KPIs',
   'agencies': 'Agency Ecosystem',
   'products': 'Quản lý Sản phẩm',
   'markets': 'Thị trường',
-  'budget': 'Ngân sách (Module 6)',
+  'budget': 'Ngân sách',
   'reconcile': 'Đối chiếu 3 Lớp',
-  'upcare-mkt': 'MKT Upcare (API)',
+  'upcare-mkt': 'MKT Fabico',
   'admin-ranking': 'Bảng xếp hạng',
   'compare': 'So sánh tuần/tháng',
-  'leader-dash': 'Dashboard Team A',
+  'leader-dash': 'Dashboard team',
   'leader-rank': 'Xếp hạng Marketing',
-  'heatmap': 'Heatmap Ads/DT',
+  'heatmap': 'Chỉ số bán hàng',
   'leader-mkt': 'Danh sách Marketing',
   'leader-tkqc': 'Quản lý TKQC',
   'leader-budget': 'Xin Ngân sách',
   'kpi-target': 'KPI Mục tiêu',
-  'mkt-dash': 'Dashboard Cá nhân',
+  'mkt-dash': 'Dashboard cá nhân',
   'mkt-report': 'Nhập Báo cáo · Module 7',
   'mkt-bill': 'Bill Hiệu suất',
   'mkt-history': 'Lịch sử Báo cáo',

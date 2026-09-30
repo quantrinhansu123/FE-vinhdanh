@@ -1,30 +1,80 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Loader2, RefreshCw, Upload } from 'lucide-react';
+import { ChevronDown, Download, FileSpreadsheet, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
-import type { DuAnQcExcelRow, DuAnRow } from '../../../types';
-import { formatCompactVnd, formatReportDateVi, REPORTS_TABLE, extractMaNvFromBracketPage } from '../mkt/mktDetailReportShared';
+import { fetchAllRows } from '../../../api/fetchAllRows';
+import type { DuAnQcExcelRow } from '../../../types';
+import { REPORTS_TABLE, formatFullVnd, formatReportDateVi, extractMaNvFromBracketPage } from '../mkt/mktDetailReportShared';
 import {
   QC_EXCEL_TABLE,
+  MKT_DAILY_DETAILS_TABLE,
   downloadQcExcelTemplate,
   parseQcExcelFile,
 } from './projectQcExcel';
-import { parseMktReportExcelFile, downloadMktReportExcelTemplate } from '../mkt/mktHistoryExcel';
-import type { MktExcelInsertRow } from '../mkt/mktHistoryExcel';
 
-const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
+type RowWithCode = DuAnQcExcelRow;
+const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+const PAGE_SIZE = 50;
 
-type DuAnEmbed = { ten_du_an?: string | null; ma_du_an?: string | null };
+function normalizeEmployeeCode(value: unknown): string {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .replace(/\u00a0/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleUpperCase();
+}
 
-type RowWithProject = DuAnQcExcelRow & {
-  du_an?: DuAnEmbed | DuAnEmbed[] | null;
-};
+function qcDuplicateKey(
+  date: string,
+  employeeCode: string | null | undefined,
+  campaign: string | null | undefined,
+  spend: unknown,
+  conversations: unknown
+): string {
+  const campaignKey = String(campaign ?? '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+  const numericKey = (value: unknown, digits: number) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toFixed(digits) : '0';
+  };
+  return JSON.stringify([
+    String(date ?? '').slice(0, 10),
+    normalizeEmployeeCode(employeeCode),
+    campaignKey,
+    numericKey(spend, 2),
+    numericKey(conversations, 4),
+  ]);
+}
 
-function tenDuAnFromRow(r: RowWithProject): string {
-  const v = r.du_an;
-  if (!v) return '—';
-  const o = Array.isArray(v) ? v[0] : v;
-  return o?.ten_du_an?.trim() || '—';
+async function deleteQcRows(ids: string[]): Promise<number> {
+  const batchSize = 200;
+  let deletedCount = 0;
+  for (let start = 0; start < ids.length; start += batchSize) {
+    const { data, error } = await supabase
+      .from(QC_EXCEL_TABLE)
+      .delete()
+      .in('id', ids.slice(start, start + batchSize))
+      .select('id');
+    if (error) throw error;
+    deletedCount += data?.length ?? 0;
+  }
+  return deletedCount;
+}
+
+async function deleteMktDailyRows(ids: string[]): Promise<number> {
+  const batchSize = 200;
+  let deletedCount = 0;
+  for (let start = 0; start < ids.length; start += batchSize) {
+    const { data, error } = await supabase
+      .from(MKT_DAILY_DETAILS_TABLE)
+      .delete()
+      .in('id', ids.slice(start, start + batchSize))
+      .select('id');
+    if (error) throw error;
+    deletedCount += data?.length ?? 0;
+  }
+  return deletedCount;
 }
 
 function addDays(d: Date, n: number): Date {
@@ -40,93 +90,112 @@ function toYmd(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function fmtTs(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('vi-VN');
-}
 
 export const ProjectQcExcelView: React.FC = () => {
   const defaultTo = toYmd(new Date());
   const defaultFrom = toYmd(addDays(new Date(), -90));
 
-  const [projects, setProjects] = useState<DuAnRow[]>([]);
-  const [draftDuAnId, setDraftDuAnId] = useState('');
+  const [draftMaNv, setDraftMaNv] = useState('');
   const [draftFrom, setDraftFrom] = useState(defaultFrom);
   const [draftTo, setDraftTo] = useState(defaultTo);
-  const [applied, setApplied] = useState({ duAnId: '', from: defaultFrom, to: defaultTo });
+  const [applied, setApplied] = useState({ maNv: '', from: defaultFrom, to: defaultTo });
+  const loadVersion = useRef(0);
+  const dailyLoadVersion = useRef(0);
 
-  const [rows, setRows] = useState<RowWithProject[]>([]);
+  const [rows, setRows] = useState<RowWithCode[]>([]);
+  const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [excelBusy, setExcelBusy] = useState(false);
   const [excelMsg, setExcelMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const reportExcelRef = useRef<HTMLInputElement>(null);
   const [pushing, setPushing] = useState(false);
-  const [stagedReportRows, setStagedReportRows] = useState<MktExcelInsertRow[]>([]);
-  const [lastPushed, setLastPushed] = useState<
-    {
-      report_date: string;
-      product: string | null;
-      market: string | null;
-      page: string | null;
-      ad_account: string | null;
-      ad_cost: number;
-      mess_comment_count: number;
-      tong_data_nhan: number;
-      team: string | null;
-      name: string | null;
-      email: string;
-      code: string | null;
-    }[]
-  >([]);
-  const currentUserEmail = useMemo(() => {
-    try {
-      const raw = localStorage.getItem('fe_vinhdanh_auth_user');
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as { email?: string | null };
-      const e = parsed?.email?.trim();
-      return e && /\S+@\S+\.\S+/.test(e) ? e : null;
-    } catch {
-      return null;
+  const [dailyDetails, setDailyDetails] = useState<{
+    id: string;
+    report_date: string;
+    ma_nv: string;
+    ten_chien_dich: string;
+    ad_cost_vnd: number;
+    message_conversations: number;
+    source_file: string | null;
+  }[]>([]);
+  const [dailyLoading, setDailyLoading] = useState(true);
+  const [dailyDeleting, setDailyDeleting] = useState(false);
+  const [dailyMsg, setDailyMsg] = useState<string | null>(null);
+  const [dailyError, setDailyError] = useState<string | null>(null);
+  const loadDailyDetails = useCallback(async () => {
+    const version = ++dailyLoadVersion.current;
+    setDailyLoading(true);
+    setDailyError(null);
+    setDailyDetails([]);
+    let q = supabase
+      .from(MKT_DAILY_DETAILS_TABLE)
+      .select('id, report_date, ma_nv, ten_chien_dich, ad_cost_vnd, message_conversations, source_file')
+      .gte('report_date', applied.from)
+      .lte('report_date', applied.to)
+      .order('report_date', { ascending: false })
+      .order('ma_nv', { ascending: true })
+      .order('ten_chien_dich', { ascending: true });
+    if (applied.maNv) q = q.eq('ma_nv', applied.maNv);
+    const { data, error: qErr } = await fetchAllRows<typeof dailyDetails[number]>(q);
+    if (version !== dailyLoadVersion.current) return;
+    if (qErr) {
+      setDailyError(qErr.message);
+      setDailyDetails([]);
+    } else {
+      setDailyDetails((data || []) as typeof dailyDetails);
     }
-  }, []);
+    setDailyLoading(false);
+  }, [applied]);
 
-  useEffect(() => {
-    let c = false;
-    void (async () => {
-      const { data, error: e } = await supabase
-        .from(DU_AN_TABLE)
-        .select('id, ma_du_an, ten_du_an')
-        .order('ten_du_an', { ascending: true });
-      if (c) return;
-      if (!e) setProjects((data || []) as DuAnRow[]);
-    })();
-    return () => {
-      c = true;
-    };
-  }, []);
+  useEffect(() => { void loadDailyDetails(); }, [loadDailyDetails]);
+
+  const handleDeleteAllDailyDetails = async () => {
+    const ids = dailyDetails.map((row) => row.id);
+    if (!ids.length || dailyDeleting || dailyLoading) return;
+    const employeeFilter = applied.maNv ? `, mã NV ${applied.maNv}` : '';
+    const prompt = `Xóa toàn bộ ${ids.length} dòng Chi tiết MKT theo bộ lọc ngày ${applied.from} đến ${applied.to}${employeeFilter}? Dữ liệu báo cáo MKT này sẽ bị xóa.`;
+    if (!window.confirm(prompt)) return;
+
+    setDailyDeleting(true);
+    setDailyError(null);
+    setDailyMsg(null);
+    try {
+      const deletedCount = await deleteMktDailyRows(ids);
+      setDailyMsg(`Đã xóa ${deletedCount}/${ids.length} dòng Chi tiết MKT.`);
+      await loadDailyDetails();
+    } catch (e) {
+      const message = e && typeof e === 'object' && 'message' in e ? String(e.message) : 'Không xóa được Chi tiết MKT.';
+      setDailyError(message);
+    } finally {
+      setDailyDeleting(false);
+    }
+  };
 
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
     setLoading(true);
     setError(null);
+    setRows([]);
+    setSelectedIds(new Set());
     let q = supabase
       .from(QC_EXCEL_TABLE)
       .select(
-        `id, du_an_id, ten_tai_khoan, ten_quang_cao, ngay, don_vi_tien_te,
-         so_tien_chi_tieu_vnd, chi_phi_mua, cpm, ctr_tat_ca, luot_tro_chuyen_tin_nhan, cpc,
-         bao_cao_tu, bao_cao_den, source_file, created_at,
-         du_an ( ten_du_an, ma_du_an )`
+        `id, ma_nv, ngay, ten_chien_dich, so_tien_da_chi_tieu_vnd,
+         so_tro_chuyen_tin_nhan, source_file, created_at`
       )
-      .or(`ngay.is.null,and(ngay.gte.${applied.from},ngay.lte.${applied.to})`)
+      .gte('ngay', applied.from)
+      .lte('ngay', applied.to)
+      .not('ten_chien_dich', 'ilike', 'all')
       .order('ngay', { ascending: false, nullsFirst: true })
-      .order('created_at', { ascending: false })
-      .limit(800);
+      .order('created_at', { ascending: false });
 
-    if (applied.duAnId) q = q.eq('du_an_id', applied.duAnId);
+    if (applied.maNv) q = q.eq('ma_nv', applied.maNv);
 
-    const { data, error: qErr } = await q;
+    const { data, error: qErr } = await fetchAllRows<RowWithCode>(q);
+    if (version !== loadVersion.current) return;
     if (qErr) {
       console.error('project-qc-excel:', qErr);
       setError(
@@ -136,7 +205,13 @@ export const ProjectQcExcelView: React.FC = () => {
       );
       setRows([]);
     } else {
-      setRows((data || []) as RowWithProject[]);
+      const filtered = (data || []).filter((row) => {
+        const day = String(row.ngay || '').slice(0, 10);
+        if (!day || day < applied.from || day > applied.to) return false;
+        return !applied.maNv || normalizeEmployeeCode(row.ma_nv) === normalizeEmployeeCode(applied.maNv);
+      });
+      setRows(filtered as RowWithCode[]);
+      setPage(1);
     }
     setLoading(false);
   }, [applied]);
@@ -146,14 +221,16 @@ export const ProjectQcExcelView: React.FC = () => {
   }, [load]);
 
   const applyFilters = () => {
+    setRows([]);
+    setDailyDetails([]);
+    setSelectedIds(new Set());
+    setPage(1);
     setApplied({
-      duAnId: draftDuAnId.trim(),
+      maNv: draftMaNv.trim(),
       from: draftFrom,
       to: draftTo,
     });
   };
-
-  const uploadDuAnId = draftDuAnId.trim() || null;
 
   const handleUpload = async (file: File | null) => {
     setExcelMsg(null);
@@ -174,372 +251,372 @@ export const ProjectQcExcelView: React.FC = () => {
         window.alert('Không có dòng hợp lệ.');
         return;
       }
-      const duLabel = uploadDuAnId
-        ? projects.find((p) => p.id === uploadDuAnId)?.ten_du_an || uploadDuAnId
-        : '(chưa gán dự án)';
-      if (!window.confirm(`Nhập ${parsed.length} dòng — gắn dự án: ${duLabel}?`)) return;
+      if (!window.confirm(`Nh\u1eadp ${parsed.length} d\u00f2ng v\u00e0o b\u1ea3ng QC Excel?`)) return;
 
       const payloads = parsed.map((r) => ({
         ...r,
-        du_an_id: uploadDuAnId,
+        ma_nv: r.ma_nv || extractMaNvFromBracketPage(r.ten_chien_dich) || null,
         source_file: file.name.slice(0, 240),
       }));
 
+      const dateFrom = parsed.reduce((min, row) => (row.ngay < min ? row.ngay : min), parsed[0].ngay);
+      const dateTo = parsed.reduce((max, row) => (row.ngay > max ? row.ngay : max), parsed[0].ngay);
+      const { data: existingRows, error: existingError } = await fetchAllRows<{
+        ma_nv: string | null;
+        ngay: string;
+        ten_chien_dich: string | null;
+        so_tien_da_chi_tieu_vnd: number | null;
+        so_tro_chuyen_tin_nhan: number | null;
+      }>(supabase
+        .from(QC_EXCEL_TABLE)
+        .select('ma_nv, ngay, ten_chien_dich, so_tien_da_chi_tieu_vnd, so_tro_chuyen_tin_nhan')
+        .gte('ngay', dateFrom)
+        .lte('ngay', dateTo));
+      if (existingError) {
+        console.error('project-qc-excel duplicate check:', existingError);
+        window.alert(`Không kiểm tra được dữ liệu trùng: ${existingError.message || 'Unknown'}. Chưa nhập file.`);
+        return;
+      }
+
+      const seenRows = new Set((existingRows || []).map((row) => qcDuplicateKey(
+        row.ngay,
+        row.ma_nv || extractMaNvFromBracketPage(row.ten_chien_dich),
+        row.ten_chien_dich,
+        row.so_tien_da_chi_tieu_vnd,
+        row.so_tro_chuyen_tin_nhan
+      )));
+      const uniquePayloads = payloads.filter((row) => {
+        const key = qcDuplicateKey(row.ngay, row.ma_nv, row.ten_chien_dich, row.so_tien_da_chi_tieu_vnd, row.so_tro_chuyen_tin_nhan);
+        if (seenRows.has(key)) return false;
+        seenRows.add(key);
+        return true;
+      });
+      const skippedDuplicates = payloads.length - uniquePayloads.length;
+      if (uniquePayloads.length === 0) {
+        setExcelMsg(`Không có dòng mới; đã bỏ qua ${skippedDuplicates} dòng trùng.`);
+        await load();
+        return;
+      }
+
       const chunk = 60;
       let done = 0;
-      for (let i = 0; i < payloads.length; i += chunk) {
-        const part = payloads.slice(i, i + chunk);
+      for (let i = 0; i < uniquePayloads.length; i += chunk) {
+        const part = uniquePayloads.slice(i, i + chunk);
         const { error: insErr } = await supabase.from(QC_EXCEL_TABLE).insert(part);
         if (insErr) {
           console.error(insErr);
-          window.alert(`Lỗi ghi DB (${done}/${parsed.length}): ${insErr.message}`);
+          window.alert(`Lỗi ghi DB (${done}/${uniquePayloads.length}): ${insErr.message}`);
           await load();
           return;
         }
         done += part.length;
       }
-      setExcelMsg(`Đã nhập ${done} dòng từ «${file.name}».`);
-      // Hiển thị ngay các dòng vừa nhập, tránh bị lọc ngoài khoảng ngày
-      const { data: justInserted } = await supabase
-        .from(QC_EXCEL_TABLE)
-        .select(
-          `id, du_an_id, ten_tai_khoan, ten_quang_cao, ngay, don_vi_tien_te,
-           so_tien_chi_tieu_vnd, chi_phi_mua, cpm, ctr_tat_ca, luot_tro_chuyen_tin_nhan, cpc,
-           bao_cao_tu, bao_cao_den, source_file, created_at,
-           du_an ( ten_du_an, ma_du_an )`
-        )
-        .eq('source_file', file.name.slice(0, 240))
-        .order('ngay', { ascending: false, nullsFirst: true })
-        .order('created_at', { ascending: false });
-      if (justInserted) {
-        setRows((justInserted || []) as RowWithProject[]);
-      } else {
-        await load();
-      }
+      setExcelMsg(`Đã nhập ${done} dòng từ «${file.name}»; bỏ qua ${skippedDuplicates} dòng trùng.`);
+      await load();
     } finally {
       setExcelBusy(false);
       if (fileRef.current) fileRef.current.value = '';
     }
   };
 
-  // Chọn file báo cáo MKT → chỉ parse và hiển thị preview; không ghi DB ngay
-  const handleUploadReportExcel = useCallback(async (file: File | null) => {
-    setExcelMsg(null);
-    if (!file?.name) return;
-    setExcelBusy(true);
-    try {
-      const { rows: parsed, errors } = await parseMktReportExcelFile(file);
-      if (errors.length) {
-        const head = errors
-          .slice(0, 12)
-          .map((e) => `Dòng ${e.row}: ${e.msg}`)
-          .join('\n');
-        window.alert(`Lỗi đọc file:\n${head}${errors.length > 12 ? `\n… +${errors.length - 12} lỗi` : ''}`);
-        return;
-      }
-      if (parsed.length === 0) {
-        window.alert('Không có dòng dữ liệu để nhập.');
-        return;
-      }
-      setStagedReportRows(parsed);
-      setExcelMsg(`Đã đọc ${parsed.length} dòng từ Excel — kiểm tra bảng Preview rồi bấm “Đồng bộ báo cáo”.`);
-    } finally {
-      setExcelBusy(false);
-      if (reportExcelRef.current) reportExcelRef.current.value = '';
-    }
-  }, [currentUserEmail]);
-
-  // Ghi các dòng đã parse (preview) vào detail_reports — khóa (report_date, code); theo mẫu MKT (không gồm doanh số/đơn/lead)
-  const commitStagedReportRows = useCallback(async () => {
-    if (!currentUserEmail) {
-      window.alert('Cần đăng nhập để đồng bộ.');
-      return;
-    }
-    if (stagedReportRows.length === 0) {
-      window.alert('Không có dòng nào để đồng bộ.');
-      return;
-    }
-    const ok = window.confirm(`Đồng bộ ${stagedReportRows.length} dòng vào detail_reports với email ${currentUserEmail}?`);
-    if (!ok) return;
-    setExcelBusy(true);
-    try {
-      const email = currentUserEmail;
-      const name = currentUserEmail;
-      const team = null;
-
-      type Prep = {
-        report_date: string;
-        code: string;
-        product: string | null;
-        market: string | null;
-        page: string | null;
-        ma_tkqc: string | null;
-        ad_account: string | null;
-        ad_cost: number;
-        mess_comment_count: number;
-        tong_data_nhan: number;
-        team: string | null;
-        name: string | null;
-        email: string;
-      };
-
-      // Chuẩn hoá: chỉ giữ dòng có ngày + code
-      const prepped: Prep[] = [];
-      for (const r of stagedReportRows) {
-        const report_date = String(r.report_date || '').slice(0, 10);
-        const code = extractMaNvFromBracketPage(r.page) || null;
-        if (!report_date || !code) continue;
-        prepped.push({
-          report_date,
-          code,
-          product: r.product || null,
-          market: r.market || null,
-          page: r.page || null,
-          ma_tkqc: r.ma_tkqc?.trim() || null,
-          ad_account: r.ad_account || null,
-          ad_cost: Number(r.ad_cost) || 0,
-          mess_comment_count: Number(r.mess_comment_count) || 0,
-          tong_data_nhan: Number(r.tong_data_nhan) || 0,
-          team,
-          name,
-          email,
-        });
-      }
-      if (prepped.length === 0) {
-        window.alert('Không có dòng hợp lệ (thiếu ngày hoặc code).');
-        return;
-      }
-
-      // Gộp trùng trong batch theo (report_date, code)
-      const merged = new Map<string, Prep>();
-      for (const p of prepped) {
-        const k = `${p.report_date}\0${p.code}`;
-        const ex = merged.get(k);
-        if (ex) {
-          ex.ad_cost += p.ad_cost;
-          ex.mess_comment_count += p.mess_comment_count;
-          ex.tong_data_nhan += p.tong_data_nhan;
-          if (!ex.product && p.product) ex.product = p.product;
-          if (!ex.market && p.market) ex.market = p.market;
-          if (!ex.page && p.page) ex.page = p.page;
-          if (!ex.ma_tkqc && p.ma_tkqc) ex.ma_tkqc = p.ma_tkqc;
-          if (!ex.ad_account && p.ad_account) ex.ad_account = p.ad_account;
-        } else {
-          merged.set(k, { ...p });
-        }
-      }
-      const prepared = Array.from(merged.values());
-
-      // Tra ID hiện có theo (report_date, code)
-      const days = Array.from(new Set(prepared.map((p) => p.report_date)));
-      const codes = Array.from(new Set(prepared.map((p) => p.code)));
-      const { data: existing, error: selErr } = await supabase
-        .from(REPORTS_TABLE)
-        .select('id, report_date, code')
-        .in('report_date', days)
-        .in('code', codes);
-      if (selErr) throw selErr;
-      const idByKey = new Map<string, string>();
-      for (const row of existing || []) {
-        const k = `${(row as any).report_date}\0${(row as any).code}`;
-        idByKey.set(k, (row as any).id);
-      }
-
-      const payload = prepared.map((p) => {
-        const k = `${p.report_date}\0${p.code}`;
-        const id = idByKey.get(k);
-        return {
-          ...(id ? { id } : {}),
-          ...p,
-        };
-      });
-
-      // Không dựa vào onConflict (có thể chưa có unique index). Tách update và insert.
-      const toUpdate = payload.filter((p) => (p as any).id);
-      const toInsert = payload.filter((p) => !(p as any).id);
-
-      // Update theo id
-      if (toUpdate.length > 0) {
-        const chunk = 50;
-        for (let i = 0; i < toUpdate.length; i += chunk) {
-          const part = toUpdate.slice(i, i + chunk);
-          const results = await Promise.all(
-            part.map((r) => supabase.from(REPORTS_TABLE).update(r).eq('id', (r as any).id))
-          );
-          const err = results.find((x) => x.error)?.error;
-          if (err) throw err;
-        }
-      }
-      // Insert phần còn lại
-      if (toInsert.length > 0) {
-        const { error: insErr } = await supabase.from(REPORTS_TABLE).insert(toInsert);
-        if (insErr) throw insErr;
-      }
-
-      {
-        const okMsg = `Đã đồng bộ ${payload.length} dòng vào detail_reports (Ngày + Code): chi phí QC, mess, tổng data, TKQC, page…`;
-        setExcelMsg(okMsg);
-        try { window.alert(okMsg); } catch {}
-      }
-      setStagedReportRows([]);
-    } catch (e) {
-      const msg =
-        e && typeof e === 'object' && 'message' in e ? String((e as any).message) : 'Đồng bộ thất bại (preview).';
-      setExcelMsg(`Lỗi: ${msg}`);
-      try {
-        window.alert(`Đồng bộ thất bại: ${msg}`);
-      } catch {}
-    } finally {
-      setExcelBusy(false);
-    }
-  }, [stagedReportRows, currentUserEmail]);
-
-  const handlePushToDetailReports = useCallback(async () => {
-    if (!currentUserEmail) {
-      window.alert('Không xác định được email người đẩy. Vui lòng đăng nhập lại.');
-      return;
-    }
-    // Chuẩn hoá dữ liệu: chỉ nhận dòng có ngày + code; key = report_date + code
+  const handleSyncToDailyDetails = useCallback(async () => {
     const prepared = rows
-      .map((r) => {
-        const report_date = String(r.ngay || '').slice(0, 10);
-        const code = extractMaNvFromBracketPage(r.ten_quang_cao) || null;
-        if (!report_date || !code) return null;
+      .map((row) => {
+        const report_date = String(row.ngay || '').slice(0, 10);
+        const ma_nv = normalizeEmployeeCode(row.ma_nv || extractMaNvFromBracketPage(row.ten_chien_dich));
+        const ten_chien_dich = row.ten_chien_dich?.trim() || '';
+        if (!report_date || !ma_nv || !ten_chien_dich) return null;
         return {
           report_date,
-          code,
-          // Các cột phụ (không bắt buộc)
-          product:
-            (Array.isArray(r.du_an) ? r.du_an?.[0]?.ten_du_an : r.du_an?.ten_du_an) || null,
-          market: r.don_vi_tien_te || null,
-          page: r.ten_quang_cao || null,
-          ad_account: r.ten_tai_khoan || null,
-          ad_cost: Number(r.so_tien_chi_tieu_vnd) || 0,
-          mess_comment_count: Number(r.luot_tro_chuyen_tin_nhan) || 0,
-          tong_data_nhan: 0,
-          ma_tkqc: null as string | null,
-          team: null as string | null,
-          name:
-            (Array.isArray(r.du_an) ? r.du_an?.[0]?.ten_du_an : r.du_an?.ten_du_an) ||
-            'QC Excel',
-          email: currentUserEmail,
+          ma_nv,
+          ten_chien_dich,
+          ad_cost_vnd: Number(row.so_tien_da_chi_tieu_vnd) || 0,
+          message_conversations: Number(row.so_tro_chuyen_tin_nhan) || 0,
+          source_file: row.source_file,
         };
       })
       .filter(Boolean) as Array<{
         report_date: string;
-        code: string;
-        product: string | null;
-        market: string | null;
-        page: string | null;
-        ad_account: string | null;
-        ad_cost: number;
-        mess_comment_count: number;
-        tong_data_nhan: number;
-        ma_tkqc: string | null;
-        team: string | null;
-        name: string | null;
-        email: string;
+        ma_nv: string;
+        ten_chien_dich: string;
+        ad_cost_vnd: number;
+        message_conversations: number;
+        source_file: string | null;
       }>;
 
-    if (prepared.length === 0) {
-      window.alert('Không có dòng nào có ngày hợp lệ để đẩy.');
+    if (!prepared.length) {
+      window.alert('Kh\u00f4ng c\u00f3 d\u00f2ng n\u00e0o c\u00f3 Ng\u00e0y, M\u00e3 NV v\u00e0 t\u00ean chi\u1ebfn d\u1ecbch h\u1ee3p l\u1ec7 \u0111\u1ec3 \u0111\u1ed3ng b\u1ed9.');
       return;
     }
 
-    if (!window.confirm(`Đẩy/ cập nhật ${prepared.length} dòng vào detail_reports (khóa Ngày + Code)?`)) return;
+    const seenQcRows = new Set<string>();
+    const uniquePrepared = prepared.filter((row) => {
+      const key = qcDuplicateKey(
+        row.report_date,
+        row.ma_nv,
+        row.ten_chien_dich,
+        row.ad_cost_vnd,
+        row.message_conversations
+      );
+      if (seenQcRows.has(key)) return false;
+      seenQcRows.add(key);
+      return true;
+    });
+
+    // Collapse true duplicate imports, then sum distinct source rows by employee and campaign.
+    const byKey = new Map<string, (typeof prepared)[number]>();
+    for (const row of uniquePrepared) {
+      const key = `${row.report_date}\0${row.ma_nv}\0${row.ten_chien_dich}`;
+      const current = byKey.get(key);
+      if (!current) byKey.set(key, { ...row });
+      else {
+        current.ad_cost_vnd += row.ad_cost_vnd;
+        current.message_conversations += row.message_conversations;
+      }
+    }
+    const payload = Array.from(byKey.values());
+    if (!window.confirm(`\u0110\u1ed3ng b\u1ed9 ${payload.length} d\u00f2ng QC v\u00e0 c\u1eadp nh\u1eadt/t\u1ea1o b\u00e1o c\u00e1o MKT theo Ng\u00e0y + M\u00e3 NV?`)) return;
 
     setPushing(true);
     try {
-      // Tìm bản ghi đã có theo (report_date, code) để update thay vì thêm mới
-      const uniqueDays = Array.from(new Set(prepared.map((p) => p.report_date)));
-      const uniqueCodes = Array.from(new Set(prepared.map((p) => p.code)));
-      const { data: existing, error: selErr } = await supabase
-        .from(REPORTS_TABLE)
-        .select('id, report_date, code')
-        .in('report_date', uniqueDays)
-        .in('code', uniqueCodes);
-      if (selErr) throw selErr;
-      const idByKey = new Map<string, string>();
-      for (const row of existing || []) {
-        const k = `${(row as any).report_date}\0${(row as any).code}`;
-        idByKey.set(k, (row as any).id);
-      }
+      const { error: syncError } = await supabase
+        .from(MKT_DAILY_DETAILS_TABLE)
+        .upsert(payload, { onConflict: 'report_date,ma_nv,ten_chien_dich' });
+      if (syncError) throw syncError;
 
-      const payload = prepared.map((p) => {
-        const k = `${p.report_date}\0${p.code}`;
-        const id = idByKey.get(k);
-        return {
-          ...(id ? { id } : {}),
-          ...p,
-        };
-      });
-
-      // Không dựa vào onConflict — tách update/insert như trên
-      const toUpdate = payload.filter((p) => (p as any).id);
-      const toInsert = payload.filter((p) => !(p as any).id);
-      if (toUpdate.length > 0) {
-        const chunk = 50;
-        for (let i = 0; i < toUpdate.length; i += chunk) {
-          const part = toUpdate.slice(i, i + chunk);
-          const results = await Promise.all(
-            part.map((r) => supabase.from(REPORTS_TABLE).update(r).eq('id', (r as any).id))
-          );
-          const err = results.find((x) => x.error)?.error;
-          if (err) throw err;
+      // Marketing Report reads detail_reports, so also sync one employee/day summary there.
+      const byEmployeeDay = new Map<string, { report_date: string; code: string; ad_cost: number; mess_comment_count: number }>();
+      for (const row of payload) {
+        const code = String(row.ma_nv).trim();
+        const key = `${row.report_date}\0${normalizeEmployeeCode(code)}`;
+        const current = byEmployeeDay.get(key);
+        if (!current) {
+          byEmployeeDay.set(key, {
+            report_date: row.report_date,
+            code,
+            ad_cost: row.ad_cost_vnd,
+            mess_comment_count: row.message_conversations,
+          });
+        } else {
+          current.ad_cost += row.ad_cost_vnd;
+          current.mess_comment_count += row.message_conversations;
         }
       }
-      if (toInsert.length > 0) {
-        const { error: insErr } = await supabase.from(REPORTS_TABLE).insert(toInsert);
-        if (insErr) throw insErr;
+      const summaries = Array.from(byEmployeeDay.values());
+      const reportDates = Array.from(new Set(summaries.map((row) => row.report_date)));
+      const [staffRes, reportRes] = await Promise.all([
+        fetchAllRows<{ ma_ns: string | null; name: string | null; email: string | null; team: string | null }>(
+          supabase.from(EMPLOYEES_TABLE).select('ma_ns, name, email, team')
+        ),
+        fetchAllRows<{ id: string; report_date: string; code: string | null; email: string | null }>(
+          supabase.from(REPORTS_TABLE).select('id, report_date, code, email').in('report_date', reportDates)
+        ),
+      ]);
+      if (staffRes.error) throw staffRes.error;
+      if (reportRes.error) throw reportRes.error;
+
+      const staffByCode = new Map<string, { name: string; email: string | null; team: string | null }>();
+      for (const staff of staffRes.data || []) {
+        const key = normalizeEmployeeCode(staff.ma_ns);
+        if (!key || staffByCode.has(key)) continue;
+        const email = String(staff.email || '').trim().toLowerCase();
+        staffByCode.set(key, {
+          name: String(staff.name || email || staff.ma_ns).trim() || String(staff.ma_ns),
+          email: email || null,
+          team: staff.team?.trim() || null,
+        });
       }
 
-      {
-        const okMsg = `Đã đồng bộ ${payload.length} dòng theo khóa Ngày + Code (chi phí QC, mess, tổng data). Nếu không thấy key trùng thì thêm dòng mới.`;
-        setExcelMsg(okMsg);
-        try { window.alert(okMsg); } catch {}
+      const reportIdByCodeKey = new Map<string, string>();
+      const reportIdByEmailKey = new Map<string, string>();
+      for (const report of reportRes.data || []) {
+        const day = String(report.report_date).slice(0, 10);
+        const codeKey = `${day}\0${normalizeEmployeeCode(report.code)}`;
+        const emailKey = `${day}\0${String(report.email || '').trim().toLowerCase()}`;
+        if (report.id && normalizeEmployeeCode(report.code) && !reportIdByCodeKey.has(codeKey)) {
+          reportIdByCodeKey.set(codeKey, report.id);
+        }
+        if (report.id && String(report.email || '').trim() && !reportIdByEmailKey.has(emailKey)) {
+          reportIdByEmailKey.set(emailKey, report.id);
+        }
       }
-      // Hiển thị danh sách đã đồng bộ
-      setLastPushed(
-        payload.map((p) => ({
-          report_date: p.report_date,
-          product: p.product,
-          market: p.market,
-          page: p.page,
-          ad_account: p.ad_account,
-          ad_cost: p.ad_cost,
-          mess_comment_count: p.mess_comment_count,
-          tong_data_nhan: p.tong_data_nhan,
-          team: p.team,
-          name: p.name,
-          email: p.email,
-          code: p.code,
-        }))
+
+      let updatedReports = 0;
+      let createdReports = 0;
+      let skippedNoEmployee = 0;
+      let skippedNoEmail = 0;
+      const reportChunk = 60;
+      const reportUpdates: { id: string; patch: { ad_cost: number; mess_comment_count: number; code: string } }[] = [];
+      const reportInserts: Record<string, unknown>[] = [];
+      for (const row of summaries) {
+        const key = `${row.report_date}\0${normalizeEmployeeCode(row.code)}`;
+        const staff = staffByCode.get(normalizeEmployeeCode(row.code));
+        const id = reportIdByCodeKey.get(key) || (staff ? reportIdByEmailKey.get(`${row.report_date}\0${staff.email}`) : undefined);
+        if (id) {
+          reportUpdates.push({
+            id,
+            patch: { ad_cost: row.ad_cost, mess_comment_count: row.mess_comment_count, code: row.code },
+          });
+          continue;
+        }
+        if (!staff) {
+          skippedNoEmployee++;
+          continue;
+        }
+        if (!staff.email) {
+          skippedNoEmail++;
+          continue;
+        }
+        reportInserts.push({
+          report_date: row.report_date,
+          code: row.code,
+          name: staff.name,
+          email: staff.email,
+          team: staff.team,
+          ad_cost: row.ad_cost,
+          mess_comment_count: row.mess_comment_count,
+        });
+      }
+
+      for (let i = 0; i < reportUpdates.length; i += reportChunk) {
+        const part = reportUpdates.slice(i, i + reportChunk);
+        const results = await Promise.all(
+          part.map(({ id, patch }) => supabase.from(REPORTS_TABLE).update(patch).eq('id', id))
+        );
+        const updateError = results.find((result) => result.error)?.error;
+        if (updateError) throw updateError;
+        updatedReports += part.length;
+      }
+      for (let i = 0; i < reportInserts.length; i += reportChunk) {
+        const part = reportInserts.slice(i, i + reportChunk);
+        const { error: insertError } = await supabase.from(REPORTS_TABLE).insert(part);
+        if (insertError) throw insertError;
+        createdReports += part.length;
+      }
+
+      const skippedTail = skippedNoEmployee
+        ? ` ${skippedNoEmployee} d\u00f2ng kh\u00f4ng c\u00f3 nh\u00e2n vi\u00ean kh\u1edbp M\u00e3 NV trong employees n\u00ean b\u1ecb b\u1ecf qua.`
+        : '';
+      const missingEmailTail = skippedNoEmail
+        ? ` ${skippedNoEmail} d\u00f2ng kh\u1edbp M\u00e3 NV nh\u01b0ng nh\u00e2n s\u1ef1 ch\u01b0a c\u00f3 email; th\u00eam email trong Qu\u1ea3n l\u00fd nh\u00e2n s\u1ef1 r\u1ed3i b\u1ea5m \u0110\u1ed3ng b\u1ed9 l\u1ea1i.`
+        : '';
+      setExcelMsg(
+        `\u0110\u00e3 \u0111\u1ed3ng b\u1ed9 ${payload.length} chi ti\u1ebft QC; Marketing Report: c\u1eadp nh\u1eadt ${updatedReports}, t\u1ea1o m\u1edbi ${createdReports} d\u00f2ng.${skippedTail}${missingEmailTail}`
       );
+      await loadDailyDetails();
     } catch (e) {
-      const msg =
-        e && typeof e === 'object' && 'message' in e ? String((e as any).message) : 'Đồng bộ thất bại.';
-      setExcelMsg(`Lỗi: ${msg}`);
-      try {
-        window.alert(`Đồng bộ thất bại: ${msg}`);
-      } catch {}
+      const msg = e && typeof e === 'object' && 'message' in e ? String((e as any).message) : '\u0110\u1ed3ng b\u1ed9 th\u1ea5t b\u1ea1i.';
+      setExcelMsg(`L\u1ed7i: ${msg}`);
+      window.alert(`\u0110\u1ed3ng b\u1ed9 th\u1ea5t b\u1ea1i: ${msg}`);
     } finally {
       setPushing(false);
     }
-  }, [rows, currentUserEmail]);
+  }, [rows, loadDailyDetails]);
 
   const summary = useMemo(() => {
     if (!rows.length) return 'Chưa có dòng trong bộ lọc';
     return `${rows.length} dòng · ${applied.from} → ${applied.to}`;
   }, [rows.length, applied]);
 
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const totalSpend = useMemo(
+    () => rows.reduce((sum, row) => sum + (Number(row.so_tien_da_chi_tieu_vnd) || 0), 0),
+    [rows],
+  );
+  const pageRows = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
+    return rows.slice(start, start + PAGE_SIZE);
+  }, [rows, safePage]);
+  const pageIds = pageRows.map((row) => row.id);
+  const selectedOnPage = pageIds.filter((id) => selectedIds.has(id)).length;
+  const allPageSelected = pageIds.length > 0 && selectedOnPage === pageIds.length;
+
+  const togglePageSelection = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const handleDeleteSelected = async () => {
+    const ids = [...selectedIds];
+    if (!ids.length || deleting) return;
+    if (!window.confirm(`Xóa ${ids.length} dòng QC đã chọn? Thao tác này không thể hoàn tác.`)) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      const deletedCount = await deleteQcRows(ids);
+      setSelectedIds(new Set());
+      setExcelMsg(`Đã xóa ${deletedCount} dòng QC.`);
+      await load();
+    } catch (e) {
+      const message = e && typeof e === 'object' && 'message' in e ? String(e.message) : 'Không xóa được các dòng đã chọn.';
+      setError(message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteAllFiltered = async () => {
+    const ids = rows.map((row) => row.id);
+    if (!ids.length || deleting || loading) return;
+    const employeeFilter = applied.maNv ? `, mã NV ${applied.maNv}` : '';
+    const prompt = `Xóa toàn bộ ${ids.length} dòng QC theo bộ lọc ngày ${applied.from} đến ${applied.to}${employeeFilter}? Thao tác này không thể hoàn tác.`;
+    if (!window.confirm(prompt)) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      const deletedCount = await deleteQcRows(ids);
+      setSelectedIds(new Set());
+      setExcelMsg(`Đã xóa ${deletedCount}/${ids.length} dòng QC theo bộ lọc.`);
+      await load();
+    } catch (e) {
+      const message = e && typeof e === 'object' && 'message' in e ? String(e.message) : 'Không xóa được dữ liệu QC.';
+      setError(message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="dash-fade-up">
+      <div className="mb-3 flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--bg2)] px-4 py-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#6d9fe5] to-[#3e659a] text-[11px] font-extrabold tracking-[-0.5px] text-white shadow-sm">MAP</div>
+        <div className="min-w-0">
+          <div className="text-[12px] font-extrabold text-[var(--text)]">MAP - Marketing Analytic Platform</div>
+          <div className="text-[10px] text-[var(--text3)]">{'Chi ti\u1ebft MKT theo ng\u00e0y'}</div>
+        </div>
+      </div>
       <SectionCard
-        title="📊 Dữ liệu QC Excel (theo dự án)"
+        title="📊 Dữ liệu QC Excel theo Mã NV"
         subtitle={summary}
         bodyPadding={false}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleDeleteAllFiltered()}
+              disabled={rows.length === 0 || deleting || loading}
+              title="Xóa tất cả dòng khớp bộ lọc hiện tại"
+              className="flex items-center gap-1.5 rounded-[6px] border border-[rgba(239,68,68,0.5)] bg-[rgba(239,68,68,0.16)] px-2.5 py-1.5 text-[11px] font-extrabold text-[var(--R)] hover:bg-[rgba(239,68,68,0.24)] disabled:opacity-40"
+            >
+              {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+              Xóa tất cả ({rows.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDeleteSelected()}
+              disabled={selectedIds.size === 0 || deleting || loading}
+              className="flex items-center gap-1.5 rounded-[6px] border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.08)] px-2.5 py-1.5 text-[11px] font-bold text-[var(--R)] hover:bg-[rgba(239,68,68,0.14)] disabled:opacity-40"
+            >
+              {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+              {deleting ? 'Đang xóa...' : `Xóa đã chọn${selectedIds.size ? ` (${selectedIds.size})` : ''}`}
+            </button>
             <button
               type="button"
               onClick={() => void load()}
@@ -549,23 +626,6 @@ export const ProjectQcExcelView: React.FC = () => {
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
               Làm mới
             </button>
-            <button
-              type="button"
-              onClick={() => downloadQcExcelTemplate()}
-              className="flex items-center gap-1.5 rounded-[6px] border border-[var(--border)] bg-[var(--bg2)] px-2.5 py-1.5 text-[11px] font-bold text-[var(--text2)]"
-            >
-              <Download size={13} />
-              Tải mẫu Excel
-            </button>
-            <button
-              type="button"
-              onClick={() => downloadMktReportExcelTemplate()}
-              className="flex items-center gap-1.5 rounded-[6px] border border-[var(--border)] bg-[var(--bg2)] px-2.5 py-1.5 text-[11px] font-bold text-[var(--text2)]"
-              title="Mẫu Excel nhập trực tiếp vào detail_reports (giống MKT History)"
-            >
-              <Download size={13} />
-              Mẫu Excel báo cáo
-            </button>
             <input
               ref={fileRef}
               type="file"
@@ -573,72 +633,41 @@ export const ProjectQcExcelView: React.FC = () => {
               className="hidden"
               onChange={(e) => void handleUpload(e.target.files?.[0] ?? null)}
             />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={excelBusy}
-              className="flex items-center gap-1.5 rounded-[6px] border border-[#10b981] px-2.5 py-1.5 text-[11px] font-bold text-[#34d399] disabled:opacity-50"
-            >
-              {excelBusy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-              Tải lên
-            </button>
-            <input
-              ref={reportExcelRef}
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              onChange={(e) => void handleUploadReportExcel(e.target.files?.[0] ?? null)}
-            />
-            <button
-              type="button"
-              onClick={() => reportExcelRef.current?.click()}
-              disabled={excelBusy}
-              className="flex items-center gap-1.5 rounded-[6px] border border-[#10b981] px-2.5 py-1.5 text-[11px] font-bold text-[#34d399] disabled:opacity-50"
-              title="Chọn Excel báo cáo để xem trước; sau đó bấm Đồng bộ để ghi vào detail_reports"
-            >
-              {excelBusy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-              Tải lên báo cáo
-            </button>
-            <button
-              type="button"
-              onClick={() => void commitStagedReportRows()}
-              disabled={excelBusy || !currentUserEmail || stagedReportRows.length === 0}
-              className="flex items-center gap-1.5 rounded-[6px] border border-[#22c55e] px-2.5 py-1.5 text-[11px] font-bold text-[#86efac] disabled:opacity-50"
-              title="Ghi các dòng báo cáo đang Preview vào detail_reports"
-            >
-              {excelBusy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-              Đồng bộ báo cáo
-            </button>
-            <button
-              type="button"
-              onClick={() => void handlePushToDetailReports()}
-              disabled={pushing || loading || rows.length === 0}
-              className="flex items-center gap-1.5 rounded-[6px] border border-[#10b981] px-2.5 py-1.5 text-[11px] font-bold text-[#34d399] disabled:opacity-50"
-              title="Đẩy các dòng đã lọc vào bảng detail_reports"
-            >
-              {pushing ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-              Đẩy vào detail_reports
-            </button>
+            <details className="relative">
+              <summary
+                className="flex cursor-pointer list-none items-center gap-1.5 rounded-[6px] border border-[#10b981] px-3 py-1.5 text-[11px] font-bold text-[#34d399] [&::-webkit-details-marker]:hidden"
+                aria-label="Các thao tác Excel"
+              >
+                <FileSpreadsheet size={13} />
+                Excel
+                <ChevronDown size={13} />
+              </summary>
+              <div className="absolute right-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-1 shadow-xl">
+                <div className="px-2 py-1.5 text-[9px] font-extrabold uppercase tracking-wide text-[var(--text3)]">Mẫu Excel</div>
+                <button type="button" onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); downloadQcExcelTemplate(); }} className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-[11px] text-[var(--text2)] hover:bg-white/5">
+                  <Download size={13} /> Tải mẫu Excel QC
+                </button>
+                <div className="my-1 border-t border-[var(--border)]" />
+                <div className="px-2 py-1.5 text-[9px] font-extrabold uppercase tracking-wide text-[var(--text3)]">Nhập dữ liệu</div>
+                <button type="button" disabled={excelBusy} onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); fileRef.current?.click(); }} className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-[11px] text-[var(--text2)] hover:bg-white/5 disabled:opacity-50">
+                  <Upload size={13} /> Tải lên dữ liệu QC
+                </button>
+                <div className="my-1 border-t border-[var(--border)]" />
+                <div className="px-2 py-1.5 text-[9px] font-extrabold uppercase tracking-wide text-[var(--text3)]">Đồng bộ</div>
+                <button type="button" disabled={pushing || loading || rows.length === 0} onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); void handleSyncToDailyDetails(); }} className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-[11px] text-[var(--text2)] hover:bg-white/5 disabled:opacity-50">
+                  <RefreshCw size={13} /> {'\u0110\u1ed3ng b\u1ed9 QC v\u00e0o chi ti\u1ebft MKT'}
+                </button>
+              </div>
+            </details>
           </div>
         }
       >
         <div className="p-[14px_16px] border-b border-[var(--border)] bg-[var(--bg3)] space-y-3">
           <div className="flex flex-wrap gap-3 items-end">
-            <label className="flex flex-col gap-1 min-w-[200px] flex-1 max-w-[320px]">
-              <span className="text-[9px] font-extrabold uppercase text-[var(--text3)]">Dự án (khi nhập Excel)</span>
-              <select
-                value={draftDuAnId}
-                onChange={(e) => setDraftDuAnId(e.target.value)}
-                className="bg-[var(--bg2)] border border-[var(--border)] rounded-[8px] text-[12px] p-2 text-[var(--text)] outline-none focus:border-[var(--accent)] [color-scheme:dark]"
-              >
-                <option value="">— Chưa gán dự án —</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.ma_du_an?.trim() ? `${p.ma_du_an} · ` : ''}
-                    {p.ten_du_an}
-                  </option>
-                ))}
-              </select>
+            <label className="flex flex-col gap-1 min-w-[160px]">
+              <span className="text-[9px] font-extrabold uppercase text-[var(--text3)]">Mã NV</span>
+              <input type="text" value={draftMaNv} onChange={(e) => setDraftMaNv(e.target.value)} placeholder="Tất cả"
+                className="bg-[var(--bg2)] border border-[var(--border)] rounded-[8px] text-[12px] p-2 text-[var(--text)]" />
             </label>
             <label className="flex flex-col gap-1 min-w-[130px]">
               <span className="text-[9px] font-extrabold uppercase text-[var(--text3)]">Từ ngày</span>
@@ -668,9 +697,8 @@ export const ProjectQcExcelView: React.FC = () => {
             </button>
           </div>
           <p className="text-[10px] text-[var(--text3)] leading-relaxed max-w-[1000px]">
-            Giống export Meta: A tài khoản, B quảng cáo (ô trống = kế thừa dòng trên), C ngày hoặc «All» (tổng theo QC), D trống,
-            E tiền tệ, F chi tiêu, G chi phí/lượt kết quả, H CPM, I CTR, J tin nhắn; tùy chọn K–M: CPC, bắt đầu/kết thúc báo cáo.
-            Giữ hàng tiêu đề; file 10 cột vẫn hợp lệ.
+            Cột Excel: Ngày, Mã NV, Tên chiến dịch, Số tiền đã chi tiêu (VND), Số trò chuyện qua tin nhắn.
+            Mã NV có thể điền riêng hoặc tự lấy từ ngoặc vuông trong tên chiến dịch.
             Bảng DB: <code className="text-[var(--text2)]">{QC_EXCEL_TABLE}</code>.
           </p>
           {excelMsg && (
@@ -681,6 +709,17 @@ export const ProjectQcExcelView: React.FC = () => {
           {error && <div className="text-[11px] font-bold text-[var(--R)]">{error}</div>}
         </div>
 
+        <div className="grid grid-cols-1 gap-3 border-b border-[var(--border)] bg-[var(--bg2)] p-3 sm:grid-cols-2">
+          <div className="rounded-[8px] border border-[var(--border)] bg-[var(--bg3)] px-4 py-3">
+            <div className="text-[9px] font-extrabold uppercase tracking-wide text-[var(--text3)]">Tổng chi tiêu theo bộ lọc</div>
+            <div className="mt-1 text-[20px] font-black text-[var(--text)]">{formatFullVnd(totalSpend)} <span className="text-[11px] font-bold">VND</span></div>
+          </div>
+          <div className="rounded-[8px] border border-[var(--border)] bg-[var(--bg3)] px-4 py-3">
+            <div className="text-[9px] font-extrabold uppercase tracking-wide text-[var(--text3)]">Số dòng trong bộ lọc</div>
+            <div className="mt-1 text-[20px] font-black text-[var(--text)]">{rows.length.toLocaleString('vi-VN')} <span className="text-[11px] font-bold">dòng</span></div>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           {loading && rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-2 text-[var(--text3)]">
@@ -688,69 +727,58 @@ export const ProjectQcExcelView: React.FC = () => {
               <span className="text-[12px] font-bold">Đang tải…</span>
             </div>
           ) : (
-            <table className="w-full border-collapse min-w-[1400px] text-left">
+            <table className="w-full border-collapse min-w-[900px] text-left">
               <thead>
                 <tr className="border-b border-[var(--border)] text-[9px] font-extrabold uppercase tracking-wide text-[var(--text3)]">
-                  <th className="p-2 whitespace-nowrap">Dự án</th>
+                  <th className="w-9 p-2 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label="Chọn tất cả dòng trên trang này"
+                      checked={allPageSelected}
+                      ref={(input) => { if (input) input.indeterminate = selectedOnPage > 0 && !allPageSelected; }}
+                      onChange={togglePageSelection}
+                      disabled={loading || pageIds.length === 0}
+                    />
+                  </th>
+                  <th className="p-2 whitespace-nowrap">Mã NV</th>
                   <th className="p-2 whitespace-nowrap">Ngày</th>
-                  <th className="p-2 min-w-[120px]">Tài khoản</th>
-                  <th className="p-2 min-w-[140px]">Quảng cáo</th>
-                  <th className="p-2">Tiền tệ</th>
-                  <th className="p-2 text-right">Chi tiêu</th>
-                  <th className="p-2 text-right">CP mua</th>
-                  <th className="p-2 text-right">CPM</th>
-                  <th className="p-2 text-right">CTR</th>
-                  <th className="p-2 text-right">TN</th>
-                  <th className="p-2 text-right">CPC</th>
-                  <th className="p-2 whitespace-nowrap">BC từ</th>
-                  <th className="p-2 whitespace-nowrap">BC đến</th>
+                  <th className="p-2 min-w-[220px]">Tên chiến dịch</th>
+                  <th className="p-2 text-right">Chi tiêu (VND)</th>
+                  <th className="p-2 text-right">Trò chuyện</th>
                   <th className="p-2">File</th>
                 </tr>
               </thead>
               <tbody className="text-[11px] text-[var(--text2)] font-[var(--mono)]">
                 {rows.length === 0 && !loading ? (
                   <tr>
-                    <td colSpan={14} className="p-10 text-center text-[var(--text3)] font-bold">
+                    <td colSpan={7} className="p-10 text-center text-[var(--text3)] font-bold">
                       Không có dữ liệu — nhập Excel hoặc nới bộ lọc ngày.
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r) => {
-                    const tenDa = tenDuAnFromRow(r);
+                  pageRows.map((r) => {
                     const ngay = r.ngay?.slice(0, 10) || '';
                     return (
-                      <tr
-                        key={r.id}
-                        className="border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.02)]"
-                      >
-                        <td className="p-2 max-w-[140px] truncate font-bold text-[var(--text)]" title={tenDa}>
-                          {tenDa}
+                      <tr key={r.id} className="border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.02)]">
+                        <td className="p-2 text-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`Chọn dòng ${r.ma_nv || r.id} ngày ${ngay}`}
+                            checked={selectedIds.has(r.id)}
+                            onChange={() => setSelectedIds((current) => {
+                              const next = new Set(current);
+                              if (next.has(r.id)) next.delete(r.id);
+                              else next.add(r.id);
+                              return next;
+                            })}
+                          />
                         </td>
-                        <td className="p-2 whitespace-nowrap">
-                          {ngay ? formatReportDateVi(ngay) : 'Tổng (All)'}
-                        </td>
-                        <td className="p-2 max-w-[140px] truncate" title={r.ten_tai_khoan || ''}>
-                          {r.ten_tai_khoan || '—'}
-                        </td>
-                        <td className="p-2 max-w-[160px] truncate" title={r.ten_quang_cao || ''}>
-                          {r.ten_quang_cao || '—'}
-                        </td>
-                        <td className="p-2">{r.don_vi_tien_te || '—'}</td>
-                        <td className="p-2 text-right">{formatCompactVnd(r.so_tien_chi_tieu_vnd)}</td>
-                        <td className="p-2 text-right">
-                          {r.chi_phi_mua != null ? formatCompactVnd(r.chi_phi_mua) : '—'}
-                        </td>
-                        <td className="p-2 text-right">{r.cpm != null ? formatCompactVnd(r.cpm) : '—'}</td>
-                        <td className="p-2 text-right text-[var(--text)]">{r.ctr_tat_ca || '—'}</td>
-                        <td className="p-2 text-right">
-                          {r.luot_tro_chuyen_tin_nhan != null ? String(r.luot_tro_chuyen_tin_nhan) : '—'}
-                        </td>
-                        <td className="p-2 text-right">{r.cpc != null ? formatCompactVnd(r.cpc) : '—'}</td>
-                        <td className="p-2 text-[10px] text-[var(--text3)] whitespace-nowrap">{fmtTs(r.bao_cao_tu)}</td>
-                        <td className="p-2 text-[10px] text-[var(--text3)] whitespace-nowrap">{fmtTs(r.bao_cao_den)}</td>
-                        <td className="p-2 max-w-[100px] truncate text-[10px]" title={r.source_file || ''}>
-                          {r.source_file || '—'}
-                        </td>
+                        <td className="p-2 whitespace-nowrap font-bold text-[var(--text)]">{r.ma_nv || '—'}</td>
+                        <td className="p-2 whitespace-nowrap">{ngay ? formatReportDateVi(ngay) : '\u2014'}</td>
+                        <td className="p-2 max-w-[300px] truncate" title={r.ten_chien_dich || ''}>{r.ten_chien_dich || '—'}</td>
+                        <td className="p-2 text-right">{formatFullVnd(r.so_tien_da_chi_tieu_vnd)}</td>
+                        <td className="p-2 text-right">{r.so_tro_chuyen_tin_nhan ?? '—'}</td>
+                        <td className="p-2 max-w-[160px] truncate text-[10px]" title={r.source_file || ''}>{r.source_file || '—'}</td>
                       </tr>
                     );
                   })
@@ -759,83 +787,63 @@ export const ProjectQcExcelView: React.FC = () => {
             </table>
           )}
         </div>
+        {!loading && rows.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-3 py-2 text-[10px] text-[var(--text3)]">
+            <span>Hiển thị {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, rows.length)} / {rows.length} dòng</span>
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={safePage <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="rounded border border-[var(--border)] px-2 py-1 disabled:opacity-40">Trước</button>
+              <span>{safePage}/{totalPages}</span>
+              <button type="button" disabled={safePage >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="rounded border border-[var(--border)] px-2 py-1 disabled:opacity-40">Sau</button>
+            </div>
+          </div>
+        )}
       </SectionCard>
 
-      {lastPushed.length > 0 && (
-        <SectionCard
-          title="✅ Dòng vừa đẩy vào detail_reports"
-          subtitle={`${lastPushed.length} dòng`}
-          bodyPadding={false}
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse min-w-[1000px] text-left">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-[9px] font-extrabold uppercase tracking-wide text-[var(--text3)]">
-                  <th className="p-2 whitespace-nowrap">Ngày</th>
-                  <th className="p-2">Code</th>
-                  <th className="p-2 text-right">Chi tiêu</th>
-                  <th className="p-2 text-right">Mess</th>
-                  <th className="p-2 text-right">Tổng data</th>
-                  <th className="p-2">Email</th>
-                </tr>
-              </thead>
-              <tbody className="text-[11px] text-[var(--text2)] font-[var(--mono)]">
-                {lastPushed.map((r, i) => (
-                  <tr key={`${r.report_date}-${r.email}-${r.page || ''}-${i}`} className="border-b border-[rgba(255,255,255,0.04)]">
-                    <td className="p-2 whitespace-nowrap">{formatReportDateVi(r.report_date)}</td>
-                    <td className="p-2 max-w-[140px] truncate" title={r.code || ''}>
-                      {r.code || '—'}
-                    </td>
-                    <td className="p-2 text-right">{formatCompactVnd(r.ad_cost)}</td>
-                    <td className="p-2 text-right">{r.mess_comment_count ?? '—'}</td>
-                    <td className="p-2 text-right">{r.tong_data_nhan ?? '—'}</td>
-                    <td className="p-2">{r.email}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <SectionCard
+        title={'Chi ti\u1ebft MKT theo ng\u00e0y'}
+        subtitle={`${dailyDetails.length} d\u00f2ng trong ${MKT_DAILY_DETAILS_TABLE}`}
+        bodyPadding={false}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => void handleDeleteAllDailyDetails()} disabled={dailyDetails.length === 0 || dailyDeleting || dailyLoading}
+              className="flex items-center gap-1.5 rounded-[6px] border border-[rgba(239,68,68,0.5)] bg-[rgba(239,68,68,0.16)] px-2.5 py-1.5 text-[11px] font-extrabold text-[var(--R)] hover:bg-[rgba(239,68,68,0.24)] disabled:opacity-40">
+              {dailyDeleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+              {dailyDeleting ? 'Đang xóa...' : `Xóa tất cả (${dailyDetails.length})`}
+            </button>
+            <button type="button" onClick={() => void loadDailyDetails()} disabled={dailyLoading || dailyDeleting}
+              className="rounded-[6px] border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-bold text-[var(--text2)] disabled:opacity-50">
+              {dailyLoading ? '\u0110ang t\u1ea3i...' : 'L\u00e0m m\u1edbi'}
+            </button>
           </div>
-        </SectionCard>
-      )}
+        }
+      >
+        {dailyError && <div className="p-3 text-[11px] font-bold text-[var(--R)]">{dailyError}. Ch\u1ea1y supabase/create_mkt_daily_details.sql.</div>}
+        {dailyMsg && <div className="p-3 text-[11px] font-bold text-[var(--G)]">{dailyMsg}</div>}
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse min-w-[900px] text-left">
+            <thead><tr className="border-b border-[var(--border)] text-[9px] font-extrabold uppercase tracking-wide text-[var(--text3)]">
+              <th className="p-2">{'Ng\u00e0y'}</th><th className="p-2">{'M\u00e3 NV'}</th><th className="p-2 min-w-[220px]">{'T\u00ean chi\u1ebfn d\u1ecbch'}</th>
+              <th className="p-2 text-right">{'Chi ti\u00eau (VND)'}</th><th className="p-2 text-right">{'Tr\u00f2 chuy\u1ec7n'}</th><th className="p-2">File</th>
+            </tr></thead>
+            <tbody className="text-[11px] text-[var(--text2)] font-[var(--mono)]">
+              {dailyDetails.length === 0 && !dailyLoading ? (
+                <tr><td colSpan={6} className="p-8 text-center text-[var(--text3)] font-bold">Ch\u01b0a c\u00f3 chi ti\u1ebft MKT trong kho\u1ea3ng ng\u00e0y n\u00e0y.</td></tr>
+              ) : dailyDetails.map((row) => (
+                <tr key={row.id} className="border-b border-[rgba(255,255,255,0.04)]">
+                  <td className="p-2 whitespace-nowrap">{formatReportDateVi(row.report_date)}</td>
+                  <td className="p-2 font-bold">{row.ma_nv}</td>
+                  <td className="p-2 max-w-[320px] truncate" title={row.ten_chien_dich}>{row.ten_chien_dich}</td>
+                  <td className="p-2 text-right">{formatFullVnd(row.ad_cost_vnd)}</td>
+                  <td className="p-2 text-right">{row.message_conversations}</td>
+                  <td className="p-2 max-w-[160px] truncate text-[10px]" title={row.source_file || ''}>{row.source_file || '\u2014'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
 
-      {stagedReportRows.length > 0 && (
-        <SectionCard
-          title="👀 Preview báo cáo sẽ đồng bộ"
-          subtitle={`${stagedReportRows.length} dòng`}
-          bodyPadding={false}
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse min-w-[1000px] text-left">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-[9px] font-extrabold uppercase tracking-wide text-[var(--text3)]">
-                  <th className="p-2 whitespace-nowrap">Ngày</th>
-                  <th className="p-2">Code</th>
-                  <th className="p-2 text-right">Chi tiêu</th>
-                  <th className="p-2 text-right">Mess</th>
-                  <th className="p-2 text-right">Tổng data</th>
-                  <th className="p-2">TKQC</th>
-                </tr>
-              </thead>
-              <tbody className="text-[11px] text-[var(--text2)] font-[var(--mono)]">
-                {stagedReportRows.map((r, i) => (
-                  <tr key={`${r.report_date}-${r.page || ''}-${i}`} className="border-b border-[rgba(255,255,255,0.04)]">
-                    <td className="p-2 whitespace-nowrap">{formatReportDateVi(r.report_date)}</td>
-                    <td className="p-2 max-w-[120px] truncate" title={extractMaNvFromBracketPage(r.page || '') || ''}>
-                      {extractMaNvFromBracketPage(r.page || '') || '—'}
-                    </td>
-                    <td className="p-2 text-right">{formatCompactVnd(r.ad_cost)}</td>
-                    <td className="p-2 text-right">{r.mess_comment_count}</td>
-                    <td className="p-2 text-right">{r.tong_data_nhan}</td>
-                    <td className="p-2 max-w-[100px] truncate" title={r.ma_tkqc || ''}>
-                      {r.ma_tkqc || '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </SectionCard>
-      )}
+
     </div>
   );
 };

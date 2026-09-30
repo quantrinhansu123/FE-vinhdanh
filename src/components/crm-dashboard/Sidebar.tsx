@@ -1,93 +1,111 @@
 import React from 'react';
-import { Role, NavGroup, UserInfo, ViewId } from './types';
-import { LogOut } from 'lucide-react';
+import { NavGroup, UserInfo, ViewId } from './types';
+import { BriefcaseBusiness, ChartColumnIncreasing, ChartNoAxesCombined, Circle, Database, Download, Flame, Globe2, Home, IdCard, LogOut, Megaphone, Package, Scale, ShieldAlert, Target, TriangleAlert, Trophy, UserRound, UsersRound, Wallet } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+
+const stitchNavIcons: Record<string, LucideIcon> = {
+  'admin-dash': Home, 'mkt-dash': UserRound, 'leader-dash': UsersRound,
+  'burn-detect': Flame, alerts: TriangleAlert, projects: BriefcaseBusiness,
+  teams: UsersRound, staff: IdCard, 'ad-accounts': ChartNoAxesCombined,
+  kpis: ChartColumnIncreasing, agencies: BriefcaseBusiness, products: Package,
+  markets: Globe2, budget: Wallet, reconcile: Scale, 'upcare-mkt': Megaphone,
+  'project-qc-excel': ChartColumnIncreasing, 'reports-raw': Database,
+  'admin-ranking': Trophy, compare: ChartNoAxesCombined, 'leader-rank': Trophy,
+  'leader-mkt': UserRound, 'leader-tkqc': Megaphone, 'leader-budget': Wallet,
+  'kpi-target': Target, heatmap: ChartColumnIncreasing, 'mkt-history': Download,
+  'mkt-accounts': ShieldAlert,
+};
 
 interface SidebarProps {
-  currentRole: Role;
-  /** Chỉ hiển thị nút chuyển khu vực tương ứng (theo vị trí / phân quyền) */
-  allowedRoles: Role[];
-  onRoleChange: (role: Role) => void;
   currentView: ViewId;
   onViewChange: (view: ViewId) => void;
   user: UserInfo;
   navGroups: NavGroup[];
   onLogout?: () => void;
+  stitch?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  currentRole,
-  allowedRoles,
-  onRoleChange,
   currentView,
   onViewChange,
   user,
   navGroups,
-  onLogout
+  onLogout,
+  stitch = false,
 }) => {
-  const roleTabs = (['admin', 'leader', 'mkt'] as Role[]).filter((r) => allowedRoles.includes(r));
-  const gridCols =
-    roleTabs.length >= 3 ? 'grid-cols-3' : roleTabs.length === 2 ? 'grid-cols-2' : 'grid-cols-1';
-
-  return (
-    <aside className="w-[var(--sw)] shrink-0 bg-[var(--bg1)] border-r border-[var(--border)] flex flex-col overflow-hidden z-20">
-      <div className="p-[14px_14px_10px] border-b border-[var(--border)] shrink-0">
-        <div className="flex items-center gap-[9px] mb-[12px]">
-          <div className="w-[30px] h-[30px] rounded-[7px] bg-gradient-to-br from-[var(--accent)] to-[#5b4dff] flex items-center justify-center text-[13px] font-extrabold text-[#fff] shrink-0">
-            M
-          </div>
-          <div>
-            <div className="text-[13px] font-extrabold tracking-[0.3px]">
-              CRM <em className="text-[var(--accent)] not-italic">Mini Ads</em>
+  if (stitch) {
+    return (
+      <aside className="stitch-sidebar" aria-label="Điều hướng chính">
+        <div className="stitch-sidebar-brand">
+          <div className="stitch-sidebar-logo">MAP</div>
+          <div className="stitch-sidebar-brand-copy"><strong>MAP - Marketing</strong><span>Analytics Platform</span></div>
+        </div>
+        <nav className="stitch-sidebar-nav">
+          {navGroups.map((group, groupIndex) => (
+            <div className="stitch-sidebar-group" key={`${group.label}-${groupIndex}`}>
+              <div className="stitch-sidebar-group-label">{group.label}</div>
+              {group.items.map((item) => {
+                const Icon = stitchNavIcons[item.id] || Circle;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onViewChange(item.id)}
+                    className={`stitch-sidebar-link ${currentView === item.id ? 'is-active' : ''}`}
+                    aria-current={currentView === item.id ? 'page' : undefined}
+                    aria-label={item.label}
+                    title={item.label}
+                  >
+                    <Icon size={17} strokeWidth={2} aria-hidden="true" />
+                    <span>{item.label}</span>
+                    {item.id === 'burn-detect' && <i className="stitch-sidebar-alert-dot" aria-hidden="true" />}
+                    {item.badge && <b className="stitch-sidebar-badge">{item.badge.text}</b>}
+                  </button>
+                );
+              })}
             </div>
-            <div className="text-[9px] text-[var(--text3)] tracking-[0.8px] uppercase">
-              BIOKAMA · v3.0
-            </div>
+          ))}
+        </nav>
+        <div className="stitch-sidebar-footer">
+          {onLogout && <button type="button" className="stitch-sidebar-logout" onClick={onLogout}><LogOut size={17} />Đăng xuất</button>}
+          <div className="stitch-sidebar-user">
+            <span className="stitch-sidebar-user-avatar">{user.avatar}</span>
+            <span className="stitch-sidebar-user-copy"><strong>{user.name}</strong><small>{user.role} · Admin</small></span>
           </div>
         </div>
-        
-        {roleTabs.length > 0 && (
-          <div className={`grid ${gridCols} gap-[3px] bg-[var(--bg2)] rounded-[7px] p-[3px]`}>
-            {roleTabs.map((role) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => onRoleChange(role)}
-                className={`p-[5px_2px] border-0 rounded-[5px] cursor-pointer font-[var(--f)] text-[10px] font-bold tracking-[0.5px] text-center transition-all duration-150 ${
-                  currentRole === role
-                    ? 'bg-[var(--accent)] text-[#fff]'
-                    : 'text-[var(--text3)] bg-transparent hover:bg-[var(--bg3)] hover:text-[var(--text)]'
-                }`}
-              >
-                {role.charAt(0).toUpperCase() + role.slice(1)}
-              </button>
-            ))}
-          </div>
-        )}
+      </aside>
+    );
+  }
+  return (
+    <aside className="w-[var(--sw)] shrink-0 bg-[#101722] border-r border-white/[0.07] flex flex-col overflow-hidden z-20">
+      <div className="p-[16px_14px_14px] border-b border-white/[0.07] shrink-0">
+        <div className="flex items-center gap-[10px]">
+          <div className="w-[38px] h-[38px] rounded-[8px] bg-gradient-to-br from-[#6d9fe5] to-[#3e659a] flex items-center justify-center text-[12px] font-extrabold tracking-[-0.5px] text-white shrink-0">MAP</div>
+          <div className="min-w-0 text-[16px] font-bold leading-[1.25] text-slate-100">MAP - Marketing Analytic Platform</div>
+        </div>
       </div>
-
       <nav className="flex-1 overflow-y-auto p-[10px_8px] custom-scrollbar dash-scrollbar">
         {navGroups.map((group, gIdx) => (
           <div key={gIdx} className="mb-[18px]">
-            <div className="text-[9px] font-bold tracking-[1.5px] uppercase text-[var(--text3)] px-[8px] mb-[5px]">
+            <div className="text-[12px] font-bold tracking-[1.4px] uppercase text-slate-400 px-[10px] mb-[9px]">
               {group.label}
             </div>
             {group.items.map((item) => (
               <div
                 key={item.id}
                 onClick={() => onViewChange(item.id)}
-                className={`flex items-center gap-[8px] p-[7px_10px] rounded-[7px] cursor-pointer text-[11.5px] font-medium transition-all duration-150 mb-[1px] relative select-none ${
+                className={`flex items-center gap-[8px] p-[11px_12px] rounded-[7px] cursor-pointer text-[18px] font-bold transition-all duration-150 mb-[2px] relative select-none ${
                   currentView === item.id
-                    ? 'bg-[var(--accent-d)] text-[var(--accent)] font-bold'
-                    : 'text-[var(--text2)] hover:bg-[var(--bg3)] hover:text-[var(--text)]'
+                    ? 'bg-[#1d2b3d] text-[#a9cbff] font-semibold'
+                    : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-100'
                 }`}
               >
                 {currentView === item.id && (
-                  <div className="absolute left-0 top-1/5 bottom-1/5 w-[3px] rounded-[2px] bg-[var(--accent)]" />
+                  <div className="absolute left-0 top-1/5 bottom-1/5 w-[2px] rounded-[2px] bg-[#75a9f5]" />
                 )}
-                <span className="text-[13px] w-[16px] text-center shrink-0">{item.icon}</span>
-                {item.label}
+                <span className="whitespace-normal break-words">{item.label}</span>
                 {item.badge && (
-                  <span className={`ml-auto text-[9px] font-bold px-[6px] py-[1px] rounded-[10px] text-[#fff] ${
+                  <span className={`ml-auto text-[12px] font-bold px-[7px] py-[2px] rounded-[10px] text-[#fff] ${
                     item.badge.type === 'y' ? 'bg-[var(--Y)]' : item.badge.type === 'b' ? 'bg-[var(--accent)]' : 'bg-[var(--R)]'
                   }`}>
                     {item.badge.text}
@@ -103,7 +121,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="px-[10px] mb-[4px]">
           <button 
             onClick={onLogout}
-            className="w-full flex items-center gap-[10px] p-[8.5px_12px] rounded-[8px] text-[11.5px] font-bold text-[var(--text2)] hover:bg-[var(--bg3)] hover:text-[var(--R)] transition-all duration-200 group relative overflow-hidden active:scale-[0.98]"
+            className="w-full flex items-center gap-[10px] p-[10px_12px] rounded-[8px] text-[15px] font-bold text-[var(--text2)] hover:bg-[var(--bg3)] hover:text-[var(--R)] transition-all duration-200 group relative overflow-hidden active:scale-[0.98]"
           >
             <LogOut size={15} className="group-hover:-translate-x-0.5 transition-transform" />
             Đăng xuất
@@ -115,14 +133,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-[10px_12px] border-t border-[var(--border)] shrink-0 flex items-center gap-[8px]">
         <div className="flex items-center gap-[8px] flex-1">
           <div 
-            className="w-[28px] h-[28px] rounded-full flex items-center justify-center text-[11px] font-extrabold text-[#fff] shrink-0 shadow-sm"
+            className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-[14px] font-extrabold text-[#fff] shrink-0 shadow-sm"
             style={{ background: user.avatarBg || 'linear-gradient(135deg, var(--accent), #7c4dff)' }}
           >
             {user.avatar}
           </div>
           <div className="min-w-0">
-            <div className="text-[11.5px] font-bold text-[var(--text)] leading-tight truncate">{user.name}</div>
-            <div className="text-[9.5px] text-[var(--text3)] leading-tight truncate">{user.role}</div>
+            <div className="text-[14px] font-bold text-[var(--text)] leading-tight truncate">{user.name}</div>
+            <div className="text-[12px] text-[var(--text3)] leading-tight truncate">{user.role}</div>
           </div>
         </div>
       </div>

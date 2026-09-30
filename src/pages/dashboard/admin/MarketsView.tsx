@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { CrmMarketRow } from '../../../types';
 import { MarketFormModal } from './MarketFormModal';
 
@@ -69,7 +70,7 @@ export const MarketsView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const res = await supabase.from(MARKETS_TABLE).select(SELECT).order('ten_thi_truong', { ascending: true });
+    const res = await fetchAllRows<CrmMarketRow>(supabase.from(MARKETS_TABLE).select(SELECT).order('ten_thi_truong', { ascending: true }));
 
     if (res.error) {
       console.error('crm_markets:', res.error);

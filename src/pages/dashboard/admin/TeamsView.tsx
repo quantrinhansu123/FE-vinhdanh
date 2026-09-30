@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { CrmTeamRow, DuAnRow } from '../../../types';
 import { TeamFormModal } from './TeamFormModal';
 
@@ -56,11 +57,11 @@ export const TeamsView: React.FC = () => {
     setLoading(true);
     setError(null);
     const [teamsRes, duRes] = await Promise.all([
-      supabase
+      fetchAllRows<CrmTeamRow>(supabase
         .from(TEAMS_TABLE)
         .select('id, ma_team, ten_team, leader, so_thanh_vien, member_ids, du_an_ids, doanh_so_thang, trang_thai')
-        .order('ten_team', { ascending: true }),
-      supabase.from(DU_AN_TABLE).select('id, ten_du_an'),
+        .order('ten_team', { ascending: true })),
+      fetchAllRows<Pick<DuAnRow, 'id' | 'ten_du_an'>>(supabase.from(DU_AN_TABLE).select('id, ten_du_an')),
     ]);
 
     if (teamsRes.error) {
@@ -107,7 +108,7 @@ export const TeamsView: React.FC = () => {
   }, [rows, search, projectLabel]);
 
   return (
-    <div className="dash-fade-up">
+    <div className="dash-fade-up teams-view">
       {/* Page header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
         <div className="space-y-1">

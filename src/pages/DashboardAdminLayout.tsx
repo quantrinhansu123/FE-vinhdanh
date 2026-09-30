@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/crm-dashboard/Sidebar';
 import { Topbar } from '../components/crm-dashboard/Topbar';
 import { NotificationPanel } from '../components/crm-dashboard/NotificationPanel';
-import { Role, ViewId, UserInfo } from '../components/crm-dashboard/types';
+import { ViewId, UserInfo } from '../components/crm-dashboard/types';
 import { ADMIN_NAV, LEADER_NAV, MKT_NAV, VIEW_TITLES } from '../components/crm-dashboard/navData';
 
 // Admin Views
@@ -22,6 +22,7 @@ import { BudgetView } from './dashboard/admin/BudgetView';
 import { ReconcileView } from './dashboard/admin/ReconcileView';
 import { UpcareMktEmployeesView } from './dashboard/admin/UpcareMktEmployeesView';
 import { AdminRankingView } from './dashboard/admin/AdminRankingView';
+import { AdminKpisView } from './dashboard/admin/AdminKpisView';
 import { CompareView } from './dashboard/admin/CompareView';
 import { ReportsRawView } from './dashboard/admin/ReportsRawView';
 
@@ -45,16 +46,46 @@ import type { Employee, AuthUser as ReportAuthUser } from '../types';
 import {
   CRM_ADMIN_BASE,
   crmAdminPathForView,
-  defaultViewForRole,
   parseCrmAdminPath,
 } from '../utils/crmAdminRoutes';
 import {
-  crmAllowedRolesForTier,
   crmNavTierFromUser,
   defaultViewForTier,
-  tierAllowsRole,
   tierAllowsView,
 } from '../utils/crmNavAccess';
+import { StitchDataView } from '../components/ui/StitchUI';
+
+const STITCH_DATA_VIEWS: ReadonlySet<ViewId> = new Set([
+  'burn-detect',
+  'alerts',
+  'projects',
+  'project-qc-excel',
+  'teams',
+  'reports-raw',
+  'staff',
+  'ad-accounts',
+  'agencies',
+  'products',
+  'markets',
+  'budget',
+  'reconcile',
+  'upcare-mkt',
+  'admin-ranking',
+  'leader-rank',
+  'leader-mkt',
+  'leader-tkqc',
+  'mkt-history',
+  'mkt-accounts',
+  'leader-dash',
+  'heatmap',
+  'compare',
+  'mkt-dash',
+  'mkt-report',
+  'leader-budget',
+  'kpis',
+  'kpi-target',
+  'mkt-bill',
+]);
 
 export interface DashboardAdminLayoutProps {
   employees?: Employee[];
@@ -84,8 +115,6 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
   const parsed = parseCrmAdminPath(location.pathname);
 
   const tier = useMemo(() => crmNavTierFromUser(reportUser ?? null), [reportUser?.role, reportUser?.vi_tri]);
-  const allowedRoles = crmAllowedRolesForTier(tier);
-
   useEffect(() => {
     const p = parseCrmAdminPath(location.pathname);
     if (p.ok === false) {
@@ -103,17 +132,27 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
 
   const currentRole = parsed.ok ? parsed.role : 'admin';
   const currentView = parsed.ok ? parsed.view : 'admin-dash';
-
-  const handleRoleChange = (role: Role) => {
-    if (!tierAllowsRole(tier, role)) return;
-    navigate(crmAdminPathForView(defaultViewForRole(role)));
-  };
+  const stitchDataView = STITCH_DATA_VIEWS.has(currentView);
+  const stitchShell = true;
 
   const handleViewChange = (view: ViewId) => {
     navigate(crmAdminPathForView(view));
   };
 
-  const navGroups = currentRole === 'admin' ? ADMIN_NAV : currentRole === 'leader' ? LEADER_NAV : MKT_NAV;
+  const availableNav = tier === 'admin'
+    ? ADMIN_NAV
+    : tier === 'leader'
+      ? [...LEADER_NAV, ...MKT_NAV]
+      : MKT_NAV;
+  const seenNavViews = new Set<string>();
+  const navGroups = availableNav.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => {
+          if (!tierAllowsView(tier, item.id) || seenNavViews.has(item.id)) return false;
+          seenNavViews.add(item.id);
+          return true;
+        }),
+      })).filter((group) => group.items.length > 0);
 
   // Adapt passed props to UserInfo type
   const userInfo: UserInfo = {
@@ -128,7 +167,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
   const renderContent = () => {
     switch (currentView) {
       // Admin Views
-      case 'admin-dash': return <AdminDashboardView />;
+      case 'admin-dash': return <AdminDashboardView viewer={reportUser ?? null} />;
       case 'burn-detect': return <BurnDetectionView />;
       case 'alerts': return <AlertsView />;
       case 'projects': return <ProjectsView />;
@@ -138,6 +177,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'staff':
         return <StaffView onEmployeesRefresh={onEmployeesRefresh} />;
       case 'ad-accounts': return <AdAccountsView />;
+      case 'kpis': return <AdminKpisView />;
       case 'agencies': return <AgenciesView />;
       case 'products': return <ProductsView />;
       case 'markets': return <MarketsView />;
@@ -174,16 +214,14 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
   };
 
   return (
-    <div className="dash-theme flex h-screen w-full overflow-hidden font-sans antialiased">
+    <div className={`dash-theme flex h-screen w-full overflow-hidden font-sans antialiased ${stitchShell ? 'stitch-admin-shell stitch-system' : ''}`}>
       <Sidebar
-        allowedRoles={allowedRoles}
-        currentRole={currentRole}
-        onRoleChange={handleRoleChange}
         currentView={currentView}
         onViewChange={handleViewChange}
         user={userInfo}
         navGroups={navGroups}
         onLogout={onLogout}
+        stitch={stitchShell}
       />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -191,11 +229,12 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
           title={VIEW_TITLES[currentView] || 'CRM Mini Ads'}
           onToggleNotif={() => setIsNotifOpen(!isNotifOpen)}
           hasNewNotif={false}
+          stitch={stitchShell}
         />
 
-        <main className="flex-1 overflow-y-auto p-[12px] dash-scrollbar custom-scrollbar bg-[var(--bg0)]">
+        <main className={`flex-1 overflow-y-auto dash-scrollbar custom-scrollbar ${stitchShell ? 'stitch-admin-main' : 'p-[12px] bg-[var(--bg0)]'}`}>
           <div className="dash-fade-up w-full">
-            {renderContent()}
+            {stitchDataView ? <StitchDataView>{renderContent()}</StitchDataView> : renderContent()}
           </div>
         </main>
       </div>

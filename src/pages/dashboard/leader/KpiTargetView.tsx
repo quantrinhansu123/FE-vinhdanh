@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import '../../../styles/stitchSystem.css';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { AuthUser, Employee } from '../../../types';
 import { formatNumberDots, formatTypingGroupedInt } from '../mkt/mktDetailReportShared';
 
@@ -96,7 +98,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
   const loadStaffList = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const res = await supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true });
+    const res = await fetchAllRows<Employee>(supabase.from(EMPLOYEES_TABLE).select(STAFF_SELECT).order('name', { ascending: true }));
     if (res.error) {
       console.error('kpi-target employees:', res.error);
       setError(res.error.message || 'Không tải được nhân sự.');
@@ -121,11 +123,11 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
         .eq('team_key', teamKey)
         .maybeSingle(),
       ids.length
-        ? supabase
+        ? fetchAllRows<{ employee_id: string; muc_tieu_vnd: number; muc_tieu_lead: number; muc_tieu_don_chot: number }>(supabase
             .from(KPI_STAFF_TABLE)
             .select('employee_id, muc_tieu_vnd, muc_tieu_lead, muc_tieu_don_chot')
             .eq('nam_thang', ym)
-            .in('employee_id', ids)
+            .in('employee_id', ids))
         : Promise.resolve({
             data: [] as { employee_id: string; muc_tieu_vnd: number; muc_tieu_lead: number; muc_tieu_don_chot: number }[],
             error: null,
@@ -382,7 +384,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
             <button
               type="button"
               onClick={() => setFormOpen((prev) => !prev)}
-              className="flex items-center gap-[6px] bg-[#3d8ef0] hover:bg-[#2e7dd1] text-white py-[6px] px-[10px] rounded-[6px] text-[11px] font-bold border border-[rgba(61,142,240,0.35)]"
+              className="stitch-button stitch-button--primary stitch-button--small"
             >
               {formOpen ? 'Ẩn form' : '+ Add KPI tháng'}
             </button>
@@ -390,7 +392,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
               type="button"
               onClick={() => void loadStaffList()}
               disabled={loading}
-              className="flex items-center gap-[6px] bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.1)] text-[var(--text2)] py-[6px] px-[10px] rounded-[6px] text-[11px] font-bold border border-[rgba(255,255,255,0.08)] disabled:opacity-50"
+              className="stitch-button stitch-button--secondary stitch-button--small"
             >
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
               Làm mới
@@ -413,21 +415,21 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
             {formOpen ? (
             <>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-[10px] mb-[16px]">
-              <div className="rounded-[10px] border border-[rgba(61,142,240,0.25)] bg-[rgba(61,142,240,0.08)] p-[10px_12px]">
-                <div className="text-[9px] uppercase tracking-[1px] font-bold text-[var(--text3)]">Mục tiêu team</div>
-                <div className="mt-1 text-[12px] font-bold text-[#fff]">{teamSummary.rev > 0 ? `${formatVndDots(teamSummary.rev)} VND` : '—'}</div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+                <div className="text-[10px] uppercase tracking-wider font-extrabold text-emerald-800">Mục tiêu team</div>
+                <div className="mt-1 text-sm font-extrabold font-mono text-[#1f2937]">{teamSummary.rev > 0 ? `${formatVndDots(teamSummary.rev)} VND` : '—'}</div>
               </div>
-              <div className="rounded-[10px] border border-[rgba(132,204,22,0.25)] bg-[rgba(132,204,22,0.08)] p-[10px_12px]">
-                <div className="text-[9px] uppercase tracking-[1px] font-bold text-[var(--text3)]">Lead team</div>
-                <div className="mt-1 text-[12px] font-bold text-[#fff]">{teamSummary.lead > 0 ? formatCountDots(teamSummary.lead) : '—'}</div>
+              <div className="rounded-xl border border-lime-200 bg-lime-50/60 p-3">
+                <div className="text-[10px] uppercase tracking-wider font-extrabold text-lime-800">Lead team</div>
+                <div className="mt-1 text-sm font-extrabold font-mono text-[#1f2937]">{teamSummary.lead > 0 ? formatCountDots(teamSummary.lead) : '—'}</div>
               </div>
-              <div className="rounded-[10px] border border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] p-[10px_12px]">
-                <div className="text-[9px] uppercase tracking-[1px] font-bold text-[var(--text3)]">Đơn chốt team</div>
-                <div className="mt-1 text-[12px] font-bold text-[#fff]">{teamSummary.orders > 0 ? formatCountDots(teamSummary.orders) : '—'}</div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                <div className="text-[10px] uppercase tracking-wider font-extrabold text-amber-800">Đơn chốt team</div>
+                <div className="mt-1 text-sm font-extrabold font-mono text-[#1f2937]">{teamSummary.orders > 0 ? formatCountDots(teamSummary.orders) : '—'}</div>
               </div>
-              <div className="rounded-[10px] border border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.03)] p-[10px_12px]">
-                <div className="text-[9px] uppercase tracking-[1px] font-bold text-[var(--text3)]">Nhân sự đã cấu hình</div>
-                <div className="mt-1 text-[12px] font-bold text-[#fff]">
+              <div className="rounded-xl border border-[var(--stitch-border)] bg-white p-3 shadow-sm">
+                <div className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748b]">Nhân sự đã cấu hình</div>
+                <div className="mt-1 text-sm font-extrabold font-mono text-[#1f2937]">
                   {allocationSummary.configured}/{teamMembers.length}
                 </div>
               </div>
@@ -454,7 +456,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                   value={teamKey}
                   onChange={(e) => setTeamKey(e.target.value)}
                   disabled={viewerTeamLocked}
-                  className="w-full bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_14px] text-[13px] font-bold text-[var(--text)] outline-none focus:border-[var(--accent)] transition-all"
+                  className="stitch-field text-[13px] font-bold"
                 >
                   {teamOptions.map((t) => (
                     <option key={t} value={t}>
@@ -478,7 +480,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                   value={teamTargetStr}
                   onChange={(e) => setTeamTargetStr(formatTypingGroupedInt(e.target.value))}
                   placeholder="VD: 1.500.000.000"
-                  className="w-full bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_14px] text-[13px] font-[var(--mono)] font-bold text-[var(--accent)] outline-none focus:border-[var(--accent)] transition-all"
+                  className="stitch-field text-[13px] font-mono font-bold text-[var(--stitch-green-700)]"
                 />
               </div>
               <div>
@@ -491,7 +493,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                   value={teamLeadTargetStr}
                   onChange={(e) => setTeamLeadTargetStr(formatTypingGroupedInt(e.target.value))}
                   placeholder="VD: 10.000"
-                  className="w-full bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_14px] text-[13px] font-[var(--mono)] font-bold text-[var(--accent)] outline-none focus:border-[var(--accent)] transition-all"
+                  className="stitch-field text-[13px] font-mono font-bold text-[var(--stitch-green-700)]"
                 />
               </div>
               <div>
@@ -504,7 +506,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                   value={teamOrdersTargetStr}
                   onChange={(e) => setTeamOrdersTargetStr(formatTypingGroupedInt(e.target.value))}
                   placeholder="VD: 400"
-                  className="w-full bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_14px] text-[13px] font-[var(--mono)] font-bold text-[var(--accent)] outline-none focus:border-[var(--accent)] transition-all"
+                  className="stitch-field text-[13px] font-mono font-bold text-[var(--stitch-green-700)]"
                 />
               </div>
               <div>
@@ -515,7 +517,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                   type="month"
                   value={ym}
                   onChange={(e) => setYm(e.target.value)}
-                  className="w-full bg-[var(--bg3)] border border-[var(--border)] rounded-[8px] p-[10px_14px] text-[13px] font-bold text-[var(--text2)] outline-none focus:border-[var(--accent)] transition-all"
+                  className="stitch-field text-[13px] font-bold text-[#1f2937]"
                 />
               </div>
             </div>
@@ -525,13 +527,13 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                 Phân bổ theo nhân sự trong team ({teamMembers.length})
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-[10px]">
-                <div className="rounded-[8px] border border-[rgba(61,142,240,0.25)] bg-[rgba(61,142,240,0.08)] p-[8px_10px] text-[10px] font-bold text-[var(--text2)]">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-2.5 text-xs font-bold text-emerald-900">
                   Tổng phân bổ DT: {allocationSummary.revTotal > 0 ? `${formatVndDots(allocationSummary.revTotal)} VND` : '—'}
                 </div>
-                <div className="rounded-[8px] border border-[rgba(132,204,22,0.25)] bg-[rgba(132,204,22,0.08)] p-[8px_10px] text-[10px] font-bold text-[var(--text2)]">
+                <div className="rounded-xl border border-lime-200 bg-lime-50/50 p-2.5 text-xs font-bold text-lime-900">
                   Tổng phân bổ Lead: {allocationSummary.leadTotal > 0 ? formatCountDots(allocationSummary.leadTotal) : '—'}
                 </div>
-                <div className="rounded-[8px] border border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] p-[8px_10px] text-[10px] font-bold text-[var(--text2)]">
+                <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-2.5 text-xs font-bold text-amber-900">
                   Tổng phân bổ Đơn: {allocationSummary.orderTotal > 0 ? formatCountDots(allocationSummary.orderTotal) : '—'}
                 </div>
               </div>
@@ -544,52 +546,52 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                 teamMembers.map((mkt) => (
                   <div
                     key={mkt.id}
-                    className="p-[12px_14px] bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-[10px] group hover:border-[rgba(61,142,240,0.3)] transition-all"
+                    className="p-4 bg-white border border-[var(--stitch-border)] rounded-xl shadow-sm hover:border-[#86efac] transition-all"
                   >
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-[12px] min-w-0">
-                        <span className="text-[11px] font-bold text-[#3d8ef0] w-[56px] shrink-0">{displayMaNs(mkt)}</span>
+                        <span className="text-[11px] font-bold font-mono text-[var(--stitch-green-700)] w-[56px] shrink-0">{displayMaNs(mkt)}</span>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-[12px] font-extrabold text-[#fff] truncate">{mkt.name}</span>
+                          <span className="text-[13px] font-extrabold text-[#1f2937] truncate">{mkt.name}</span>
                           {mkt.vi_tri?.trim() ? (
-                            <span className="text-[9px] text-[var(--text3)] truncate">{mkt.vi_tri}</span>
+                            <span className="text-[10px] text-[var(--text3)] truncate">{mkt.vi_tri}</span>
                           ) : null}
                         </div>
                       </div>
                       {mkt.trang_thai === 'dot_tien' ? <Badge type="R">Đốt tiền</Badge> : null}
                     </div>
                     <div className="mt-[10px] grid grid-cols-1 md:grid-cols-3 gap-[8px]">
-                      <div className="rounded-[8px] border border-[rgba(61,142,240,0.2)] bg-[rgba(61,142,240,0.06)] p-[8px]">
-                        <span className="block text-[9px] text-[var(--text3)] uppercase font-bold mb-[4px]">Mục tiêu (VND)</span>
+                      <div className="rounded-lg border border-[var(--stitch-border)] bg-[#f8faf9] p-2.5">
+                        <span className="block text-[9px] text-[var(--text3)] uppercase font-bold mb-1">Mục tiêu (VND)</span>
                         <input
                           type="text"
                           inputMode="numeric"
                           value={staffAmounts[mkt.id] ?? ''}
                           onChange={(e) => setStaffField(mkt.id, formatTypingGroupedInt(e.target.value))}
                           placeholder="0"
-                          className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[6px] p-[6px_10px] text-[12px] font-[var(--mono)] font-bold text-right text-[var(--text)] outline-none focus:border-[var(--accent)] transition-all"
+                          className="w-full bg-white border border-[var(--stitch-border)] rounded-md p-1.5 text-xs font-mono font-bold text-right text-[#1f2937] outline-none focus:border-[var(--stitch-green-600)] transition-all"
                         />
                       </div>
-                      <div className="rounded-[8px] border border-[rgba(132,204,22,0.2)] bg-[rgba(132,204,22,0.06)] p-[8px]">
-                        <span className="block text-[9px] text-[var(--text3)] uppercase font-bold mb-[4px]">Lead</span>
+                      <div className="rounded-lg border border-[var(--stitch-border)] bg-[#f8faf9] p-2.5">
+                        <span className="block text-[9px] text-[var(--text3)] uppercase font-bold mb-1">Lead</span>
                         <input
                           type="text"
                           inputMode="numeric"
                           value={staffLeadAmounts[mkt.id] ?? ''}
                           onChange={(e) => setStaffLeadField(mkt.id, formatTypingGroupedInt(e.target.value))}
                           placeholder="0"
-                          className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[6px] p-[6px_10px] text-[12px] font-[var(--mono)] font-bold text-right text-[var(--text)] outline-none focus:border-[var(--accent)] transition-all"
+                          className="w-full bg-white border border-[var(--stitch-border)] rounded-md p-1.5 text-xs font-mono font-bold text-right text-[#1f2937] outline-none focus:border-[var(--stitch-green-600)] transition-all"
                         />
                       </div>
-                      <div className="rounded-[8px] border border-[rgba(245,158,11,0.2)] bg-[rgba(245,158,11,0.06)] p-[8px]">
-                        <span className="block text-[9px] text-[var(--text3)] uppercase font-bold mb-[4px]">Đơn chốt</span>
+                      <div className="rounded-lg border border-[var(--stitch-border)] bg-[#f8faf9] p-2.5">
+                        <span className="block text-[9px] text-[var(--text3)] uppercase font-bold mb-1">Đơn chốt</span>
                         <input
                           type="text"
                           inputMode="numeric"
                           value={staffOrderAmounts[mkt.id] ?? ''}
                           onChange={(e) => setStaffOrderField(mkt.id, formatTypingGroupedInt(e.target.value))}
                           placeholder="0"
-                          className="w-full bg-[var(--bg4)] border border-[var(--border)] rounded-[6px] p-[6px_10px] text-[12px] font-[var(--mono)] font-bold text-right text-[var(--text)] outline-none focus:border-[var(--accent)] transition-all"
+                          className="w-full bg-white border border-[var(--stitch-border)] rounded-md p-1.5 text-xs font-mono font-bold text-right text-[#1f2937] outline-none focus:border-[var(--stitch-green-600)] transition-all"
                         />
                       </div>
                     </div>
@@ -599,8 +601,8 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
             </div>
             </>
             ) : (
-              <div className="mb-[20px] rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.03)] p-[12px] text-[11px] text-[var(--text2)]">
-                Form nhập KPI đang ẩn. Bấm <span className="font-bold text-[#8fc6ff]">+ Add KPI tháng</span> để mở form tạo/chỉnh KPI.
+              <div className="mb-[20px] rounded-xl border border-[var(--stitch-border)] bg-[#f8faf9] p-3 text-xs text-[#64748b]">
+                Form nhập KPI đang ẩn. Bấm <span className="font-bold text-[var(--stitch-green-700)]">+ Add KPI tháng</span> để mở form tạo/chỉnh KPI.
               </div>
             )}
 
@@ -613,33 +615,33 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                   type="button"
                   onClick={() => void loadTeamHistory()}
                   disabled={historyLoading}
-                  className="text-[10px] px-[9px] py-[5px] rounded-[6px] border border-[var(--border)] bg-[var(--bg3)] text-[var(--text2)] hover:bg-[var(--bg4)] disabled:opacity-50"
+                  className="stitch-button stitch-button--secondary stitch-button--small"
                 >
                   {historyLoading ? 'Đang tải…' : 'Làm mới bảng'}
                 </button>
               </div>
-              <div className="mt-[10px] overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)]">
-                <table className="w-full min-w-[760px] border-collapse">
+              <div className="mt-2.5 overflow-x-auto rounded-xl border border-[var(--stitch-border)] bg-white shadow-sm">
+                <table className="w-full min-w-[760px] border-collapse stitch-table">
                   <thead>
-                    <tr className="border-b border-[var(--border)] text-[9px] font-bold tracking-[1px] uppercase text-[var(--text3)]">
-                      <th className="p-[8px_10px] text-left">Tháng</th>
-                      <th className="p-[8px_10px] text-right">Doanh thu mục tiêu</th>
-                      <th className="p-[8px_10px] text-right">Lead mục tiêu</th>
-                      <th className="p-[8px_10px] text-right">Đơn chốt mục tiêu</th>
-                      <th className="p-[8px_10px] text-left">Cập nhật</th>
-                      <th className="p-[8px_10px] text-center">Thao tác</th>
+                    <tr className="border-b border-[var(--stitch-border)] text-[9px] font-bold tracking-[1px] uppercase text-[#64748b] bg-[#f8faf9]">
+                      <th className="p-3 text-left">Tháng</th>
+                      <th className="p-3 text-right">Doanh thu mục tiêu</th>
+                      <th className="p-3 text-right">Lead mục tiêu</th>
+                      <th className="p-3 text-right">Đơn chốt mục tiêu</th>
+                      <th className="p-3 text-left">Cập nhật</th>
+                      <th className="p-3 text-center">Thao tác</th>
                     </tr>
                   </thead>
-                  <tbody className="text-[11px] text-[var(--text2)]">
+                  <tbody className="text-xs text-[#334155]">
                     {historyLoading ? (
                       <tr>
-                        <td colSpan={6} className="p-[14px] text-center text-[var(--text3)]">
+                        <td colSpan={6} className="p-4 text-center text-[#64748b]">
                           Đang tải dữ liệu KPI tháng…
                         </td>
                       </tr>
                     ) : teamHistory.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="p-[14px] text-center text-[var(--text3)]">
+                        <td colSpan={6} className="p-4 text-center text-[#64748b]">
                           Chưa có dữ liệu KPI theo tháng cho team này.
                         </td>
                       </tr>
@@ -649,28 +651,28 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                         return (
                           <tr
                             key={r.nam_thang}
-                            className={`border-b border-[rgba(255,255,255,0.04)] ${selected ? 'bg-[rgba(61,142,240,0.12)]' : 'hover:bg-[rgba(255,255,255,0.03)]'}`}
+                            className={`border-b border-[#eef2ef] transition-colors ${selected ? 'bg-[#f0fdf4]' : 'hover:bg-[#f8fcf9]'}`}
                           >
-                            <td className="p-[8px_10px] font-bold text-[#fff]">{r.nam_thang}</td>
-                            <td className="p-[8px_10px] text-right font-[var(--mono)]">
+                            <td className="p-3 font-bold text-[#1f2937]">{r.nam_thang}</td>
+                            <td className="p-3 text-right font-mono font-bold text-[var(--stitch-green-700)]">
                               {Number(r.muc_tieu_doanh_thu_team || 0) > 0
                                 ? `${formatVndDots(Number(r.muc_tieu_doanh_thu_team || 0))} VND`
                                 : '—'}
                             </td>
-                            <td className="p-[8px_10px] text-right font-[var(--mono)]">
+                            <td className="p-3 text-right font-mono">
                               {Number(r.muc_tieu_lead_team || 0) > 0
                                 ? formatCountDots(Number(r.muc_tieu_lead_team || 0))
                                 : '—'}
                             </td>
-                            <td className="p-[8px_10px] text-right font-[var(--mono)]">
+                            <td className="p-3 text-right font-mono">
                               {Number(r.muc_tieu_don_chot_team || 0) > 0
                                 ? formatCountDots(Number(r.muc_tieu_don_chot_team || 0))
                                 : '—'}
                             </td>
-                            <td className="p-[8px_10px] text-[10px] text-[var(--text3)]">
+                            <td className="p-3 text-[11px] text-[#64748b]">
                               {r.updated_at ? new Date(r.updated_at).toLocaleString('vi-VN') : '—'}
                             </td>
-                            <td className="p-[8px_10px] text-center">
+                            <td className="p-3 text-center">
                               <div className="inline-flex items-center gap-[6px]">
                                 <button
                                   type="button"
@@ -678,11 +680,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                                     setYm(r.nam_thang);
                                     setFormOpen(true);
                                   }}
-                                  className={`px-[8px] py-[4px] rounded-[6px] text-[10px] font-bold border ${
-                                    selected
-                                      ? 'bg-[rgba(61,142,240,0.2)] border-[rgba(61,142,240,0.45)] text-[#8fc6ff]'
-                                      : 'bg-[var(--bg3)] border-[var(--border)] text-[var(--text2)] hover:bg-[var(--bg4)]'
-                                  }`}
+                                  className={selected ? 'stitch-button stitch-button--primary stitch-button--small' : 'stitch-button stitch-button--secondary stitch-button--small'}
                                 >
                                   {selected ? 'Đang chọn' : 'Chọn'}
                                 </button>
@@ -692,7 +690,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                                     setYm(r.nam_thang);
                                     setFormOpen(true);
                                   }}
-                                  className="px-[8px] py-[4px] rounded-[6px] text-[10px] font-bold border border-[rgba(61,142,240,0.35)] bg-[rgba(61,142,240,0.14)] text-[#8fc6ff] hover:bg-[rgba(61,142,240,0.2)]"
+                                  className="stitch-button stitch-button--quiet stitch-button--small"
                                 >
                                   Sửa
                                 </button>
@@ -712,9 +710,9 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                 type="button"
                 disabled={saving || !teamKey}
                 onClick={() => void onSave()}
-                className="flex items-center gap-[8px] bg-[#3d8ef0] hover:bg-[#2e7dd1] disabled:opacity-50 text-white p-[10px_24px] rounded-[8px] text-[12px] font-bold transition-all shadow-[0_4px_16px_rgba(61,142,240,0.3)]"
+                className="stitch-button stitch-button--primary px-6 py-2.5 text-xs font-bold"
               >
-                {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+                {saving ? <Loader2 size={14} className="animate-spin mr-1 inline" /> : null}
                 💾 Lưu mục tiêu
               </button>
             ) : null}

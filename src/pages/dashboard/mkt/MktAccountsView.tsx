@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { AuthUser, TkqcAdListRow } from '../../../types';
 
 const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_TABLE?.trim() || 'tkqc';
@@ -93,12 +94,12 @@ export const MktAccountsView: React.FC<MktAccountsViewProps> = ({ reportUser = n
       return;
     }
 
-    const { data, error: qErr } = await supabase
+    const { data, error: qErr } = await fetchAllRows<TkqcAdListRow>(supabase
       .from(TKQC_TABLE)
       .select(TKQC_SELECT)
       .in('id_marketing_staff', staffIds)
       .order('ten_tkqc', { ascending: true, nullsFirst: false })
-      .order('ma_tkqc', { ascending: true });
+      .order('ma_tkqc', { ascending: true }));
 
     if (qErr) {
       console.error('mkt-accounts tkqc:', qErr);

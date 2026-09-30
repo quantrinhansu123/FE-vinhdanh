@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { CrmTeamRow, TkqcAdListRow } from '../../../types';
 import { AdAccountFormModal } from './AdAccountFormModal';
 
@@ -118,10 +119,10 @@ export const AdAccountsView: React.FC = () => {
   }, []);
 
   const loadTeams = useCallback(async () => {
-    const { data, error: qErr } = await supabase
+    const { data, error: qErr } = await fetchAllRows<CrmTeamRow>(supabase
       .from(TEAMS_TABLE)
       .select('id, ma_team, ten_team, du_an_ids')
-      .order('ten_team', { ascending: true });
+      .order('ten_team', { ascending: true }));
     if (qErr) {
       console.error('crm_teams for ad accounts:', qErr);
       setTeams([]);
@@ -133,10 +134,10 @@ export const AdAccountsView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: qErr } = await supabase
+    const { data, error: qErr } = await fetchAllRows<TkqcAdListRow>(supabase
       .from(TKQC_TABLE)
       .select(TKQC_SELECT)
-      .order('ma_tkqc', { ascending: true });
+      .order('ma_tkqc', { ascending: true }));
 
     if (qErr) {
       console.error('Supabase tkqc:', qErr);

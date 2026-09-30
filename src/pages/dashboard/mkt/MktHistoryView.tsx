@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { AuthUser, Employee, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { fetchUpcareMktEmployees, isUpcareMktConfigured } from '../../../api/upcareCrm';
@@ -21,6 +22,32 @@ import { downloadMktReportExcelTemplate, parseMktReportExcelFile } from './mktHi
 const PRODUCTS_TABLE = import.meta.env.VITE_SUPABASE_PRODUCTS_TABLE?.trim() || 'crm_products';
 const MARKETS_TABLE = import.meta.env.VITE_SUPABASE_MARKETS_TABLE?.trim() || 'crm_markets';
 const PAGE_SIZE = 10;
+
+function reportImportKey(row: {
+  report_date?: string | null;
+  product?: string | null;
+  market?: string | null;
+  page?: string | null;
+  ma_tkqc?: string | null;
+  ad_account?: string | null;
+  ad_cost?: number | null;
+  mess_comment_count?: number | null;
+  tong_data_nhan?: number | null;
+}): string {
+  const text = (value: string | null | undefined) => value?.trim().toLocaleLowerCase('vi') || '';
+  const number = (value: number | null | undefined) => Number(value) || 0;
+  return JSON.stringify([
+    row.report_date?.slice(0, 10) || '',
+    text(row.product),
+    text(row.market),
+    text(row.page),
+    text(row.ma_tkqc),
+    text(row.ad_account),
+    number(row.ad_cost),
+    number(row.mess_comment_count),
+    number(row.tong_data_nhan),
+  ]);
+}
 
 function addDays(d: Date, n: number): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -146,15 +173,15 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
       const email = reportUser?.email?.trim().toLowerCase();
 
       const [pRes, mRes, rRes] = await Promise.all([
-        supabase.from(PRODUCTS_TABLE).select('ten_san_pham').eq('trang_thai', 'dang_ban').order('ten_san_pham', { ascending: true }),
-        supabase.from(MARKETS_TABLE).select('ten_thi_truong').eq('trang_thai', 'hoat_dong').order('ten_thi_truong', { ascending: true }),
+        fetchAllRows<{ ten_san_pham: string | null }>(supabase.from(PRODUCTS_TABLE).select('ten_san_pham').eq('trang_thai', 'dang_ban').order('ten_san_pham', { ascending: true })),
+        fetchAllRows<{ ten_thi_truong: string | null }>(supabase.from(MARKETS_TABLE).select('ten_thi_truong').eq('trang_thai', 'hoat_dong').order('ten_thi_truong', { ascending: true })),
         email
-          ? supabase
+          ? fetchAllRows<{ product?: string | null; market?: string | null }>(supabase
               .from(REPORTS_TABLE)
               .select('product, market')
               .ilike('email', email)
               .order('report_date', { ascending: false })
-              .limit(2000)
+            )
           : Promise.resolve({ data: [] as { product?: string | null; market?: string | null }[], error: null as null }),
       ]);
 
@@ -225,13 +252,12 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
       .gte('report_date', applied.from)
       .lte('report_date', applied.to)
       .order('report_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(1000);
+      .order('created_at', { ascending: false });
 
     if (applied.product) q = q.eq('product', applied.product);
     if (applied.market) q = q.eq('market', applied.market);
 
-    const { data, error: qErr } = await q;
+    const { data, error: qErr } = await fetchAllRows<ReportRow>(q);
     if (qErr) {
       console.error('mkt-history:', qErr);
       setError(
@@ -359,7 +385,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
       return;
     }
     if (!isUpcareMktConfigured()) {
-      window.alert('Chưa cấu hình Upcare (VITE_UPCARE_CRM_BEARER_TOKEN trong .env.local).');
+      window.alert('Chưa cấu hình Fabico (VITE_UPCARE_CRM_BEARER_TOKEN trong .env.local).');
       return;
     }
     if (rows.length === 0) {
@@ -372,7 +398,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
     const warnMulti =
       multiDay &&
       !window.confirm(
-        `Khoảng ngày ${applied.from} → ${applied.to}: API Upcare trả một mức doanh số / nhân viên cho cả khoảng.\n` +
+        `Khoảng ngày ${applied.from} → ${applied.to}: API Fabico trả một mức doanh số / nhân viên cho cả khoảng.\n` +
           `Mọi dòng khớp Mã NV sẽ nhận cùng số đó (có thể trùng nếu nhiều dòng cùng NV).\n\nTiếp tục?`
       );
     if (warnMulti) return;
@@ -408,14 +434,14 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
           `Không có dòng nào khớp.\n` +
             `- Không có […] trong Page: ${skippedNoTag} dòng\n` +
             `- Có […] nhưng không khớp API (ID / tên): ${skippedNoMatch} dòng\n` +
-            `Gợi ý: trong Page dùng [ID_Upcare] (số) hoặc [mã_ns] trùng bảng nhân sự + tên trùng Upcare.`
+            `Gợi ý: trong Page dùng [ID_Upcare] (số) hoặc [mã_ns] trùng bảng nhân sự + tên trùng Fabico.`
         );
         return;
       }
 
       if (
         !window.confirm(
-          `Cập nhật doanh số (revenue) cho ${updates.length} dòng báo cáo theo Upcare CRM?\n` +
+          `Cập nhật doanh số (revenue) cho ${updates.length} dòng báo cáo theo Fabico CRM?\n` +
             `Khoảng API: ${applied.from} … ${applied.to}\n` +
             `Bỏ qua: không [Mã NV] trong Page ${skippedNoTag}, không khớp API ${skippedNoMatch}.`
         )
@@ -443,11 +469,11 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
         }
       }
 
-      setExcelMsg(`Đồng bộ Upcare: đã cập nhật doanh số cho ${ok} dòng (${applied.from} … ${applied.to}).`);
+      setExcelMsg(`Đồng bộ Fabico: đã cập nhật doanh số cho ${ok} dòng (${applied.from} … ${applied.to}).`);
       await load();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Lỗi không xác định';
-      window.alert(`Đồng bộ Upcare thất bại: ${msg}`);
+      window.alert(`Đồng bộ Fabico thất bại: ${msg}`);
     } finally {
       setUpcareSyncBusy(false);
     }
@@ -488,15 +514,53 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
         team,
       }));
 
+      const dateFrom = parsed.reduce((min, r) => (r.report_date < min ? r.report_date : min), parsed[0].report_date);
+      const dateTo = parsed.reduce((max, r) => (r.report_date > max ? r.report_date : max), parsed[0].report_date);
+      const { data: existingRows, error: existingErr } = await fetchAllRows<{
+        report_date: string;
+        product?: string | null;
+        market?: string | null;
+        page?: string | null;
+        ma_tkqc?: string | null;
+        ad_account?: string | null;
+        ad_cost?: number | null;
+        mess_comment_count?: number | null;
+        tong_data_nhan?: number | null;
+      }>(supabase
+        .from(REPORTS_TABLE)
+        .select('report_date, product, market, page, ma_tkqc, ad_account, ad_cost, mess_comment_count, tong_data_nhan')
+        .ilike('email', email)
+        .gte('report_date', dateFrom)
+        .lte('report_date', dateTo));
+      if (existingErr) {
+        console.error('mkt-history duplicate check:', existingErr);
+        window.alert(`Không kiểm tra được dữ liệu trùng: ${existingErr.message || 'Unknown'}. Chưa nhập file.`);
+        return;
+      }
+
+      const seen = new Set((existingRows || []).map(reportImportKey));
+      const uniquePayloads = payloads.filter((row) => {
+        const key = reportImportKey(row);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      const skippedDuplicates = payloads.length - uniquePayloads.length;
+      if (uniquePayloads.length === 0) {
+        setExcelMsg(`Không có dòng mới: đã bỏ qua ${skippedDuplicates} dòng trùng với dữ liệu đã có.`);
+        await load();
+        return;
+      }
+
       const chunk = 80;
       let inserted = 0;
-      for (let i = 0; i < payloads.length; i += chunk) {
-        const part = payloads.slice(i, i + chunk);
+      for (let i = 0; i < uniquePayloads.length; i += chunk) {
+        const part = uniquePayloads.slice(i, i + chunk);
         const { error: insErr } = await supabase.from(REPORTS_TABLE).insert(part);
         if (insErr) {
           console.error('mkt-history excel insert:', insErr);
           window.alert(
-            `Lỗi khi ghi DB (đã nhập ${inserted}/${parsed.length} dòng): ${insErr.message || 'Unknown'}`
+            `Lỗi khi ghi DB (đã nhập ${inserted}/${uniquePayloads.length} dòng): ${insErr.message || 'Unknown'}`
           );
           await load();
           return;
@@ -504,7 +568,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
         inserted += part.length;
       }
 
-      setExcelMsg(`Đã nhập ${inserted} dòng từ Excel.`);
+      setExcelMsg(`Đã nhập ${inserted} dòng từ Excel; bỏ qua ${skippedDuplicates} dòng trùng.`);
       await load();
     } finally {
       setExcelBusy(false);
@@ -677,7 +741,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
             title={
               !isUpcareMktConfigured()
                 ? 'Cần VITE_UPCARE_CRM_BEARER_TOKEN'
-                : 'Gọi API Upcare /employee/mkt theo khoảng ngày đang lọc; khớp cột Mã NV với ID hoặc tên nhân viên'
+                : 'Gọi API Fabico /employee/mkt theo khoảng ngày đang lọc; khớp cột Mã NV với ID hoặc tên nhân viên'
             }
             className="flex items-center gap-2 px-4 py-2 bg-[color-mix(in_srgb,var(--ld-primary)_12%,transparent)] text-[var(--ld-primary)] rounded-lg border border-[color-mix(in_srgb,var(--ld-primary)_35%,transparent)] text-xs leader-dash-label font-bold hover:bg-[color-mix(in_srgb,var(--ld-primary)_18%,transparent)] transition-all disabled:opacity-40"
           >
@@ -686,7 +750,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
             ) : (
               <span className="material-symbols-outlined text-sm">cloud_sync</span>
             )}
-            Đồng bộ doanh số (Upcare)
+            Đồng bộ doanh số (Fabico)
           </button>
         </div>
 
@@ -696,11 +760,11 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
           </div>
         )}
         <p className="mt-4 text-[10px] text-[var(--ld-on-surface-variant)] leading-relaxed max-w-[920px]">
-          <span className="text-[var(--ld-on-surface)] font-bold">Đồng bộ doanh số (Upcare):</span> dùng khoảng ngày ở trên, gọi API cùng tham số; điền{' '}
+          <span className="text-[var(--ld-on-surface)] font-bold">Đồng bộ doanh số (Fabico):</span> dùng khoảng ngày ở trên, gọi API cùng tham số; điền{' '}
           <span className="text-[var(--ld-on-surface)] font-bold">Doanh số</span> khi{' '}
           <span className="text-[var(--ld-on-surface)] font-bold">Mã NV</span> khớp —{' '}
-          <span className="text-[var(--ld-on-surface)] font-bold">[số]</span> trong Page = ID nhân viên trên Upcare, hoặc{' '}
-          <span className="text-[var(--ld-on-surface)] font-bold">[mã_ns]</span> khớp nhân sự CRM + tên khớp Upcare. Nhiều ngày: API là tổng khoảng; xác nhận trước khi ghi.
+          <span className="text-[var(--ld-on-surface)] font-bold">[số]</span> trong Page = ID nhân viên trên Fabico, hoặc{' '}
+          <span className="text-[var(--ld-on-surface)] font-bold">[mã_ns]</span> khớp nhân sự CRM + tên khớp Fabico. Nhiều ngày: API là tổng khoảng; xác nhận trước khi ghi.
         </p>
         <p className="mt-2 text-[10px] text-[var(--ld-on-surface-variant)] leading-relaxed max-w-[920px]">
           Hai kiểu file: (1) Mẫu CRM — nút Tải mẫu Excel, cột ngày A–C. (2) Export Ads: chỉ nhập dòng có{' '}

@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from './api/supabase';
+import { fetchAllRows } from './api/fetchAllRows';
 import {
   defaultUpcareMktDateRange,
   fetchUpcareMktEmployees,
@@ -45,7 +46,7 @@ function logSupabaseError(action: string, error: { code?: string; message?: stri
 function AppRoutes() {
   const navigate = useNavigate();
   const [employees, setEmployees] = useState<Employee[]>([]);
-  /** BXH trang chủ: Upcare MKT API nếu bật, không thì cùng nguồn Supabase employees */
+  /** BXH trang chủ: Fabico MKT API nếu bật, không thì cùng nguồn Supabase employees */
   const [boardEmployees, setBoardEmployees] = useState<Employee[]>([]);
   const [boardSource, setBoardSource] = useState<'upcare' | 'supabase'>('supabase');
   const [loading, setLoading] = useState(true);
@@ -78,7 +79,7 @@ function AppRoutes() {
 
   const fetchEmployees = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from(EMPLOYEES_TABLE).select('*').order('score', { ascending: false });
+    const { data, error } = await fetchAllRows<Employee>(supabase.from(EMPLOYEES_TABLE).select('*').order('score', { ascending: false }));
 
     let rankedData: Employee[] = [];
     if (error) {
@@ -98,7 +99,7 @@ function AppRoutes() {
         const { dateFrom, dateTo } = defaultUpcareMktDateRange();
         const mktRows = await fetchUpcareMktEmployees({ dateFrom, dateTo });
         board = mapUpcareMktRowsToLeaderboardEmployees(mktRows);
-        // Không dùng avatar từ API Upcare
+        // Không dùng avatar từ API Fabico
         board = board.map((b) => ({ ...b, avatar_url: null }));
         // Ưu tiên avatar theo code ↔ ma_ns trong bảng employees (dùng rankedData vừa fetch để tránh lệch state)
         if (rankedData.length > 0) {
@@ -154,7 +155,7 @@ function AppRoutes() {
           .map((e, i) => ({ ...e, rank: i + 1 }));
         source = 'upcare';
       } catch (e) {
-        console.warn('[BXH] Upcare employee/mkt:', e);
+        console.warn('[BXH] Fabico employee/mkt:', e);
         board = rankedData;
         source = 'supabase';
       }

@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { CrmTeamRow, DuAnRow, Employee, TkqcAdListRow } from '../../../types';
+import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 
 const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_TABLE?.trim() || 'tkqc';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
@@ -156,13 +158,13 @@ export const AdAccountFormModal: React.FC<Props> = ({ open, initial, onClose, on
       }
 
       const [pRes, mRes, tRes, eRes] = await Promise.all([
-        supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true }),
-        supabase.from(MKT_STAFF_TABLE).select('id, id_ns, name, employee_id').order('name', { ascending: true }),
-        supabase.from(TEAMS_TABLE).select('id, ma_team, ten_team').order('ten_team', { ascending: true }),
-        supabase
+        fetchAllRows<DuAnRow>(supabase.from(DU_AN_TABLE).select('id, ma_du_an, ten_du_an').order('ten_du_an', { ascending: true })),
+        fetchAllRows<MktStaffRow>(supabase.from(MKT_STAFF_TABLE).select('id, id_ns, name, employee_id').order('name', { ascending: true })),
+        fetchAllRows<CrmTeamRow>(supabase.from(TEAMS_TABLE).select('id, ma_team, ten_team').order('ten_team', { ascending: true })),
+        fetchAllRows<Employee>(supabase
           .from(EMPLOYEES_TABLE)
           .select('id, name, ma_ns, email, vi_tri')
-          .order('name', { ascending: true }),
+          .order('name', { ascending: true })),
       ]);
       if (cancelled) return;
       if (pRes.error) console.error('du_an for tkqc form:', pRes.error);
@@ -264,7 +266,7 @@ export const AdAccountFormModal: React.FC<Props> = ({ open, initial, onClose, on
   if (!open) return null;
 
   return createPortal(
-    <div className="dash-theme project-form-modal-root fixed inset-0 z-[200] !bg-transparent font-[family-name:var(--f)]">
+    <div className={`${STITCH_PORTAL_CLASS} dash-theme project-form-modal-root fixed inset-0 z-[200] !bg-transparent font-[family-name:var(--f)]`}>
       <div className="absolute inset-0 z-0 bg-black/60 backdrop-blur-[3px]" aria-hidden onMouseDown={onClose} />
       <div className="pointer-events-none relative z-[1] flex min-h-[100dvh] w-full items-center justify-center p-4 sm:p-6">
         <div

@@ -331,97 +331,97 @@ export const BillCard: React.FC<BillCardProps> = ({
   name, team, date, workDay, lastUpdate, stats, performance, indicator 
 }) => {
   const indicatorClasses = {
-    G: 'bg-[var(--Gd)] border-[var(--Gb)] text-[var(--G)]',
-    Y: 'bg-[var(--Yd)] border-[var(--Yb)] text-[var(--Y)]',
-    R: 'bg-[var(--Rd)] border-[var(--Rb)] text-[var(--R)]',
+    G: 'bg-[#ecfdf5] border-[#a7f3d0] text-[#059669]',
+    Y: 'bg-[#fefce8] border-[#fde68a] text-[#d97706]',
+    R: 'bg-[#fff1f2] border-[#fecdd3] text-[#e11d48]',
   };
 
   const indicatorDot = indicator.type === 'G' ? '🟢' : indicator.type === 'Y' ? '🟡' : '🔴';
 
   return (
-    <div className="bg-[var(--bg2)] border border-[var(--border2)] rounded-[12px] p-[22px] max-w-[440px]">
-      <div className="text-center pb-[16px] border-b border-[var(--border)] mb-[14px]">
-        <div className="text-[10px] font-extrabold tracking-[3px] uppercase text-[var(--accent)] mb-[5px]">
+    <div className="bg-white border border-[#e2e8e5] rounded-2xl p-6 max-w-[440px] shadow-xs">
+      <div className="text-center pb-4 border-b border-[#e2e8e5] mb-4">
+        <div className="text-[10px] font-extrabold tracking-[2.5px] uppercase text-[#006e51] mb-1.5">
           Marketing Performance Today
         </div>
-        <div className="text-[17px] font-extrabold text-[var(--text)]">
+        <div className="text-xl font-extrabold text-[#191c1b]">
           {name}
         </div>
-        <div className="text-[10px] text-[var(--text3)] mt-[3px]">
+        <div className="text-xs text-[#476355] mt-1">
           {team} · Ngày làm việc: {workDay}
         </div>
-        <div className="text-[10px] text-[var(--text3)] mt-[3px]">
+        <div className="text-[11px] text-[#8b9b94] mt-0.5">
           {date} · Cập nhật cuối: {lastUpdate}
         </div>
       </div>
 
-      <div className="text-[9px] font-extrabold tracking-[1.5px] uppercase text-[var(--text3)] my-[12px]">
+      <div className="text-[10px] font-extrabold tracking-wider uppercase text-[#8b9b94] my-3">
         Thông tin cơ bản
       </div>
-      <div className="flex flex-col gap-[2px]">
-        <div className="flex items-center justify-between py-[8px] border-b border-[rgba(255,255,255,0.04)]">
-          <span className="text-[11px] text-[var(--text2)]">Doanh số</span>
-          <span className="font-[var(--mono)] text-[12.5px] font-black text-[var(--G)]">{stats.revenue} đ</span>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
+          <span className="text-xs text-[#476355]">Doanh số</span>
+          <span className="font-mono text-sm font-black text-[#006e51]">{stats.revenue} đ</span>
         </div>
-        <div className="flex items-center justify-between py-[8px] border-b border-[rgba(255,255,255,0.04)]">
-          <span className="text-[11px] text-[var(--text2)]">Chi phí Ads</span>
-          <span className="font-[var(--mono)] text-[12.5px] font-black text-[var(--text)]">{stats.adsCost} đ</span>
+        <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
+          <span className="text-xs text-[#476355]">Chi phí Ads</span>
+          <span className="font-mono text-sm font-black text-[#191c1b]">{stats.adsCost} đ</span>
         </div>
-        <div className="flex items-center justify-between py-[8px] border-b border-[rgba(255,255,255,0.04)]">
-          <span className="text-[11px] text-[var(--text2)]">Số lượng mess</span>
-          <span className="font-[var(--mono)] text-[12.5px] font-bold text-[var(--text)]">{stats.mess}</span>
+        <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
+          <span className="text-xs text-[#476355]">Số lượng mess</span>
+          <span className="font-mono text-sm font-bold text-[#191c1b]">{stats.mess}</span>
         </div>
-        <div className="flex items-center justify-between py-[8px] border-b border-[rgba(255,255,255,0.04)]">
-          <span className="text-[11px] text-[var(--text2)]">Số lượng lead</span>
-          <span className="font-[var(--mono)] text-[12.5px] font-bold text-[var(--text)]">{stats.lead}</span>
+        <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
+          <span className="text-xs text-[#476355]">Số lượng lead</span>
+          <span className="font-mono text-sm font-bold text-[#191c1b]">{stats.lead}</span>
         </div>
-        <div className="flex items-center justify-between py-[8px] border-b border-[rgba(255,255,255,0.04)]">
-          <span className="text-[11px] text-[var(--text2)]">Số lượng đơn</span>
-          <span className="font-[var(--mono)] text-[12.5px] font-bold text-[var(--text)]">{stats.orders}</span>
+        <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
+          <span className="text-xs text-[#476355]">Số lượng đơn</span>
+          <span className="font-mono text-sm font-bold text-[#191c1b]">{stats.orders}</span>
         </div>
       </div>
 
-      <div className="text-[9px] font-extrabold tracking-[1.5px] uppercase text-[var(--text3)] my-[12px]">
+      <div className="text-[10px] font-extrabold tracking-wider uppercase text-[#8b9b94] my-3 pt-2">
         Chỉ số hiệu suất
       </div>
-      <div className="flex flex-col gap-[2px]">
-        <div className="flex items-center justify-between py-[8px] border-b border-[rgba(255,255,255,0.04)]">
-          <span className="text-[11px] text-[var(--text2)]">% Ads / Doanh số</span>
-          <span className="font-[var(--mono)] text-[12px] font-black text-[var(--G)]">{performance.adsRatio}</span>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
+          <span className="text-xs text-[#476355]">% Ads / Doanh số</span>
+          <span className="font-mono text-sm font-black text-[#006e51]">{performance.adsRatio}</span>
         </div>
-        <div className="flex items-center justify-between py-[8px] border-b border-[rgba(255,255,255,0.04)]">
-          <span className="text-[11px] text-[var(--text2)]">Tỷ lệ chốt</span>
-          <span className="font-[var(--mono)] text-[12px] font-black text-[var(--G)]">{performance.closeRate}</span>
+        <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
+          <span className="text-xs text-[#476355]">Tỷ lệ chốt</span>
+          <span className="font-mono text-sm font-black text-[#006e51]">{performance.closeRate}</span>
         </div>
-        <div className="flex items-center justify-between py-[8px] border-b border-[rgba(255,255,255,0.04)]">
-          <span className="text-[11px] text-[var(--text2)]">Tỷ lệ xin số</span>
-          <span className="font-[var(--mono)] text-[12px] font-bold text-[var(--text)]">{performance.leadRate}</span>
+        <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
+          <span className="text-xs text-[#476355]">Tỷ lệ xin số</span>
+          <span className="font-mono text-sm font-bold text-[#191c1b]">{performance.leadRate}</span>
         </div>
-        <div className="flex items-center justify-between py-[8px] border-b border-[rgba(255,255,255,0.04)]">
-          <span className="text-[11px] text-[var(--text2)]">AOV (Giá trị TB đơn)</span>
-          <span className="font-[var(--mono)] text-[12px] font-black text-[var(--text)]">{performance.aov} đ</span>
+        <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
+          <span className="text-xs text-[#476355]">AOV (Giá trị TB đơn)</span>
+          <span className="font-mono text-sm font-black text-[#191c1b]">{performance.aov} đ</span>
         </div>
-        <div className="flex items-center justify-between py-[8px] border-b border-[rgba(255,255,255,0.04)]">
-          <span className="text-[11px] text-[var(--text2)]">CPO (Chi phí / đơn)</span>
-          <span className="font-[var(--mono)] text-[12px] font-black text-[var(--text)]">{performance.cpo} đ</span>
+        <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
+          <span className="text-xs text-[#476355]">CPO (Chi phí / đơn)</span>
+          <span className="font-mono text-sm font-black text-[#191c1b]">{performance.cpo} đ</span>
         </div>
-        <div className="flex items-center justify-between py-[8px] border-b border-[rgba(255,255,255,0.04)]">
-          <span className="text-[11px] text-[var(--text2)]">CPL (Chi phí / lead)</span>
-          <span className="font-[var(--mono)] text-[12px] font-black text-[var(--text)]">{performance.cpl} đ</span>
+        <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
+          <span className="text-xs text-[#476355]">CPL (Chi phí / lead)</span>
+          <span className="font-mono text-sm font-black text-[#191c1b]">{performance.cpl} đ</span>
         </div>
-        <div className="flex items-center justify-between py-[8px] border-b border-[rgba(255,255,255,0.04)]">
-          <span className="text-[11px] text-[var(--text2)]">CPA (Chi phí / mess)</span>
-          <span className="font-[var(--mono)] text-[12px] font-black text-[var(--text)]">{performance.cpa} đ</span>
+        <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
+          <span className="text-xs text-[#476355]">CPA (Chi phí / mess)</span>
+          <span className="font-mono text-sm font-black text-[#191c1b]">{performance.cpa} đ</span>
         </div>
       </div>
 
-      <div className={`mt-[16px] p-[11px_14px] rounded-[10px] text-[11.5px] font-bold flex items-center gap-[8px] border ${indicatorClasses[indicator.type]}`}>
+      <div className={`mt-4 p-3 rounded-xl text-xs font-bold flex items-center gap-2 border ${indicatorClasses[indicator.type]}`}>
         {indicatorDot} {indicator.text}
       </div>
 
-      <div className="mt-[18px] flex gap-[10px]">
-        <button className="bg-[var(--bg3)] text-[var(--text2)] border border-[var(--border)] flex-1 justify-center py-[9px] rounded-[8px] text-[11px] font-extrabold hover:bg-[var(--bg4)] transition-all">⬇ Tải PNG</button>
-        <button className="btn-p shadow-md shadow-[rgba(61,142,240,0.2)] flex-1 justify-center py-[9px] rounded-[8px] text-[11px] font-extrabold flex items-center gap-[6px] transition-all"><span className="text-[14px]">📄</span> Tải PDF</button>
+      <div className="mt-5 flex gap-2.5">
+        <button type="button" onClick={() => window.print()} className="flex-1 justify-center py-2.5 rounded-xl text-xs font-bold bg-[#f8faf9] text-[#191c1b] border border-[#e2e8e5] hover:bg-[#f0f4f1] transition-all">⬇ Tải PNG</button>
+        <button type="button" onClick={() => window.print()} className="flex-1 justify-center py-2.5 rounded-xl text-xs font-bold bg-[#006e51] text-white shadow-xs hover:bg-[#005840] transition-all flex items-center justify-center gap-1.5"><span className="text-sm">📄</span> Tải PDF</button>
       </div>
     </div>
   );

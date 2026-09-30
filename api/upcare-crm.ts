@@ -1,108 +1,40 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createUpcareClient, UpcareAuthError } from '../server/upcareClient';
 
-function allowCors(res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
-}
+// Reuse the renewed token across requests within a running serverless instance.
+let client: ReturnType<typeof createUpcareClient> | undefined;
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  allowCors(res);
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  const json = (status: number, body: unknown) => {
+    res.statusCode = status;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify(body));
+  };
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    res.statusCode = 204;
+    res.end();
+    return;
   }
-
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET, OPTIONS');
+    return json(405, { error: 'method_not_allowed' });
+  }
+  const url = new URL(req.url || '/', 'http://localhost');
+  if (!['/api/upcare-crm', '/api/upcare-crm/api/employee/mkt'].includes(url.pathname)) {
+    return json(404, { error: 'not_found' });
+  }
+  const pathAndQuery = `/api/employee/mkt${url.search}`;
   try {
-    const upstreamBase = process.env.UPCARE_CRM_API_BASE?.trim() || 'https://crm.upcare.asia';
-    let bearer = (process.env.UPCARE_CRM_BEARER_TOKEN || '').trim();
-    let cookie = (process.env.UPCARE_CRM_COOKIE || '').trim();
-
-    // Build upstream URL by stripping the function base (/api/upcare-crm)
-    const originalUrl = req.url || '/';
-    const pathAndQuery = originalUrl.replace(/^\/api\/upcare-crm/, '') || '/';
-    const upstreamUrl = `${upstreamBase.replace(/\/$/, '')}${pathAndQuery}`;
-
-    async function doProxy(currentBearer: string, currentCookie: string) {
-      const headers: Record<string, string> = {
-        Accept: 'application/json',
-      };
-      if (currentBearer) {
-        headers.Authorization = `Bearer ${currentBearer}`;
-      }
-      if (currentCookie) {
-        headers.Cookie = currentCookie;
-      }
-
-      const init: RequestInit = {
-        method: req.method,
-        headers,
-      };
-      if (req.method && req.method !== 'GET' && req.method !== 'HEAD') {
-        init.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {});
-        if (!headers['Content-Type']) {
-          headers['Content-Type'] = 'application/json';
-        }
-      }
-      return fetch(upstreamUrl, init as any);
+    client ??= createUpcareClient(process.env);
+    const response = await client.request(pathAndQuery);
+    res.statusCode = response.status;
+    res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json; charset=utf-8');
+    res.end(await response.text());
+  } catch (error) {
+    if (error instanceof UpcareAuthError) {
+      return json(502, { error: 'upcare_auth_failed', message: error.message });
     }
-
-    let upstreamRes = await doProxy(bearer, cookie);
-
-    // On 401, try OAuth refresh if configured
-    if (upstreamRes.status === 401) {
-      const db = (process.env.UPCARE_CRM_OAUTH_DB || '').trim();
-      const login = (process.env.UPCARE_CRM_OAUTH_LOGIN || '').trim();
-      const password = (process.env.UPCARE_CRM_OAUTH_PASSWORD || '').trim();
-      const oauthUrl = `${upstreamBase.replace(/\/$/, '')}/api/oauth/token`;
-      if (db && login && password && cookie) {
-        const form = new FormData();
-        form.append('db', db);
-        form.append('login', login);
-        form.append('password', password);
-        const r = await fetch(oauthUrl, {
-          method: 'POST',
-          headers: { Cookie: cookie, Accept: 'application/json' },
-          body: form as any,
-        });
-        const txt = await r.text().catch(() => '');
-        const jwtMatch =
-          txt.match(/\b(eyJ[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2})\b/) ||
-          (() => {
-            try {
-              const obj = JSON.parse(txt);
-              const k = ['access_token', 'token', 'authorization', 'accessToken'];
-              for (const key of k) {
-                if (typeof obj[key] === 'string' && obj[key].startsWith('eyJ')) return [{ 0: obj[key] } as any];
-              }
-              if (obj?.data && typeof obj.data === 'object') {
-                for (const key of k) {
-                  if (typeof obj.data[key] === 'string' && obj.data[key].startsWith('eyJ')) return [{ 0: obj.data[key] } as any];
-                }
-              }
-            } catch {}
-            return null;
-          })();
-        if (jwtMatch && jwtMatch[0]) {
-          bearer = String(jwtMatch[0]).trim();
-          // Keep same cookie; if bạn muốn đồng bộ authorization=… trong cookie:
-          if (/authorization=/.test(cookie)) {
-            cookie = cookie.replace(/authorization=[^;]*/i, `authorization=${bearer}`);
-          }
-          upstreamRes = await doProxy(bearer, cookie);
-        }
-      }
-    }
-
-    const text = await upstreamRes.text().catch(() => '');
-    // Proxy status and content-type
-    const ct = upstreamRes.headers.get('content-type') || 'application/json; charset=utf-8';
-    res.status(upstreamRes.status);
-    res.setHeader('Content-Type', ct);
-    // Simple passthrough
-    return res.send(text);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return res.status(500).json({ error: 'proxy_failed', message: msg });
+    return json(502, { error: 'upcare_proxy_failed', message: 'Upcare connection failed. Please try again.' });
   }
 }
-

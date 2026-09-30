@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { DuAnRow, Employee } from '../../../types';
+import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
@@ -128,10 +130,10 @@ export const ProjectFormModal: React.FC<Props> = ({ open, initial, onClose, onSa
     const loadEmployees = async () => {
       setEmployeesLoading(true);
       try {
-        const { data, error } = await supabase
+        const { data, error } = await fetchAllRows<Employee>(supabase
           .from(EMPLOYEES_TABLE)
           .select('id, name, team, email, avatar_url')
-          .order('name', { ascending: true });
+          .order('name', { ascending: true }));
 
         if (error) throw error;
         if (!cancelled) setEmployees((data || []) as Employee[]);
@@ -212,7 +214,7 @@ export const ProjectFormModal: React.FC<Props> = ({ open, initial, onClose, onSa
   if (!open) return null;
 
   return createPortal(
-    <div className="dash-theme project-form-modal-root fixed inset-0 z-[200] !bg-transparent font-[family-name:var(--f)]">
+    <div className={`${STITCH_PORTAL_CLASS} dash-theme project-form-modal-root fixed inset-0 z-[200] !bg-transparent font-[family-name:var(--f)]`}>
       <div
         className="absolute inset-0 z-0 bg-black/60 backdrop-blur-[3px]"
         aria-hidden

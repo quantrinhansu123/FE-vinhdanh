@@ -5,40 +5,38 @@ import {
   getUpcareProjectScopeForUi,
   isUpcareMktConfigured,
   isUpcareOauthRefreshConfigured,
-  upcareBearerStatus,
   type UpcareMktEmployeeRow,
 } from '../../../api/upcareCrm';
 import { supabase } from '../../../api/supabase';
-import { REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboard/mkt/mktDetailReportShared';
+import { fetchAllRows } from '../../../api/fetchAllRows';
+import { isMissingTienVietError } from '../../../utils/detailReportsVnd';
+import { normalizeMaNsCode, REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboard/mkt/mktDetailReportShared';
 
-/** Upcare MKT → detail_reports: chỉ cập nhật revenue + tien_viet (không đụng name/email/code/report_date). */
-type UpcareReportsPatch = { revenue: number; tien_viet: number };
+/** Fabico MKT → detail_reports: cập nhật doanh thu + số đơn (không đụng name/email/code/report_date). */
+type UpcareReportsPatch = { revenue: number; tien_viet: number; order_count: number };
+type UpcareDailyEmployeeRow = UpcareMktEmployeeRow & { reportDate: string };
 import { downloadMktReportExcelTemplate } from '../../dashboard/mkt/mktHistoryExcel';
 
-/** Nhiều dòng trên trang cùng mã (code) → một dòng, cộng dồn amount trước khi đẩy. */
-function aggregateUpcareRowsBySameCode(list: UpcareMktEmployeeRow[]): UpcareMktEmployeeRow[] {
-  const m = new Map<string, UpcareMktEmployeeRow>();
+/** Gộp trùng mã trong cùng ngày; không cộng lẫn số liệu giữa các ngày. */
+function aggregateUpcareRowsBySameCode(list: UpcareDailyEmployeeRow[]): UpcareDailyEmployeeRow[] {
+  const m = new Map<string, UpcareDailyEmployeeRow>();
   for (const r of list) {
     const c = String(r.code).trim();
-    const prev = m.get(c);
+    const key = `${r.reportDate}\0${normalizeMaNsCode(c)}`;
+    const prev = m.get(key);
     if (prev) {
       prev.amount = (Number(prev.amount) || 0) + (Number(r.amount) || 0);
+      prev.count = (Number(prev.count) || 0) + (Number(r.count) || 0);
       if (!prev.name?.trim() && r.name?.trim()) prev.name = r.name;
     } else {
-      m.set(c, { ...r, code: c, amount: Number(r.amount) || 0 });
+      m.set(key, { ...r, code: c, amount: Number(r.amount) || 0, count: Number(r.count) || 0 });
     }
   }
   return Array.from(m.values());
 }
 
-function defaultDateRange(): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date(to);
-  from.setDate(from.getDate() - 6);
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
-  };
+function defaultDate(): string {
+  return toLocalYyyyMmDd(new Date());
 }
 
 function formatAmount(n: number): string {
@@ -46,61 +44,56 @@ function formatAmount(n: number): string {
 }
 
 export const UpcareMktEmployeesView: React.FC = () => {
-  const initial = useMemo(() => defaultDateRange(), []);
-  const [dateFrom, setDateFrom] = useState(initial.from);
-  const [dateTo, setDateTo] = useState(initial.to);
-  const [rows, setRows] = useState<UpcareMktEmployeeRow[]>([]);
+  const initialDate = useMemo(() => defaultDate(), []);
+  const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [loadedDate, setLoadedDate] = useState<string | null>(null);
+  const [rows, setRows] = useState<UpcareDailyEmployeeRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const configured = isUpcareMktConfigured();
-  const bearerInfo = upcareBearerStatus();
 
   const load = useCallback(async () => {
     if (!isUpcareMktConfigured()) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchUpcareMktEmployees({ dateFrom, dateTo });
-      const sorted = [...data].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0));
+      if (!selectedDate) throw new Error('Vui lòng chọn ngày cần tải.');
+      const daily = await fetchUpcareMktEmployees({ dateFrom: selectedDate, dateTo: selectedDate });
+      const sorted = daily
+        .map((row) => ({ ...row, reportDate: selectedDate }))
+        .sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0));
       setRows(sorted);
+      setLoadedDate(selectedDate);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Không tải được dữ liệu.';
       setError(msg);
       setRows([]);
+      setLoadedDate(null);
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo]);
+  }, [selectedDate]);
 
   // Không tự tải khi mở trang; chỉ tải khi người dùng bấm nút
 
   useEffect(() => {
     const prev = document.title;
-    document.title = 'MKT Upcare API | CRM';
+    document.title = 'MKT Fabico API | CRM';
     return () => {
       document.title = prev;
     };
   }, []);
 
-  const proxyOn = import.meta.env.VITE_UPCARE_CRM_USE_PROXY === 'true';
+  const proxyOn = true;
   const oauthRefreshOn = useMemo(() => isUpcareOauthRefreshConfigured(), []);
   const { param: projectParam, uuid: projectUuid } = useMemo(() => getUpcareProjectScopeForUi(), []);
 
   const apiUrl = useMemo(() => {
-    const base =
-      import.meta.env.VITE_UPCARE_CRM_USE_PROXY === 'true'
-        ? '/upcare-crm'
-        : (import.meta.env.VITE_UPCARE_CRM_API_BASE?.trim() || 'https://crm.upcare.asia').replace(/\/$/, '');
-    const qs = new URLSearchParams({
-      date_from: dateFrom,
-      date_to: dateTo,
-    });
-    if (projectUuid) {
-      qs.set(projectParam, projectUuid);
-    }
-    return `${base}/api/employee/mkt?${qs.toString()}`;
-  }, [dateFrom, dateTo, projectParam, projectUuid]);
+    const qs = new URLSearchParams({ date_from: selectedDate, date_to: selectedDate });
+    if (projectUuid) qs.set(projectParam, projectUuid);
+    return `/api/upcare-crm?${qs.toString()}`;
+  }, [selectedDate, projectParam, projectUuid]);
 
   const currentUserEmail = useMemo(() => {
     try {
@@ -114,19 +107,6 @@ export const UpcareMktEmployeesView: React.FC = () => {
     }
   }, []);
 
-  const buildInclusiveDays = useCallback((): string[] => {
-    const days: string[] = [];
-    const s = new Date(dateFrom);
-    const e = new Date(dateTo);
-    const cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
-    const end = new Date(e.getFullYear(), e.getMonth(), e.getDate());
-    while (cur <= end) {
-      days.push(toLocalYyyyMmDd(cur));
-      cur.setDate(cur.getDate() + 1);
-    }
-    return days;
-  }, [dateFrom, dateTo]);
-
   const pushToDetailReports = useCallback(async () => {
     if (!rows.length) return;
     if (!currentUserEmail) {
@@ -135,13 +115,11 @@ export const UpcareMktEmployeesView: React.FC = () => {
     }
     setSaving(true);
     try {
-      const dayKeys = buildInclusiveDays();
-      if (dayKeys.length === 0) {
-        try {
-          window.alert('Khoảng ngày không hợp lệ.');
-        } catch {}
+      if (!selectedDate || loadedDate !== selectedDate) {
+        setError('Hãy tải dữ liệu lại cho ngày đang chọn trước khi đẩy.');
         return;
       }
+      const dayKeys = [selectedDate];
 
       // Chỉ đẩy dòng có mã (code); không có mã thì bỏ qua hoàn toàn
       const rowsWithCode = rows.filter((r) => {
@@ -161,21 +139,15 @@ export const UpcareMktEmployeesView: React.FC = () => {
       const rowsAggregated = aggregateUpcareRowsBySameCode(rowsWithCode);
       const mergedSameCodeOnPage = rowsWithCode.length - rowsAggregated.length;
 
-      const codes = Array.from(
-        new Set(rowsAggregated.map((r) => String(r.code).trim()))
-      );
-
       // Lấy các bản ghi đã có trong DB theo (report_date, code)
-      const { data: existing, error: selErr } = await supabase
-        .from(REPORTS_TABLE)
-        .select('id, report_date, code')
-        .in('report_date', dayKeys)
-        .in('code', codes);
+      const { data: existing, error: selErr } = await fetchAllRows<{ id: string; report_date: string; code: string | null }>(
+        supabase.from(REPORTS_TABLE).select('id, report_date, code').in('report_date', dayKeys)
+      );
       if (selErr) throw selErr;
 
       const idByKey = new Map<string, string>();
       for (const row of existing || []) {
-        const k = `${row.report_date}\0${(row as any).code}`;
+        const k = `${row.report_date}\0${normalizeMaNsCode((row as any).code)}`;
         idByKey.set(k, (row as any).id);
       }
 
@@ -184,27 +156,31 @@ export const UpcareMktEmployeesView: React.FC = () => {
       const toUpdate: RowUp[] = [];
       let skippedNoDbRow = 0;
 
-      for (const ymd of dayKeys) {
-        for (const r of rowsAggregated) {
-          const c = String(r.code).trim();
-          const k = `${ymd}\0${c}`;
-          const id = idByKey.get(k);
-          if (!id) {
-            skippedNoDbRow += 1;
-            continue;
-          }
-          const amt = Number(r.amount) || 0;
-          toUpdate.push({
-            id,
-            patch: { revenue: amt, tien_viet: Math.round(amt * 25000) },
-          });
+      for (const r of rowsAggregated) {
+        const ymd = r.reportDate;
+        if (ymd !== selectedDate) continue;
+        const c = String(r.code).trim();
+        const k = `${ymd}\0${normalizeMaNsCode(c)}`;
+        const id = idByKey.get(k);
+        if (!id) {
+          skippedNoDbRow += 1;
+          continue;
         }
+        const amt = Number(r.amount) || 0;
+        toUpdate.push({
+          id,
+          patch: {
+            revenue: amt,
+            tien_viet: Math.round(amt * 25000),
+            order_count: Number(r.count) || 0,
+          },
+        });
       }
 
       if (toUpdate.length === 0) {
         try {
           window.alert(
-            'Không cập nhật dòng nào: trong detail_reports không có bản ghi trùng Ngày + Mã với dữ liệu Upcare (chỉ cập nhật khi đã tồn tại; không tạo mới).'
+            'Không cập nhật dòng nào: trong detail_reports không có bản ghi trùng Ngày + Mã với dữ liệu Fabico (chỉ cập nhật khi đã tồn tại; không tạo mới).'
           );
         } catch {}
         return;
@@ -218,7 +194,21 @@ export const UpcareMktEmployeesView: React.FC = () => {
             supabase.from(REPORTS_TABLE).update(patch).eq('id', id)
           )
         );
-        const err = results.find((x) => x.error)?.error;
+        let err = results.find((x) => x.error)?.error;
+        // DB chưa có cột tien_viet -> thử lại chỉ với revenue.
+        if (err && isMissingTienVietError(err)) {
+          const retry = await Promise.all(
+            part.map(({ id, patch }) =>
+              supabase.from(REPORTS_TABLE).update({ revenue: patch.revenue }).eq('id', id)
+            )
+          );
+          err = retry.find((x) => x.error)?.error;
+          if (!err) {
+            setError(
+              'Đã lưu revenue (thiếu cột tien_viet nên chưa lưu VND). Hãy chạy supabase/alter_detail_reports_tien_viet.sql.'
+            );
+          }
+        }
         if (err) throw err;
       }
       setError(null);
@@ -227,34 +217,39 @@ export const UpcareMktEmployeesView: React.FC = () => {
         skippedNoCode > 0 ? ` Đã bỏ qua ${skippedNoCode} dòng không có mã.` : '';
       const tailMerge =
         mergedSameCodeOnPage > 0
-          ? ` Đã cộng gộp ${mergedSameCodeOnPage} dòng trùng mã trên trang trước khi đẩy.`
+          ? ` Đã cộng gộp ${mergedSameCodeOnPage} dòng trùng mã trong cùng ngày trước khi đẩy.`
           : '';
       const tailSkip =
         skippedNoDbRow > 0
           ? ` ${skippedNoDbRow} cặp (ngày+mã) không có trong detail_reports — bỏ qua (không thêm dòng).`
           : '';
-      const okMsg = `Đã cập nhật ${toUpdate.length} bản ghi trong detail_reports (chỉ cột revenue, tien_viet).${tailNoCode}${tailMerge}${tailSkip}`;
+      const okMsg = `Đã cập nhật ${toUpdate.length} bản ghi đúng theo ngày trong detail_reports (cột revenue, tien_viet, order_count).${tailNoCode}${tailMerge}${tailSkip}`;
       try { window.alert(okMsg); } catch {}
       // Ẩn dữ liệu source sau khi đẩy
       setRows([]);
+      setLoadedDate(null);
     } catch (e) {
-      const msg = e && typeof e === 'object' && 'message' in e ? String((e as any).message) : 'Ghi dữ liệu thất bại.';
-      setError(msg);
+      const raw = e && typeof e === 'object' && 'message' in e ? String((e as any).message) : 'Ghi dữ liệu thất bại.';
+      setError(
+        isMissingTienVietError(raw)
+          ? `${raw} — Hãy chạy supabase/alter_detail_reports_tien_viet.sql để tạo cột tien_viet.`
+          : raw
+      );
     } finally {
       setSaving(false);
     }
-  }, [rows, buildInclusiveDays, currentUserEmail]);
+  }, [rows, selectedDate, loadedDate, currentUserEmail]);
 
   return (
     <div className="-m-3 min-h-[calc(100vh-5.5rem)] bg-[#070d1f] p-6 font-[Inter,sans-serif] text-[#dfe4fe] sm:p-8 ag-prism-scroll">
       <div className="mx-auto max-w-[1400px] space-y-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-[#dfe4fe] sm:text-3xl">Marketing — Upcare CRM</h2>
+            <h2 className="text-2xl font-bold tracking-tight text-[#dfe4fe] sm:text-3xl">Marketing — Fabico CRM</h2>
             <p className="mt-1 text-sm text-[#a5aac2]">
               GET <code className="rounded bg-[#11192e] px-1.5 py-0.5 text-xs text-[#3bbffa]">/api/employee/mkt</code>
               {proxyOn ? (
-                <span className="ml-2 text-[#69f6b8]">(proxy dev: /upcare-crm)</span>
+                <span className="ml-2 text-[#69f6b8]">(server proxy: /api/upcare-crm)</span>
               ) : null}
             </p>
                 <p className="mt-1 text-xs text-[#a5aac2]">
@@ -279,20 +274,16 @@ export const UpcareMktEmployeesView: React.FC = () => {
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1 text-xs font-medium text-[#a5aac2]">
-              Từ ngày
+              Ngày báo cáo
               <input
                 type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="rounded-lg border-none bg-[#0c1326] px-3 py-2 text-sm text-[#dfe4fe] ring-1 ring-[#41475b]/30 focus:outline-none focus:ring-[#3bbffa]/50"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-medium text-[#a5aac2]">
-              Đến ngày
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+                value={selectedDate}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value);
+                  setRows([]);
+                  setLoadedDate(null);
+                  setError(null);
+                }}
                 className="rounded-lg border-none bg-[#0c1326] px-3 py-2 text-sm text-[#dfe4fe] ring-1 ring-[#41475b]/30 focus:outline-none focus:ring-[#3bbffa]/50"
               />
             </label>
@@ -316,9 +307,9 @@ export const UpcareMktEmployeesView: React.FC = () => {
             <button
               type="button"
               onClick={() => void pushToDetailReports()}
-              disabled={saving || loading || rows.length === 0}
+              disabled={saving || loading || rows.length === 0 || loadedDate !== selectedDate}
               className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-[#69f6b8] to-[#4de2a2] px-5 py-2.5 text-sm font-bold text-[#013828] shadow-lg shadow-[#69f6b8]/15 transition-all hover:brightness-110 disabled:opacity-50"
-              title="Chỉ cập nhật bản ghi đã có trong detail_reports (trùng ngày + mã); chỉ sửa revenue và tien_viet. Không tạo dòng mới. Dòng trùng mã trên trang được cộng amount trước khi áp vào từng ngày."
+              title="Gọi Upcare riêng cho từng ngày. Chỉ cập nhật bản ghi đã có trong detail_reports trùng ngày + mã; không tạo dòng mới."
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Đẩy vào detail_reports
@@ -328,42 +319,18 @@ export const UpcareMktEmployeesView: React.FC = () => {
 
         {!configured ? (
           <div className="rounded-xl border border-[#f8a010]/30 bg-[#f8a010]/10 p-5 text-sm text-[#ffb148]">
-            <p className="font-semibold">Chưa có Bearer token (hoặc Vite chưa nạp .env)</p>
-            {bearerInfo.ok === false && bearerInfo.hint === 'missing' ? (
-              <p className="mt-2 text-[#dfe4fe]/90">
-                Không thấy biến <code className="text-[#3bbffa]">VITE_UPCARE_CRM_BEARER_TOKEN</code> trong bundle — thường do{' '}
-                <strong className="text-[#ffb148]">thiếu tiền tố VITE_</strong>, sai tên biến, hoặc file{' '}
-                <code className="text-[#3bbffa]">.env</code> không nằm ở thư mục gốc project (cùng cấp{' '}
-                <code className="text-[#3bbffa]">package.json</code>). Sau khi sửa .env:{' '}
-                <strong className="text-[#ffb148]">tắt và chạy lại npm run dev</strong>.
-              </p>
-            ) : (
-              <p className="mt-2 text-[#dfe4fe]/90">
-                Biến đã khai báo nhưng giá trị sau khi xử lý vẫn trống — kiểm tra không để dòng trống, hoặc bỏ dấu{' '}
-                <code className="text-[#3bbffa]">Bearer </code> (app sẽ tự thêm). Có thể dùng{' '}
-                <code className="text-[#3bbffa]">VITE_UPCARE_API_TOKEN</code> thay thế.
-              </p>
-            )}
+            <p className="font-semibold">Upcare server proxy is disabled.</p>
             <p className="mt-2 text-[#dfe4fe]/90">
-              Thêm vào <code className="text-[#3bbffa]">.env.local</code> (một dòng, không cần chữ Bearer):
-            </p>
-            <pre className="mt-3 overflow-x-auto rounded-lg bg-black/40 p-3 text-xs text-[#a5aac2]">
-              {`VITE_UPCARE_CRM_BEARER_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-VITE_UPCARE_CRM_USE_PROXY=true`}
-            </pre>
-            <p className="mt-3 text-xs text-[#a5aac2]">
-              Dự phòng tên biến: <code className="text-[#3bbffa]">VITE_UPCARE_API_TOKEN</code>. Nếu <strong>401</strong>: lấy JWT
-              mới hoặc dán <code className="text-[#3bbffa]">VITE_UPCARE_CRM_COOKIE</code> (full Cookie từ trình duyệt). Production:{' '}
-              <code className="text-[#3bbffa]">npm run build</code> sau khi đặt biến.
+              Enable <code className="text-[#3bbffa]">VITE_UPCARE_CRM_ENABLED=true</code> in .env.local and restart the dev server.
+              Keep credentials in server-only <code className="text-[#3bbffa]">UPCARE_CRM_*</code> variables; do not use a VITE_ prefix for passwords.
             </p>
           </div>
         ) : (
           <p className="text-xs text-[#69f6b8]">
-            Bearer đã cấu hình
-            {bearerInfo.ok ? ` (${bearerInfo.length} ký tự).` : '.'}
+            Upcare server-side proxy is enabled. Credentials stay on the server.
             {oauthRefreshOn ? (
               <span className="ml-2 text-[#a5aac2]">
-                · 401 sẽ thử refresh qua <code className="text-[#3bbffa]">/api/oauth/token</code>
+                Tự động lấy token mới khi sắp hết hạn hoặc khi CRM trả 401.
               </span>
             ) : null}
           </p>
@@ -376,7 +343,7 @@ VITE_UPCARE_CRM_USE_PROXY=true`}
         <div className="overflow-hidden rounded-xl border border-[#41475b]/20 bg-[#0c1326] shadow-xl">
           <div className="border-b border-[#41475b]/15 px-4 py-3 sm:px-6">
             <p className="text-xs text-[#a5aac2]">
-              {loading ? 'Đang tải…' : `${rows.length} nhân sự MKT (sắp xếp theo amount giảm dần)`}
+              {loading ? 'Đang tải…' : `${rows.length} nhân sự MKT trong ngày ${loadedDate || selectedDate} (sắp xếp theo amount giảm dần)`}
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -388,13 +355,14 @@ VITE_UPCARE_CRM_USE_PROXY=true`}
                   <th className="px-4 py-3 sm:px-6">ID</th>
                   <th className="px-4 py-3 sm:px-6">Code</th>
                   <th className="px-4 py-3 sm:px-6">Tên</th>
+                  <th className="px-4 py-3 text-right sm:px-6">Số đơn</th>
                   <th className="px-4 py-3 text-right sm:px-6">Amount</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#41475b]/10">
                 {loading && rows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-[#a5aac2]">
+                    <td colSpan={7} className="px-6 py-12 text-center text-[#a5aac2]">
                       <span className="inline-flex items-center gap-2">
                         <Loader2 className="h-5 w-5 animate-spin" />
                         Đang tải…
@@ -404,7 +372,7 @@ VITE_UPCARE_CRM_USE_PROXY=true`}
                 ) : null}
                 {!loading && configured && rows.length === 0 && !error ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-[#a5aac2]">
+                    <td colSpan={7} className="px-6 py-12 text-center text-[#a5aac2]">
                       Không có bản ghi. Chọn khoảng ngày và bấm Tải dữ liệu.
                     </td>
                   </tr>
@@ -435,6 +403,9 @@ VITE_UPCARE_CRM_USE_PROXY=true`}
                       <span className="line-clamp-2" title={row.name}>
                         {row.name}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums text-[#a5aac2] sm:px-6">
+                      {(Number(row.count) || 0).toLocaleString('vi-VN')}
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums text-[#69f6b8] sm:px-6">
                       {formatAmount(Number(row.amount) || 0)}

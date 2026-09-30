@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Loader2, Trash2, X } from 'lucide-react';
 import { Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import type { Employee } from '../../../types';
+import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 
 function formatDateVn(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -76,7 +77,7 @@ export const StaffDetailModal: React.FC<Props> = ({ open, row, onClose, onDelete
   const fp = row.so_fanpage ?? 0;
 
   return createPortal(
-    <div className="dash-theme crm-staff-module project-form-modal-root fixed inset-0 z-[10050] !bg-transparent font-[family-name:var(--f)]">
+    <div className={`${STITCH_PORTAL_CLASS} dash-theme crm-staff-module project-form-modal-root fixed inset-0 z-[10050] !bg-transparent font-[family-name:var(--f)]`}>
       <div className="absolute inset-0 z-0 bg-black/60 backdrop-blur-[3px]" aria-hidden onMouseDown={onClose} />
       <div className="pointer-events-none relative z-[1] flex min-h-[100dvh] w-full items-center justify-center p-4 sm:p-6">
         <div
