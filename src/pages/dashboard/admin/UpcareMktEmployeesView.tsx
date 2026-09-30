@@ -8,19 +8,20 @@ import {
   type UpcareMktEmployeeRow,
 } from '../../../api/upcareCrm';
 import { supabase } from '../../../api/supabase';
-import { normalizeMaNsCode, REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboard/mkt/mktDetailReportShared';
 import { isMissingTienVietError } from '../../../utils/detailReportsVnd';
+import { normalizeMaNsCode, REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboard/mkt/mktDetailReportShared';
 
 /** Fabico MKT → detail_reports: cập nhật doanh thu + số đơn (không đụng name/email/code/report_date). */
 type UpcareReportsPatch = { revenue: number; tien_viet: number; order_count: number };
+type UpcareDailyEmployeeRow = UpcareMktEmployeeRow & { reportDate: string };
 import { downloadMktReportExcelTemplate } from '../../dashboard/mkt/mktHistoryExcel';
 
-/** Nhiều dòng trên trang cùng mã (code) → một dòng, cộng dồn amount và count trước khi đẩy. */
-function aggregateUpcareRowsBySameCode(list: UpcareMktEmployeeRow[]): UpcareMktEmployeeRow[] {
-  const m = new Map<string, UpcareMktEmployeeRow>();
+/** Gộp trùng mã trong cùng ngày; không cộng lẫn số liệu giữa các ngày. */
+function aggregateUpcareRowsBySameCode(list: UpcareDailyEmployeeRow[]): UpcareDailyEmployeeRow[] {
+  const m = new Map<string, UpcareDailyEmployeeRow>();
   for (const r of list) {
     const c = String(r.code).trim();
-    const key = normalizeMaNsCode(c);
+    const key = `${r.reportDate}\0${normalizeMaNsCode(c)}`;
     const prev = m.get(key);
     if (prev) {
       prev.amount = (Number(prev.amount) || 0) + (Number(r.amount) || 0);
@@ -33,14 +34,8 @@ function aggregateUpcareRowsBySameCode(list: UpcareMktEmployeeRow[]): UpcareMktE
   return Array.from(m.values());
 }
 
-function defaultDateRange(): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date(to);
-  from.setDate(from.getDate() - 6);
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
-  };
+function defaultDate(): string {
+  return toLocalYyyyMmDd(new Date());
 }
 
 function formatAmount(n: number): string {
@@ -48,10 +43,10 @@ function formatAmount(n: number): string {
 }
 
 export const UpcareMktEmployeesView: React.FC = () => {
-  const initial = useMemo(() => defaultDateRange(), []);
-  const [dateFrom, setDateFrom] = useState(initial.from);
-  const [dateTo, setDateTo] = useState(initial.to);
-  const [rows, setRows] = useState<UpcareMktEmployeeRow[]>([]);
+  const initialDate = useMemo(() => defaultDate(), []);
+  const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [loadedDate, setLoadedDate] = useState<string | null>(null);
+  const [rows, setRows] = useState<UpcareDailyEmployeeRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -62,17 +57,22 @@ export const UpcareMktEmployeesView: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchUpcareMktEmployees({ dateFrom, dateTo });
-      const sorted = [...data].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0));
+      if (!selectedDate) throw new Error('Vui lòng chọn ngày cần tải.');
+      const daily = await fetchUpcareMktEmployees({ dateFrom: selectedDate, dateTo: selectedDate });
+      const sorted = daily
+        .map((row) => ({ ...row, reportDate: selectedDate }))
+        .sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0));
       setRows(sorted);
+      setLoadedDate(selectedDate);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Không tải được dữ liệu.';
       setError(msg);
       setRows([]);
+      setLoadedDate(null);
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo]);
+  }, [selectedDate]);
 
   // Không tự tải khi mở trang; chỉ tải khi người dùng bấm nút
 
@@ -89,10 +89,10 @@ export const UpcareMktEmployeesView: React.FC = () => {
   const { param: projectParam, uuid: projectUuid } = useMemo(() => getUpcareProjectScopeForUi(), []);
 
   const apiUrl = useMemo(() => {
-    const qs = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+    const qs = new URLSearchParams({ date_from: selectedDate, date_to: selectedDate });
     if (projectUuid) qs.set(projectParam, projectUuid);
     return `/api/upcare-crm?${qs.toString()}`;
-  }, [dateFrom, dateTo, projectParam, projectUuid]);
+  }, [selectedDate, projectParam, projectUuid]);
 
   const currentUserEmail = useMemo(() => {
     try {
@@ -106,19 +106,6 @@ export const UpcareMktEmployeesView: React.FC = () => {
     }
   }, []);
 
-  const buildInclusiveDays = useCallback((): string[] => {
-    const days: string[] = [];
-    const s = new Date(dateFrom);
-    const e = new Date(dateTo);
-    const cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
-    const end = new Date(e.getFullYear(), e.getMonth(), e.getDate());
-    while (cur <= end) {
-      days.push(toLocalYyyyMmDd(cur));
-      cur.setDate(cur.getDate() + 1);
-    }
-    return days;
-  }, [dateFrom, dateTo]);
-
   const pushToDetailReports = useCallback(async () => {
     if (!rows.length) return;
     if (!currentUserEmail) {
@@ -127,13 +114,11 @@ export const UpcareMktEmployeesView: React.FC = () => {
     }
     setSaving(true);
     try {
-      const dayKeys = buildInclusiveDays();
-      if (dayKeys.length === 0) {
-        try {
-          window.alert('Khoảng ngày không hợp lệ.');
-        } catch {}
+      if (!selectedDate || loadedDate !== selectedDate) {
+        setError('Hãy tải dữ liệu lại cho ngày đang chọn trước khi đẩy.');
         return;
       }
+      const dayKeys = [selectedDate];
 
       // Chỉ đẩy dòng có mã (code); không có mã thì bỏ qua hoàn toàn
       const rowsWithCode = rows.filter((r) => {
@@ -172,25 +157,25 @@ export const UpcareMktEmployeesView: React.FC = () => {
       const toUpdate: RowUp[] = [];
       let skippedNoDbRow = 0;
 
-      for (const ymd of dayKeys) {
-        for (const r of rowsAggregated) {
-          const c = String(r.code).trim();
-          const k = `${ymd}\0${normalizeMaNsCode(c)}`;
-          const id = idByKey.get(k);
-          if (!id) {
-            skippedNoDbRow += 1;
-            continue;
-          }
-          const amt = Number(r.amount) || 0;
-          toUpdate.push({
-            id,
-            patch: {
-              revenue: amt,
-              tien_viet: Math.round(amt * 25000),
-              order_count: Number(r.count) || 0,
-            },
-          });
+      for (const r of rowsAggregated) {
+        const ymd = r.reportDate;
+        if (ymd !== selectedDate) continue;
+        const c = String(r.code).trim();
+        const k = `${ymd}\0${normalizeMaNsCode(c)}`;
+        const id = idByKey.get(k);
+        if (!id) {
+          skippedNoDbRow += 1;
+          continue;
         }
+        const amt = Number(r.amount) || 0;
+        toUpdate.push({
+          id,
+          patch: {
+            revenue: amt,
+            tien_viet: Math.round(amt * 25000),
+            order_count: Number(r.count) || 0,
+          },
+        });
       }
 
       if (toUpdate.length === 0) {
@@ -211,7 +196,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
           )
         );
         let err = results.find((x) => x.error)?.error;
-        // DB chưa có cột tien_viet -> thử lại chỉ với revenue
+        // DB chưa có cột tien_viet -> thử lại chỉ với revenue.
         if (err && isMissingTienVietError(err)) {
           const retry = await Promise.all(
             part.map(({ id, patch }) =>
@@ -233,16 +218,17 @@ export const UpcareMktEmployeesView: React.FC = () => {
         skippedNoCode > 0 ? ` Đã bỏ qua ${skippedNoCode} dòng không có mã.` : '';
       const tailMerge =
         mergedSameCodeOnPage > 0
-          ? ` Đã cộng gộp ${mergedSameCodeOnPage} dòng trùng mã trên trang trước khi đẩy.`
+          ? ` Đã cộng gộp ${mergedSameCodeOnPage} dòng trùng mã trong cùng ngày trước khi đẩy.`
           : '';
       const tailSkip =
         skippedNoDbRow > 0
           ? ` ${skippedNoDbRow} cặp (ngày+mã) không có trong detail_reports — bỏ qua (không thêm dòng).`
           : '';
-      const okMsg = `Đã cập nhật ${toUpdate.length} bản ghi trong detail_reports (cột revenue, tien_viet, order_count).${tailNoCode}${tailMerge}${tailSkip}`;
+      const okMsg = `Đã cập nhật ${toUpdate.length} bản ghi đúng theo ngày trong detail_reports (cột revenue, tien_viet, order_count).${tailNoCode}${tailMerge}${tailSkip}`;
       try { window.alert(okMsg); } catch {}
       // Ẩn dữ liệu source sau khi đẩy
       setRows([]);
+      setLoadedDate(null);
     } catch (e) {
       const raw = e && typeof e === 'object' && 'message' in e ? String((e as any).message) : 'Ghi dữ liệu thất bại.';
       setError(
@@ -253,7 +239,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [rows, buildInclusiveDays, currentUserEmail]);
+  }, [rows, selectedDate, loadedDate, currentUserEmail]);
 
   return (
     <div className="-m-3 min-h-[calc(100vh-5.5rem)] bg-[#070d1f] p-6 font-[Inter,sans-serif] text-[#dfe4fe] sm:p-8 ag-prism-scroll">
@@ -289,20 +275,16 @@ export const UpcareMktEmployeesView: React.FC = () => {
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1 text-xs font-medium text-[#a5aac2]">
-              Từ ngày
+              Ngày báo cáo
               <input
                 type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="rounded-lg border-none bg-[#0c1326] px-3 py-2 text-sm text-[#dfe4fe] ring-1 ring-[#41475b]/30 focus:outline-none focus:ring-[#3bbffa]/50"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-medium text-[#a5aac2]">
-              Đến ngày
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+                value={selectedDate}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value);
+                  setRows([]);
+                  setLoadedDate(null);
+                  setError(null);
+                }}
                 className="rounded-lg border-none bg-[#0c1326] px-3 py-2 text-sm text-[#dfe4fe] ring-1 ring-[#41475b]/30 focus:outline-none focus:ring-[#3bbffa]/50"
               />
             </label>
@@ -326,9 +308,9 @@ export const UpcareMktEmployeesView: React.FC = () => {
             <button
               type="button"
               onClick={() => void pushToDetailReports()}
-              disabled={saving || loading || rows.length === 0}
+              disabled={saving || loading || rows.length === 0 || loadedDate !== selectedDate}
               className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-[#69f6b8] to-[#4de2a2] px-5 py-2.5 text-sm font-bold text-[#013828] shadow-lg shadow-[#69f6b8]/15 transition-all hover:brightness-110 disabled:opacity-50"
-              title="Chỉ cập nhật bản ghi đã có trong detail_reports (trùng ngày + mã); cập nhật revenue, tien_viet và order_count. Không tạo dòng mới. Dòng trùng mã trên trang được cộng amount và count trước khi áp vào từng ngày."
+              title="Gọi Upcare riêng cho từng ngày. Chỉ cập nhật bản ghi đã có trong detail_reports trùng ngày + mã; không tạo dòng mới."
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Đẩy vào detail_reports
@@ -362,7 +344,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
         <div className="overflow-hidden rounded-xl border border-[#41475b]/20 bg-[#0c1326] shadow-xl">
           <div className="border-b border-[#41475b]/15 px-4 py-3 sm:px-6">
             <p className="text-xs text-[#a5aac2]">
-              {loading ? 'Đang tải…' : `${rows.length} nhân sự MKT (sắp xếp theo amount giảm dần)`}
+              {loading ? 'Đang tải…' : `${rows.length} nhân sự MKT trong ngày ${loadedDate || selectedDate} (sắp xếp theo amount giảm dần)`}
             </p>
           </div>
           <div className="overflow-x-auto">

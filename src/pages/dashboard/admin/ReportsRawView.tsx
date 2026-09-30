@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import type { ReportRow } from '../../../types';
 
@@ -128,6 +128,7 @@ export const ReportsRawView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setSelectedIds(new Set());
     let q = supabase
       .from(REPORTS_TABLE)
       .select(
@@ -173,6 +174,7 @@ export const ReportsRawView: React.FC = () => {
   }, [rows, page, totalPages]);
 
   const apply = () => {
+    setSelectedIds(new Set());
     setApplied({
       from: draftFrom,
       to: draftTo,
@@ -459,6 +461,24 @@ export const ReportsRawView: React.FC = () => {
         </button>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--ld-error)]/20 bg-[color-mix(in_srgb,var(--ld-error)_5%,white)] px-4 py-3">
+          <span className="text-sm font-semibold text-[var(--ld-on-surface)]">
+            Đã chọn <strong className="text-[var(--ld-error)]">{selectedIds.size}</strong> dòng trong kết quả lọc.
+          </span>
+          <button
+            type="button"
+            onClick={() => void deleteSelected()}
+            disabled={deleting || loading}
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--ld-error)] px-4 py-2 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50"
+            title="Xóa các dòng đã tích chọn"
+          >
+            {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+            {deleting ? 'Đang xóa…' : `Xóa đã chọn (${selectedIds.size})`}
+          </button>
+        </div>
+      )}
+
       {/* Summary totals */}
       <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/15 rounded-lg p-3">
@@ -565,14 +585,6 @@ export const ReportsRawView: React.FC = () => {
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             >
               Sau →
-            </button>
-            <button
-              className="ml-3 px-3 py-1 rounded border border-[var(--ld-error)]/40 text-[var(--ld-error)] hover:bg-[color-mix(in_srgb,var(--ld-error)_10%,transparent)] disabled:opacity-50"
-              disabled={selectedIds.size === 0 || deleting}
-              onClick={() => void deleteSelected()}
-              title="Xóa các dòng đã chọn"
-            >
-              {deleting ? 'Đang xóa…' : 'Xóa đã chọn'}
             </button>
           </div>
         </div>
