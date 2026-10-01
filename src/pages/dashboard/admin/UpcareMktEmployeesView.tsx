@@ -59,6 +59,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [loadedDate, setLoadedDate] = useState<string | null>(null);
   const [rows, setRows] = useState<UpcareDailyEmployeeRow[]>([]);
+  const [codeFilter, setCodeFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -99,6 +100,12 @@ export const UpcareMktEmployeesView: React.FC = () => {
   const proxyOn = true;
   const oauthRefreshOn = useMemo(() => isUpcareOauthRefreshConfigured(), []);
   const { param: projectParam, uuid: projectUuid } = useMemo(() => getUpcareProjectScopeForUi(), []);
+
+  const filteredRows = useMemo(() => {
+    const query = codeFilter.trim().toLocaleLowerCase();
+    if (!query) return rows;
+    return rows.filter((row) => String(row.code ?? '').trim().toLocaleLowerCase().includes(query));
+  }, [rows, codeFilter]);
 
   const apiUrl = useMemo(() => {
     const qs = new URLSearchParams({ date_from: selectedDate, date_to: selectedDate });
@@ -358,10 +365,22 @@ export const UpcareMktEmployeesView: React.FC = () => {
         ) : null}
 
         <div className="overflow-hidden rounded-xl border border-[#41475b]/20 bg-[#0c1326] shadow-xl">
-          <div className="border-b border-[#41475b]/15 px-4 py-3 sm:px-6">
+          <div className="flex flex-col gap-3 border-b border-[#41475b]/15 px-4 py-3 sm:flex-row sm:items-end sm:justify-between sm:px-6">
             <p className="text-xs text-[#a5aac2]">
-              {loading ? 'Đang tải…' : `${rows.length} nhân sự MKT trong ngày ${loadedDate || selectedDate} (sắp xếp theo amount giảm dần)`}
+              {loading ? 'Đang tải…' : codeFilter.trim()
+                ? `Hiển thị ${filteredRows.length}/${rows.length} nhân sự MKT trong ngày ${loadedDate || selectedDate}`
+                : `${rows.length} nhân sự MKT trong ngày ${loadedDate || selectedDate} (sắp xếp theo amount giảm dần)`}
             </p>
+            <label className="flex flex-col gap-1 text-xs font-medium text-[#a5aac2]">
+              Lọc theo Code
+              <input
+                type="search"
+                value={codeFilter}
+                onChange={(event) => setCodeFilter(event.target.value)}
+                placeholder="Nhập Code cần tìm"
+                className="min-w-56 rounded-lg border-none bg-[#11192e] px-3 py-2 text-sm text-[#dfe4fe] ring-1 ring-[#41475b]/30 placeholder:text-[#737b96] focus:outline-none focus:ring-[#3bbffa]/50"
+              />
+            </label>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-left text-sm">
@@ -394,7 +413,14 @@ export const UpcareMktEmployeesView: React.FC = () => {
                     </td>
                   </tr>
                 ) : null}
-                {rows.map((row, idx) => (
+                {!loading && rows.length > 0 && filteredRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-12 text-center text-[#a5aac2]">
+                      Không tìm thấy Code “{codeFilter.trim()}”.
+                    </td>
+                  </tr>
+                ) : null}
+                {filteredRows.map((row, idx) => (
                   <tr key={row.id} className="bg-[#11192e]/50 transition-colors hover:bg-[#171f36]">
                     <td className="px-4 py-3 tabular-nums text-[#a5aac2] sm:px-6">{idx + 1}</td>
                     <td className="px-4 py-3 sm:px-6">
