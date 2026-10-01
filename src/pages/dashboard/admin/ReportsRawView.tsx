@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
-import type { ReportRow } from '../../../types';
+import type { Employee, ReportRow } from '../../../types';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
+const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const PAGE_SIZE = 50;
 
 /** Bỏ ký tự [ ] ở hai đầu (lặp) rồi trim — vd [FBC.HuyNN] → FBC.HuyNN, [FBC → FBC. */
@@ -86,6 +87,10 @@ function reportCurrencyUnit(r: ReportRow): string {
   return Math.abs(rate - 1) < 0.01 ? 'VND' : 'USD';
 }
 
+function staffCodeKey(value: string | null | undefined): string {
+  return String(value ?? '').replace(/\u00a0/g, ' ').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 function toYmd(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -106,6 +111,9 @@ export const ReportsRawView: React.FC = () => {
   const [applied, setApplied] = useState({ from: monthAgo, to: today, email: '', code: '', q: '' });
   const loadVersion = useRef(0);
   const [rows, setRows] = useState<ReportRow[]>([]);
+  const [staff, setStaff] = useState<Employee[]>([]);
+  const [periodReports, setPeriodReports] = useState<Pick<ReportRow, 'code' | 'name' | 'email'>[]>([]);
+  const [coverageError, setCoverageError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -126,6 +134,30 @@ export const ReportsRawView: React.FC = () => {
     }
     return { mess, ads, vnd };
   }, [rows]);
+
+  const staffCoverage = useMemo(() => {
+    const reported = new Set(periodReports.map((row) => staffCodeKey(row.code)).filter(Boolean));
+    const activeStaff = staff.filter((person) => person.trang_thai === 'dang_lam');
+    const unmatchable = activeStaff.filter((person) => !staffCodeKey(person.ma_ns));
+    const missing = activeStaff.filter((person) => {
+      const code = staffCodeKey(person.ma_ns);
+      return code && !reported.has(code);
+    });
+    const employeeCodes = new Set(staff.map((person) => staffCodeKey(person.ma_ns)).filter(Boolean));
+    const employeeEmails = new Set(staff.map((person) => String(person.email || '').trim().toLowerCase()).filter(Boolean));
+    const unregisteredReports = new Map<string, { name: string; code: string }>();
+    for (const report of periodReports) {
+      const code = String(report.code || '').trim();
+      const codeKey = staffCodeKey(code);
+      const emailKey = String(report.email || '').trim().toLowerCase();
+      if ((codeKey && employeeCodes.has(codeKey)) || (emailKey && employeeEmails.has(emailKey))) continue;
+      const name = String(report.name || '').trim();
+      const identityKey = emailKey || codeKey || name.toLowerCase();
+      if (!identityKey || unregisteredReports.has(identityKey)) continue;
+      unregisteredReports.set(identityKey, { name: name || 'Kh\u00f4ng c\u00f3 t\u00ean', code });
+    }
+    return { activeCount: activeStaff.length, missing, unmatchable, unregisteredReports: Array.from(unregisteredReports.values()) };
+  }, [staff, periodReports]);
 
   const load = useCallback(async () => {
     const version = ++loadVersion.current;
@@ -154,14 +186,31 @@ export const ReportsRawView: React.FC = () => {
         ].join(',')
       );
     }
-    const { data, error: qErr } = await fetchAllRows<ReportRow>(q);
+    setCoverageError(null);
+    const [reportResult, staffResult, codeResult] = await Promise.all([
+      fetchAllRows<ReportRow>(q),
+      fetchAllRows<Employee>(supabase.from(EMPLOYEES_TABLE).select('name, email, team, ma_ns, trang_thai')),
+      fetchAllRows<Pick<ReportRow, 'code' | 'name' | 'email'>>(
+        supabase.from(REPORTS_TABLE).select('code, name, email').gte('report_date', applied.from).lte('report_date', applied.to)
+      ),
+    ]);
     if (version !== loadVersion.current) return;
-    if (qErr) {
-      setError(qErr.message || 'Không tải được dữ liệu.');
+    if (reportResult.error) {
+      setError(reportResult.error.message || 'Không tải được dữ liệu.');
       setRows([]);
     } else {
-      setRows((data || []) as ReportRow[]);
+      setRows((reportResult.data || []) as ReportRow[]);
     }
+    if (staffResult.error) {
+      setStaff([]);
+      setCoverageError(`Không tải được danh sách nhân sự: ${staffResult.error.message}`);
+    }
+    else setStaff((staffResult.data || []) as Employee[]);
+    if (codeResult.error) {
+      setPeriodReports([]);
+      setCoverageError((current) => [current, `Không đối chiếu được mã trong báo cáo: ${codeResult.error.message}`].filter(Boolean).join(' '));
+    }
+    else setPeriodReports((codeResult.data || []) as Pick<ReportRow, 'code' | 'name' | 'email'>[]);
     setLoading(false);
     setPage(1);
   }, [applied]);
@@ -521,13 +570,62 @@ export const ReportsRawView: React.FC = () => {
         </div>
       </div>
 
+      <section className="mb-4 rounded-xl border border-amber-300 bg-amber-50/70 p-4" aria-label="Nhân sự chưa có báo cáo">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-sm font-extrabold text-[var(--ld-on-surface)]">Nhân sự chưa có dòng báo cáo</h2>
+          <span className="text-xs font-semibold text-amber-900">Kỳ {applied.from} → {applied.to}</span>
+        </div>
+        {loading ? (
+          <p className="mt-2 text-xs text-[var(--ld-on-surface-variant)]">Đang đối chiếu nhân sự đang làm với mã trong detail_reports…</p>
+        ) : coverageError ? (
+          <p role="alert" className="mt-2 text-sm text-rose-700">{coverageError}</p>
+        ) : (
+          <>
+            <p className="mt-2 text-xs text-[var(--ld-on-surface-variant)]">
+              {staffCoverage.missing.length === 0
+                ? `Đủ báo cáo: ${staffCoverage.activeCount} nhân sự đang làm đều có ít nhất một dòng trong kỳ.`
+                : `${staffCoverage.missing.length}/${staffCoverage.activeCount} nhân sự đang làm chưa có dòng nào trong kỳ.`}
+              {' '}Đối chiếu theo employees.ma_ns ↔ detail_reports.code; không áp dụng lọc email/code/tìm nhanh.
+            </p>
+            {staffCoverage.unmatchable.length > 0 && (
+              <p className="mt-2 text-xs font-semibold text-rose-700">
+                Chưa thể đối chiếu {staffCoverage.unmatchable.length} nhân sự vì thiếu mã ma_ns: {staffCoverage.unmatchable.map((person) => person.name || 'Không tên').join(', ')}.
+              </p>
+            )}
+            {staffCoverage.unregisteredReports.length > 0 && (
+              <p className="mt-2 text-xs font-semibold text-rose-700" role="status">
+                {`\u0043\u00f3 ${staffCoverage.unregisteredReports.length} nh\u00e2n s\u1ef1 trong detail_reports kh\u00f4ng t\u00ecm th\u1ea5y trong employees: ${staffCoverage.unregisteredReports.map((person) => person.code ? `${person.name} (${person.code})` : person.name).join(', ')}.`}
+              </p>
+            )}
+            {staffCoverage.missing.length > 0 && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {staffCoverage.missing.map((person, index) => (
+                  <div key={`${person.ma_ns}-${index}`} className="rounded-lg border border-amber-200 bg-white/80 px-3 py-2 text-sm">
+                    <div className="font-bold text-[var(--ld-on-surface)]">{person.name || 'Không có tên'}</div>
+                    <div className="mt-0.5 text-xs text-[var(--ld-on-surface-variant)]">Mã: {person.ma_ns} · Team: {person.team || '—'}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
       <div className="overflow-x-auto">
         {loading ? (
           <div className="flex items-center gap-2 text-[var(--ld-on-surface-variant)] p-6">
             <Loader2 className="animate-spin" size={18} /> Đang tải…
           </div>
+        ) : error ? (
+          <div role="alert" className="rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-800">
+            <strong>Không tải được detail_reports.</strong>
+            <p className="mt-1">Lỗi truy vấn: {error}</p>
+            <p className="mt-1 text-xs">Bộ lọc ngày: {applied.from} đến {applied.to}. Kiểm tra quyền truy cập/RLS, tên bảng và cột đang được truy vấn.</p>
+          </div>
         ) : rows.length === 0 ? (
-          <div className="p-6 text-[var(--ld-on-surface-variant)]">Không có dòng nào.</div>
+          <div className="p-6 text-[var(--ld-on-surface-variant)]">
+            {`Không có dòng nào từ ${applied.from} đến ${applied.to}. Hãy kiểm tra lại khoảng ngày, email, code hoặc bộ lọc tìm nhanh.`}
+          </div>
         ) : (
           <table className="w-full border-collapse min-w-[1320px] text-left">
             <thead>

@@ -262,6 +262,7 @@ export const ProjectQcExcelView: React.FC = () => {
       const dateFrom = parsed.reduce((min, row) => (row.ngay < min ? row.ngay : min), parsed[0].ngay);
       const dateTo = parsed.reduce((max, row) => (row.ngay > max ? row.ngay : max), parsed[0].ngay);
       const { data: existingRows, error: existingError } = await fetchAllRows<{
+        id: string;
         ma_nv: string | null;
         ngay: string;
         ten_chien_dich: string | null;
@@ -269,7 +270,7 @@ export const ProjectQcExcelView: React.FC = () => {
         so_tro_chuyen_tin_nhan: number | null;
       }>(supabase
         .from(QC_EXCEL_TABLE)
-        .select('ma_nv, ngay, ten_chien_dich, so_tien_da_chi_tieu_vnd, so_tro_chuyen_tin_nhan')
+        .select('id, ma_nv, ngay, ten_chien_dich, so_tien_da_chi_tieu_vnd, so_tro_chuyen_tin_nhan')
         .gte('ngay', dateFrom)
         .lte('ngay', dateTo));
       if (existingError) {
@@ -278,17 +279,18 @@ export const ProjectQcExcelView: React.FC = () => {
         return;
       }
 
-      const seenRows = new Set((existingRows || []).map((row) => qcDuplicateKey(
+      const existingByKey = new Map((existingRows || []).map((row) => [qcDuplicateKey(
         row.ngay,
         row.ma_nv || extractMaNvFromBracketPage(row.ten_chien_dich),
         row.ten_chien_dich,
         row.so_tien_da_chi_tieu_vnd,
         row.so_tro_chuyen_tin_nhan
-      )));
+      ), row]));
       const uniquePayloads = payloads.filter((row) => {
         const key = qcDuplicateKey(row.ngay, row.ma_nv, row.ten_chien_dich, row.so_tien_da_chi_tieu_vnd, row.so_tro_chuyen_tin_nhan);
-        if (seenRows.has(key)) return false;
-        seenRows.add(key);
+        const existing = existingByKey.get(key);
+        if (existing) return false;
+        existingByKey.set(key, { ...row, id: '' });
         return true;
       });
       const skippedDuplicates = payloads.length - uniquePayloads.length;
@@ -320,62 +322,47 @@ export const ProjectQcExcelView: React.FC = () => {
   };
 
   const handleSyncToDailyDetails = useCallback(async () => {
-    const prepared = rows
-      .map((row) => {
-        const report_date = String(row.ngay || '').slice(0, 10);
-        const ma_nv = normalizeEmployeeCode(row.ma_nv || extractMaNvFromBracketPage(row.ten_chien_dich));
-        const ten_chien_dich = row.ten_chien_dich?.trim() || '';
-        if (!report_date || !ma_nv || !ten_chien_dich) return null;
-        return {
+    const grouped = new Map<string, {
+      report_date: string;
+      ma_nv: string;
+      ten_chien_dich: string;
+      ad_cost_vnd: number;
+      message_conversations: number;
+      source_file: string | null;
+    }>();
+    let skippedInvalidRows = 0;
+
+    for (const row of rows) {
+      const report_date = String(row.ngay || '').slice(0, 10);
+      const ma_nv = String(row.ma_nv || extractMaNvFromBracketPage(row.ten_chien_dich) || '').trim();
+      const ten_chien_dich = row.ten_chien_dich?.trim() || '';
+      if (!report_date || !ma_nv || !ten_chien_dich) {
+        skippedInvalidRows++;
+        continue;
+      }
+
+      const key = `${report_date}\u0000${ma_nv}\u0000${ten_chien_dich}`;
+      const current = grouped.get(key);
+      if (current) {
+        current.ad_cost_vnd += Number(row.so_tien_da_chi_tieu_vnd) || 0;
+        current.message_conversations += Number(row.so_tro_chuyen_tin_nhan) || 0;
+      } else {
+        grouped.set(key, {
           report_date,
           ma_nv,
           ten_chien_dich,
           ad_cost_vnd: Number(row.so_tien_da_chi_tieu_vnd) || 0,
           message_conversations: Number(row.so_tro_chuyen_tin_nhan) || 0,
           source_file: row.source_file,
-        };
-      })
-      .filter(Boolean) as Array<{
-        report_date: string;
-        ma_nv: string;
-        ten_chien_dich: string;
-        ad_cost_vnd: number;
-        message_conversations: number;
-        source_file: string | null;
-      }>;
-
-    if (!prepared.length) {
-      window.alert('Kh\u00f4ng c\u00f3 d\u00f2ng n\u00e0o c\u00f3 Ng\u00e0y, M\u00e3 NV v\u00e0 t\u00ean chi\u1ebfn d\u1ecbch h\u1ee3p l\u1ec7 \u0111\u1ec3 \u0111\u1ed3ng b\u1ed9.');
-      return;
-    }
-
-    const seenQcRows = new Set<string>();
-    const uniquePrepared = prepared.filter((row) => {
-      const key = qcDuplicateKey(
-        row.report_date,
-        row.ma_nv,
-        row.ten_chien_dich,
-        row.ad_cost_vnd,
-        row.message_conversations
-      );
-      if (seenQcRows.has(key)) return false;
-      seenQcRows.add(key);
-      return true;
-    });
-
-    // Collapse true duplicate imports, then sum distinct source rows by employee and campaign.
-    const byKey = new Map<string, (typeof prepared)[number]>();
-    for (const row of uniquePrepared) {
-      const key = `${row.report_date}\0${row.ma_nv}\0${row.ten_chien_dich}`;
-      const current = byKey.get(key);
-      if (!current) byKey.set(key, { ...row });
-      else {
-        current.ad_cost_vnd += row.ad_cost_vnd;
-        current.message_conversations += row.message_conversations;
+        });
       }
     }
-    const payload = Array.from(byKey.values());
-    if (!window.confirm(`\u0110\u1ed3ng b\u1ed9 ${payload.length} d\u00f2ng QC v\u00e0 c\u1eadp nh\u1eadt/t\u1ea1o b\u00e1o c\u00e1o MKT theo Ng\u00e0y + M\u00e3 NV?`)) return;
+
+    const payload = Array.from(grouped.values());
+    if (!payload.length) {
+      window.alert('Kh\u00f4ng c\u00f3 d\u00f2ng QC h\u1ee3p l\u1ec7 \u0111\u1ec3 \u0111\u1ed3ng b\u1ed9.');
+      return;
+    }
 
     setPushing(true);
     try {
@@ -384,124 +371,131 @@ export const ProjectQcExcelView: React.FC = () => {
         .upsert(payload, { onConflict: 'report_date,ma_nv,ten_chien_dich' });
       if (syncError) throw syncError;
 
-      // Marketing Report reads detail_reports, so also sync one employee/day summary there.
-      const byEmployeeDay = new Map<string, { report_date: string; code: string; ad_cost: number; mess_comment_count: number }>();
-      for (const row of payload) {
-        const code = String(row.ma_nv).trim();
-        const key = `${row.report_date}\0${normalizeEmployeeCode(code)}`;
-        const current = byEmployeeDay.get(key);
-        if (!current) {
-          byEmployeeDay.set(key, {
-            report_date: row.report_date,
-            code,
-            ad_cost: row.ad_cost_vnd,
-            mess_comment_count: row.message_conversations,
+      let reportStatus = '';
+      try {
+        const byEmployeeDay = new Map<string, { report_date: string; code: string; ad_cost: number; mess_comment_count: number }>();
+        for (const row of payload) {
+          const code = String(row.ma_nv).trim();
+          const key = `${row.report_date}\u0000${normalizeEmployeeCode(code)}`;
+          const current = byEmployeeDay.get(key);
+          if (current) {
+            current.ad_cost += row.ad_cost_vnd;
+            current.mess_comment_count += row.message_conversations;
+          } else {
+            byEmployeeDay.set(key, {
+              report_date: row.report_date,
+              code,
+              ad_cost: row.ad_cost_vnd,
+              mess_comment_count: row.message_conversations,
+            });
+          }
+        }
+
+        const summaries = Array.from(byEmployeeDay.values());
+        const reportDates = Array.from(new Set(summaries.map((row) => row.report_date)));
+        const [staffRes, reportRes] = await Promise.all([
+          fetchAllRows<{ ma_ns: string | null; name: string | null; email: string | null; team: string | null }>(
+            supabase.from(EMPLOYEES_TABLE).select('ma_ns, name, email, team')
+          ),
+          fetchAllRows<{ id: string; report_date: string; code: string | null; email: string | null }>(
+            supabase.from(REPORTS_TABLE).select('id, report_date, code, email').in('report_date', reportDates)
+          ),
+        ]);
+        if (staffRes.error) throw staffRes.error;
+        if (reportRes.error) throw reportRes.error;
+
+        const staffByCode = new Map<string, { name: string; email: string | null; team: string | null }>();
+        for (const staff of staffRes.data || []) {
+          const key = normalizeEmployeeCode(staff.ma_ns);
+          if (!key || staffByCode.has(key)) continue;
+          const email = String(staff.email || '').trim().toLowerCase();
+          staffByCode.set(key, {
+            name: String(staff.name || email || staff.ma_ns).trim() || String(staff.ma_ns),
+            email: email || null,
+            team: staff.team?.trim() || null,
           });
-        } else {
-          current.ad_cost += row.ad_cost_vnd;
-          current.mess_comment_count += row.message_conversations;
         }
-      }
-      const summaries = Array.from(byEmployeeDay.values());
-      const reportDates = Array.from(new Set(summaries.map((row) => row.report_date)));
-      const [staffRes, reportRes] = await Promise.all([
-        fetchAllRows<{ ma_ns: string | null; name: string | null; email: string | null; team: string | null }>(
-          supabase.from(EMPLOYEES_TABLE).select('ma_ns, name, email, team')
-        ),
-        fetchAllRows<{ id: string; report_date: string; code: string | null; email: string | null }>(
-          supabase.from(REPORTS_TABLE).select('id, report_date, code, email').in('report_date', reportDates)
-        ),
-      ]);
-      if (staffRes.error) throw staffRes.error;
-      if (reportRes.error) throw reportRes.error;
 
-      const staffByCode = new Map<string, { name: string; email: string | null; team: string | null }>();
-      for (const staff of staffRes.data || []) {
-        const key = normalizeEmployeeCode(staff.ma_ns);
-        if (!key || staffByCode.has(key)) continue;
-        const email = String(staff.email || '').trim().toLowerCase();
-        staffByCode.set(key, {
-          name: String(staff.name || email || staff.ma_ns).trim() || String(staff.ma_ns),
-          email: email || null,
-          team: staff.team?.trim() || null,
-        });
-      }
+        const reportIdByCode = new Map<string, string>();
+        const reportIdByEmail = new Map<string, string>();
+        for (const report of reportRes.data || []) {
+          const day = String(report.report_date).slice(0, 10);
+          const codeKey = `${day}\u0000${normalizeEmployeeCode(report.code)}`;
+          const emailKey = `${day}\u0000${String(report.email || '').trim().toLowerCase()}`;
+          if (report.id && normalizeEmployeeCode(report.code) && !reportIdByCode.has(codeKey)) {
+            reportIdByCode.set(codeKey, report.id);
+          }
+          if (report.id && String(report.email || '').trim() && !reportIdByEmail.has(emailKey)) {
+            reportIdByEmail.set(emailKey, report.id);
+          }
+        }
 
-      const reportIdByCodeKey = new Map<string, string>();
-      const reportIdByEmailKey = new Map<string, string>();
-      for (const report of reportRes.data || []) {
-        const day = String(report.report_date).slice(0, 10);
-        const codeKey = `${day}\0${normalizeEmployeeCode(report.code)}`;
-        const emailKey = `${day}\0${String(report.email || '').trim().toLowerCase()}`;
-        if (report.id && normalizeEmployeeCode(report.code) && !reportIdByCodeKey.has(codeKey)) {
-          reportIdByCodeKey.set(codeKey, report.id);
+        let updatedReports = 0;
+        let createdReports = 0;
+        let skippedReports = 0;
+        const updates: { id: string; patch: Record<string, unknown> }[] = [];
+        const inserts: Record<string, unknown>[] = [];
+        for (const row of summaries) {
+          const dayCodeKey = `${row.report_date}\u0000${normalizeEmployeeCode(row.code)}`;
+          const staff = staffByCode.get(normalizeEmployeeCode(row.code));
+          const existingId = reportIdByCode.get(dayCodeKey) ||
+            (staff?.email ? reportIdByEmail.get(`${row.report_date}\u0000${staff.email}`) : undefined);
+          if (existingId) {
+            updates.push({
+              id: existingId,
+              patch: {
+                ad_cost: row.ad_cost,
+                mess_comment_count: row.mess_comment_count,
+                code: row.code,
+                ...(staff ? { name: staff.name } : {}),
+              },
+            });
+          } else if (staff?.email) {
+            inserts.push({
+              report_date: row.report_date,
+              code: row.code,
+              name: staff.name,
+              email: staff.email,
+              team: staff.team,
+              ad_cost: row.ad_cost,
+              mess_comment_count: row.mess_comment_count,
+            });
+          } else {
+            skippedReports++;
+          }
         }
-        if (report.id && String(report.email || '').trim() && !reportIdByEmailKey.has(emailKey)) {
-          reportIdByEmailKey.set(emailKey, report.id);
-        }
-      }
 
-      let updatedReports = 0;
-      let createdReports = 0;
-      let skippedNoEmployee = 0;
-      let skippedNoEmail = 0;
-      const reportChunk = 60;
-      const reportUpdates: { id: string; patch: { ad_cost: number; mess_comment_count: number; code: string } }[] = [];
-      const reportInserts: Record<string, unknown>[] = [];
-      for (const row of summaries) {
-        const key = `${row.report_date}\0${normalizeEmployeeCode(row.code)}`;
-        const staff = staffByCode.get(normalizeEmployeeCode(row.code));
-        const id = reportIdByCodeKey.get(key) || (staff ? reportIdByEmailKey.get(`${row.report_date}\0${staff.email}`) : undefined);
-        if (id) {
-          reportUpdates.push({
-            id,
-            patch: { ad_cost: row.ad_cost, mess_comment_count: row.mess_comment_count, code: row.code },
-          });
-          continue;
+        for (let i = 0; i < updates.length; i += 60) {
+          const batch = updates.slice(i, i + 60);
+          const results = await Promise.all(
+            batch.map(({ id, patch }) => supabase.from(REPORTS_TABLE).update(patch).eq('id', id))
+          );
+          const updateError = results.find((result) => result.error)?.error;
+          if (updateError) throw updateError;
+          updatedReports += batch.length;
         }
-        if (!staff) {
-          skippedNoEmployee++;
-          continue;
+        for (let i = 0; i < inserts.length; i += 60) {
+          const batch = inserts.slice(i, i + 60);
+          const { error: insertError } = await supabase.from(REPORTS_TABLE).insert(batch);
+          if (insertError) throw insertError;
+          createdReports += batch.length;
         }
-        if (!staff.email) {
-          skippedNoEmail++;
-          continue;
-        }
-        reportInserts.push({
-          report_date: row.report_date,
-          code: row.code,
-          name: staff.name,
-          email: staff.email,
-          team: staff.team,
-          ad_cost: row.ad_cost,
-          mess_comment_count: row.mess_comment_count,
-        });
+
+        reportStatus = ` Report: cập nhật ${updatedReports}, tạo mới ${createdReports}` +
+          (skippedReports ? `, bỏ qua ${skippedReports} dòng do không khớp nhân viên hoặc thiếu email.` : '.') ;
+      } catch (reportError) {
+        const detail = reportError && typeof reportError === 'object' && 'message' in reportError
+          ? String(reportError.message)
+          : 'Không rõ nguyên nhân';
+        reportStatus = ` Chưa đồng bộ được bảng report: ${detail}`;
       }
 
-      for (let i = 0; i < reportUpdates.length; i += reportChunk) {
-        const part = reportUpdates.slice(i, i + reportChunk);
-        const results = await Promise.all(
-          part.map(({ id, patch }) => supabase.from(REPORTS_TABLE).update(patch).eq('id', id))
-        );
-        const updateError = results.find((result) => result.error)?.error;
-        if (updateError) throw updateError;
-        updatedReports += part.length;
-      }
-      for (let i = 0; i < reportInserts.length; i += reportChunk) {
-        const part = reportInserts.slice(i, i + reportChunk);
-        const { error: insertError } = await supabase.from(REPORTS_TABLE).insert(part);
-        if (insertError) throw insertError;
-        createdReports += part.length;
-      }
-
-      const skippedTail = skippedNoEmployee
-        ? ` ${skippedNoEmployee} d\u00f2ng kh\u00f4ng c\u00f3 nh\u00e2n vi\u00ean kh\u1edbp M\u00e3 NV trong employees n\u00ean b\u1ecb b\u1ecf qua.`
+      const skippedTail = skippedInvalidRows
+        ? ` \u0110\u00e3 b\u1ecf qua ${skippedInvalidRows.toLocaleString('vi-VN')} d\u00f2ng thi\u1ebfu Ng\u00e0y, M\u00e3 NV ho\u1eb7c T\u00ean chi\u1ebfn d\u1ecbch.`
         : '';
-      const missingEmailTail = skippedNoEmail
-        ? ` ${skippedNoEmail} d\u00f2ng kh\u1edbp M\u00e3 NV nh\u01b0ng nh\u00e2n s\u1ef1 ch\u01b0a c\u00f3 email; th\u00eam email trong Qu\u1ea3n l\u00fd nh\u00e2n s\u1ef1 r\u1ed3i b\u1ea5m \u0110\u1ed3ng b\u1ed9 l\u1ea1i.`
-        : '';
+      const includedRows = rows.length - skippedInvalidRows;
       setExcelMsg(
-        `\u0110\u00e3 \u0111\u1ed3ng b\u1ed9 ${payload.length} chi ti\u1ebft QC; Marketing Report: c\u1eadp nh\u1eadt ${updatedReports}, t\u1ea1o m\u1edbi ${createdReports} d\u00f2ng.${skippedTail}${missingEmailTail}`
+        `\u0110\u00e3 c\u1ed9ng ${includedRows.toLocaleString('vi-VN')}/${rows.length.toLocaleString('vi-VN')} d\u00f2ng QC th\u00e0nh ${payload.length.toLocaleString('vi-VN')} d\u00f2ng chi ti\u1ebft MKT.${skippedTail}${reportStatus}`
       );
       await loadDailyDetails();
     } catch (e) {

@@ -19,15 +19,30 @@ function displayMaNs(row: Employee): string {
   return row.id.slice(0, 8).toUpperCase();
 }
 
+/** Keep report-linked staff visible even when they do not have login credentials. */
+function belongsToThisApp(row: Employee): boolean {
+  return Boolean(row.ma_ns?.trim() || (row.email?.trim() && row.pass?.trim()));
+}
+
 function getDeleteErrorMessage(error: { code?: string; message?: string }): string {
   const message = error.message || '';
+  if (error.code === '42501' || /row-level security|permission denied/i.test(message)) {
+    return `${message} — chạy supabase/alter_employees_crm_staff_ui.sql trong Supabase SQL Editor để cấp policy DELETE cho employees.`;
+  }
   if (
     (error.code === '23502' || /not-null constraint/i.test(message)) &&
     /finance_transactions|owner_user_id/i.test(message)
   ) {
     return 'Không thể xóa nhân sự này vì có giao dịch tài chính đang gắn với chủ sở hữu. Hãy chuyển các giao dịch sang người phụ trách khác trước khi xóa để giữ nguyên lịch sử tài chính.';
   }
+  if (error.code === '23503' || /foreign key constraint/i.test(message)) {
+    return `Không thể xóa vì nhân sự này còn được dữ liệu khác tham chiếu. ${message}`;
+  }
   return message || 'Không xóa được nhân sự.';
+}
+
+function noDeletePermissionMessage(): string {
+  return 'Không xóa được dòng nào. Kiểm tra policy RLS DELETE của employees; chạy supabase/alter_employees_crm_staff_ui.sql trong Supabase SQL Editor nếu database cũ chưa có policy này.';
 }
 
 function initialsFromName(name: string): string {
@@ -80,6 +95,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
   const [viewing, setViewing] = useState<Employee | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [showNonAppStaff, setShowNonAppStaff] = useState(false);
   const [page, setPage] = useState(1);
   const [importRows, setImportRows] = useState<StaffImportRow[]>([]);
   const [importErrors, setImportErrors] = useState<{ row: number; message: string }[]>([]);
@@ -122,15 +138,18 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
     setPage(1);
   }, [search]);
 
+  const nonAppStaffCount = useMemo(() => rows.filter((row) => !belongsToThisApp(row)).length, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) =>
+    const scopeRows = showNonAppStaff ? rows : rows.filter(belongsToThisApp);
+    if (!q) return scopeRows;
+    return scopeRows.filter((r) =>
       [r.name, r.team, r.ma_ns, r.email, r.vi_tri, r.leader, r.du_an_ten]
         .map((x) => (x || '').toLowerCase())
         .some((s) => s.includes(q))
     );
-  }, [rows, search]);
+  }, [rows, search, showNonAppStaff]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -265,13 +284,24 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
 
       setDeletingId(row.id);
       setError(null);
-      const { error: delErr } = await supabase.from(EMPLOYEES_TABLE).delete().eq('id', row.id);
-      setDeletingId(null);
-
-      if (delErr) {
-        console.error('employees delete:', delErr);
-        setError(getDeleteErrorMessage(delErr));
+      try {
+        const { data, error: delErr } = await supabase
+          .from(EMPLOYEES_TABLE)
+          .delete()
+          .eq('id', row.id)
+          .select('id');
+        if (delErr) throw delErr;
+        if (!data?.length) {
+          await load();
+          setError(noDeletePermissionMessage());
+          return;
+        }
+      } catch (err) {
+        console.error('employees delete:', err);
+        setError(getDeleteErrorMessage(err as { code?: string; message?: string }));
         return;
+      } finally {
+        setDeletingId(null);
       }
 
       setSelectedIds((current) => {
@@ -327,24 +357,43 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
 
     setBulkDeleting(true);
     setError(null);
-    const { error: deleteError } = await supabase.from(EMPLOYEES_TABLE).delete().in('id', ids);
-    setBulkDeleting(false);
-    if (deleteError) {
-      console.error('employees bulk delete:', deleteError);
-      setError(getDeleteErrorMessage(deleteError));
+    let deletedIds: string[] = [];
+    try {
+      const { data, error: deleteError } = await supabase
+        .from(EMPLOYEES_TABLE)
+        .delete()
+        .in('id', ids)
+        .select('id');
+      if (deleteError) throw deleteError;
+      deletedIds = (data || []).map((row) => row.id);
+      if (!deletedIds.length) {
+        await load();
+        setError(noDeletePermissionMessage());
+        return;
+      }
+    } catch (err) {
+      console.error('employees bulk delete:', err);
+      setError(getDeleteErrorMessage(err as { code?: string; message?: string }));
       return;
+    } finally {
+      setBulkDeleting(false);
     }
 
-    if (viewingRef.current && ids.includes(viewingRef.current.id)) {
+    const partialMessage = deletedIds.length < ids.length
+      ? `Đã xóa ${deletedIds.length}/${ids.length} nhân sự. Một số dòng bị RLS hoặc ràng buộc dữ liệu chặn xóa.`
+      : null;
+
+    if (viewingRef.current && deletedIds.includes(viewingRef.current.id)) {
       setViewing(null);
       setDetailOpen(false);
     }
-    if (editingRef.current && ids.includes(editingRef.current.id)) {
+    if (editingRef.current && deletedIds.includes(editingRef.current.id)) {
       setEditing(null);
       setFormOpen(false);
     }
-    setSelectedIds(new Set());
-    void load();
+    setSelectedIds(new Set(ids.filter((id) => !deletedIds.includes(id))));
+    await load();
+    if (partialMessage) setError(partialMessage);
     void onEmployeesRefresh?.();
   };
 
@@ -550,6 +599,17 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
               />
             </div>
             <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNonAppStaff((show) => !show);
+                  setSelectedIds(new Set());
+                }}
+                className="rounded-xl border border-white/10 px-3 py-2.5 text-xs font-semibold text-[var(--hrm-on-variant)] hover:bg-white/5"
+                title="Hiện nhân sự có mã ma_ns hoặc có đủ email và mật khẩu đăng nhập."
+              >
+                {showNonAppStaff ? 'Chỉ nhân sự app' : `Hiện tất cả (+${nonAppStaffCount} ngoài app)`}
+              </button>
               {selectedIds.size > 0 && (
                 <button
                   type="button"

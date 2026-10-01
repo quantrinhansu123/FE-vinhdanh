@@ -5,7 +5,6 @@ import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/Shar
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { AuthUser, Employee } from '../../../types';
-import { isPrivilegedViewer } from '../../../utils/roleScope';
 import { formatNumberDots, formatTypingGroupedInt } from '../mkt/mktDetailReportShared';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
@@ -87,8 +86,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
   }, [allStaff]);
 
   const viewerTeam = (viewer?.team || '').trim();
-  // Đặc quyền (admin/GĐ/QLDA): được chọn mọi team. Leader/NV bị khóa theo team mình.
-  const viewerTeamLocked = Boolean(viewerTeam) && !isPrivilegedViewer(viewer);
+  const viewerTeamLocked = Boolean(viewerTeam);
 
   const teamMembers = useMemo(() => {
     if (!teamKey) return [];

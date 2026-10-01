@@ -43,6 +43,17 @@ function formatAmount(n: number): string {
   return n.toLocaleString('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+function normalizeReportDate(value: unknown): string {
+  return String(value ?? '').trim().slice(0, 10);
+}
+
+function nextReportDate(value: string): string {
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + 1);
+  return toLocalYyyyMmDd(date);
+}
+
 export const UpcareMktEmployeesView: React.FC = () => {
   const initialDate = useMemo(() => defaultDate(), []);
   const [selectedDate, setSelectedDate] = useState(initialDate);
@@ -119,7 +130,8 @@ export const UpcareMktEmployeesView: React.FC = () => {
         setError('Hãy tải dữ liệu lại cho ngày đang chọn trước khi đẩy.');
         return;
       }
-      const dayKeys = [selectedDate];
+      const reportDate = normalizeReportDate(selectedDate);
+      const nextDate = nextReportDate(reportDate);
 
       // Chỉ đẩy dòng có mã (code); không có mã thì bỏ qua hoàn toàn
       const rowsWithCode = rows.filter((r) => {
@@ -141,29 +153,36 @@ export const UpcareMktEmployeesView: React.FC = () => {
 
       // Lấy các bản ghi đã có trong DB theo (report_date, code)
       const { data: existing, error: selErr } = await fetchAllRows<{ id: string; report_date: string; code: string | null }>(
-        supabase.from(REPORTS_TABLE).select('id, report_date, code').in('report_date', dayKeys)
+        supabase.from(REPORTS_TABLE)
+          .select('id, report_date, code')
+          .gte('report_date', reportDate)
+          .lt('report_date', nextDate)
       );
       if (selErr) throw selErr;
 
       const idByKey = new Map<string, string>();
       for (const row of existing || []) {
-        const k = `${row.report_date}\0${normalizeMaNsCode((row as any).code)}`;
-        idByKey.set(k, (row as any).id);
+        const dateKey = normalizeReportDate(row.report_date);
+        const codeKey = normalizeMaNsCode(row.code);
+        const k = `${dateKey}\0${codeKey}`;
+        if (row.id && dateKey && codeKey && !idByKey.has(k)) idByKey.set(k, row.id);
       }
 
       // Chỉ cập nhật bản ghi đã có trùng (report_date, code); không insert dòng mới
       type RowUp = { id: string; patch: UpcareReportsPatch };
       const toUpdate: RowUp[] = [];
       let skippedNoDbRow = 0;
+      const unmatchedCodes: string[] = [];
 
       for (const r of rowsAggregated) {
-        const ymd = r.reportDate;
-        if (ymd !== selectedDate) continue;
+        const ymd = normalizeReportDate(r.reportDate);
+        if (ymd !== reportDate) continue;
         const c = String(r.code).trim();
         const k = `${ymd}\0${normalizeMaNsCode(c)}`;
         const id = idByKey.get(k);
         if (!id) {
           skippedNoDbRow += 1;
+          unmatchedCodes.push(c);
           continue;
         }
         const amt = Number(r.amount) || 0;
@@ -178,11 +197,9 @@ export const UpcareMktEmployeesView: React.FC = () => {
       }
 
       if (toUpdate.length === 0) {
-        try {
-          window.alert(
-            'Không cập nhật dòng nào: trong detail_reports không có bản ghi trùng Ngày + Mã với dữ liệu Fabico (chỉ cập nhật khi đã tồn tại; không tạo mới).'
-          );
-        } catch {}
+        window.alert(
+          `Kh\u00f4ng c\u1eadp nh\u1eadt \u0111\u01b0\u1ee3c d\u00f2ng n\u00e0o cho ng\u00e0y ${reportDate}. Kh\u00f4ng t\u00ecm th\u1ea5y key Ng\u00e0y + M\u00e3 NV trong detail_reports: ${Array.from(new Set(unmatchedCodes)).join(', ') || 'kh\u00f4ng c\u00f3 m\u00e3 kh\u1edbp'}.`
+        );
         return;
       }
 

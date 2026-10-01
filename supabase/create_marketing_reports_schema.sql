@@ -36,9 +36,12 @@ create table if not exists public.detail_reports (
   mess_comment_count integer,
   order_count integer,
   revenue numeric,
+  tien_viet numeric,
   team text,
   created_at timestamptz not null default now()
 );
+
+alter table public.detail_reports add column if not exists tien_viet numeric;
 
 alter table public.detail_reports drop column if exists shift;
 alter table public.detail_reports drop column if exists staff_id;

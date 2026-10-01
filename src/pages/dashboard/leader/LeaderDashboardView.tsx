@@ -344,6 +344,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
   const [leaderTeamKeys, setLeaderTeamKeys] = useState<string[]>([]);
   const [staffTargets, setStaffTargets] = useState<Map<string, number>>(() => new Map());
   const [filterHighCpdt, setFilterHighCpdt] = useState(false);
+  const [viewMode, setViewMode] = useState<'personal' | 'team'>('personal');
   const [detailRowsByCodeKey, setDetailRowsByCodeKey] = useState<Map<string, Record<string, unknown>[]>>(() => new Map());
   const [mktNameByCode, setMktNameByCode] = useState<Map<string, string>>(() => new Map());
   const [mktDetailCodeKey, setMktDetailCodeKey] = useState<string | null>(null);
@@ -825,6 +826,37 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     return out;
   }, [teamKpiRows, leaderTeamKeys, revByTeamAttributed, teamTotals.rev, tableRows]);
 
+  const teamSummaryRows = useMemo(() => {
+    const labels: string[] = [];
+    const seen = new Set<string>();
+    for (const label of [...leaderTeamKeys, ...teamKpiRows.map((row) => row.teamKey)]) {
+      const key = normalizeTeamLookupKey(label);
+      if (!key || seen.has(key)) continue;
+      // Back-office groups are not sales teams and should not appear in this summary.
+      if (key === 'ke-toan' || key === 'admin') continue;
+      seen.add(key);
+      labels.push(label);
+    }
+
+    const targets = new Map(teamKpiRows.map((row) => [normalizeTeamLookupKey(row.teamKey), row.targetVnd] as const));
+    const allocatedRevenue = new Map(teamKpiBarItems.map((row) => [normalizeTeamLookupKey(row.label), row.rev] as const));
+    const adsByTeam = new Map<string, number>();
+    const singleTeamKey = labels.length === 1 ? normalizeTeamLookupKey(labels[0]) : '';
+    for (const row of tableRows) {
+      const key = normalizeTeamLookupKey(row.m.team) || singleTeamKey;
+      if (!key) continue;
+      adsByTeam.set(key, (adsByTeam.get(key) || 0) + row.a.ads);
+    }
+
+    return labels.map((label) => {
+      const key = normalizeTeamLookupKey(label);
+      const target = targets.get(key) || 0;
+      const revenue = allocatedRevenue.get(key) ?? revByTeamAttributed.get(key) ?? (labels.length === 1 ? teamTotals.rev : 0);
+      const ads = adsByTeam.get(key) || 0;
+      return { label, revenue, target, ads, adsPct: adsDtPct(ads, revenue), targetPct: target > 0 ? (revenue / target) * 100 : null };
+    });
+  }, [leaderTeamKeys, teamKpiRows, teamKpiBarItems, revByTeamAttributed, tableRows, teamTotals.rev]);
+
   const mktActive = useMemo(
     () => tableRows.filter((r) => r.a.rev > 0 || r.a.ads > 0 || r.a.orders > 0).length,
     [tableRows]
@@ -971,6 +1003,10 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
           </div>
         </div>
         <div className="team-dashboard-filters">
+          <div className="team-dashboard-segment" role="tablist" aria-label="Chế độ xem">
+            <button type="button" role="tab" aria-selected={viewMode === 'personal'} onClick={() => setViewMode('personal')} className={viewMode === 'personal' ? 'active' : ''}>Theo cá nhân</button>
+            <button type="button" role="tab" aria-selected={viewMode === 'team'} onClick={() => setViewMode('team')} className={viewMode === 'team' ? 'active' : ''}>Theo team</button>
+          </div>
           <div className="team-dashboard-segment" role="group" aria-label="Khoảng thời gian">
             <button type="button" onClick={() => setQuickRange('yesterday')}>Hôm qua</button>
             <button type="button" onClick={() => setQuickRange('7days')}>7 ngày</button>
@@ -991,6 +1027,26 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
 
       {loading ? (
         <div className="team-dashboard-loading"><Loader2 size={22} className="animate-spin" /> Đang tải dashboard team…</div>
+      ) : viewMode === 'team' ? (
+        <section className="team-dashboard-card team-dashboard-panel">
+          <div className="team-dashboard-panel-title"><div><h2>Tổng hợp tiền theo team</h2><p>{monthLabel}</p></div></div>
+          <div className="team-dashboard-table-wrap">
+            <table className="team-dashboard-table">
+              <thead><tr><th>Team</th><th>Doanh thu (VNĐ)</th><th>Mục tiêu</th><th>Hoàn thành</th><th>Chi phí</th><th>CP/DT</th></tr></thead>
+              <tbody>
+                {teamSummaryRows.map((row) => <tr key={normalizeTeamLookupKey(row.label)}>
+                  <td className="person team-name">{row.label}</td>
+                  <td className="td-good">{formatVndDots(row.revenue)}</td>
+                  <td>{row.target > 0 ? formatVndDots(row.target) : '—'}</td>
+                  <td>{row.targetPct == null ? '—' : `${row.targetPct.toFixed(1)}%`}</td>
+                  <td>{formatVndDots(row.ads)}</td>
+                  <td>{row.adsPct == null ? '—' : `${row.adsPct.toFixed(1)}%`}</td>
+                </tr>)}
+                {!teamSummaryRows.length ? <tr><td colSpan={6} className="td-empty">Chưa có team trong danh sách.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
       ) : (
         <>
           <section className="team-dashboard-summary-grid" aria-label="Tổng quan team">

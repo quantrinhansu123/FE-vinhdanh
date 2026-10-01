@@ -137,7 +137,7 @@ export function downloadQcExcelTemplate(): void {
     ['C\u00e1c c\u1ed9t chi ti\u00eau v\u00e0 tr\u00f2 chuy\u1ec7n nh\u1eadn s\u1ed1.'],
   ];
   const helpWs = XLSX.utils.aoa_to_sheet(help);
-  helpWs['!cols'] = [{ wch: 105 }];
+  helpWs['!cols'] = [{ wch: 125 }];
   XLSX.utils.book_append_sheet(wb, helpWs, 'Huong dan');
   XLSX.writeFile(wb, QC_EXCEL_TEMPLATE_FILENAME);
 }
