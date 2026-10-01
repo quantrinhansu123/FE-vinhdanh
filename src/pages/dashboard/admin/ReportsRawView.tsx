@@ -74,6 +74,11 @@ function formatRawMoney(n: number | null | undefined): string {
   return Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
 }
 
+function formatUsdMoney(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return Number(n).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+}
+
 function reportExchangeRate(r: ReportRow): number | null {
   const amount = Number(r.revenue);
   const amountVnd = Number(r.tien_viet);
@@ -127,12 +132,14 @@ export const ReportsRawView: React.FC = () => {
     let mess = 0;
     let ads = 0;
     let vnd = 0;
+    let usd = 0;
     for (const r of rows) {
       mess += Number(r.mess_comment_count || 0);
       ads += Number(r.ad_cost || 0);
       vnd += Number(r.tien_viet || 0);
+      if (reportCurrencyUnit(r) === 'USD') usd += Number(r.revenue || 0);
     }
-    return { mess, ads, vnd };
+    return { mess, ads, vnd, usd };
   }, [rows]);
 
   const staffCoverage = useMemo(() => {
@@ -555,7 +562,7 @@ export const ReportsRawView: React.FC = () => {
       )}
 
       {/* Summary totals */}
-      <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="mb-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <div className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/15 rounded-lg p-3">
           <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-on-surface-variant)]">Tổng Mess</p>
           <p className="text-xl font-extrabold text-[var(--ld-on-surface)] tabular-nums">{totals.mess.toLocaleString('vi-VN')}</p>
@@ -567,6 +574,10 @@ export const ReportsRawView: React.FC = () => {
         <div className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/15 rounded-lg p-3">
           <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-on-surface-variant)]">Tổng tiền Việt</p>
           <p className="text-xl font-extrabold text-[var(--ld-on-surface)] tabular-nums">{formatVndDots(totals.vnd)} <span className="text-xs font-medium text-[var(--ld-on-surface-variant)]">VNĐ</span></p>
+        </div>
+        <div className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/15 rounded-lg p-3">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-on-surface-variant)]">Tổng giá gốc</p>
+          <p className="text-xl font-extrabold text-[var(--ld-on-surface)] tabular-nums">{formatUsdMoney(totals.usd)}</p>
         </div>
       </div>
 
@@ -641,7 +652,7 @@ export const ReportsRawView: React.FC = () => {
                 </th>
                 <th className="p-2">Ngày</th>
                 <th className="p-2">Code</th>
-                <th className="p-2 text-right">Giá tiền</th>
+                <th className="p-2 text-right" title="Giá gốc từ revenue, trước khi quy đổi/đồng bộ sang VNĐ">Giá gốc (chưa đồng bộ tiếng Việt)</th>
                 <th className="p-2">Đơn vị</th>
                 <th className="p-2 text-right">Tỉ giá</th>
                 <th className="p-2 text-right">Ads chi</th>
@@ -665,7 +676,7 @@ export const ReportsRawView: React.FC = () => {
                   </td>
                   <td className="p-2">{r.report_date?.slice(0, 10)}</td>
                   <td className="p-2">{(r as { code?: string | null }).code || '—'}</td>
-                  <td className="p-2 text-right">{formatRawMoney(r.revenue)}</td>
+                  <td className="p-2 text-right">{formatUsdMoney(r.revenue)}</td>
                   <td className="p-2">{reportCurrencyUnit(r)}</td>
                   <td className="p-2 text-right">{formatRawMoney(reportExchangeRate(r))}</td>
                   <td className="p-2 text-right">{Number(r.ad_cost || 0).toLocaleString('vi-VN')}</td>

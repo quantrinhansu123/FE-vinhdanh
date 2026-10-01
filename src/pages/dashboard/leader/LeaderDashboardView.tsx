@@ -977,6 +977,41 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
         }).join(', ');
       })()
     : '#1c3450 0% 100%';
+  const teamSummaryTotals = teamSummaryRows.reduce(
+    (totals, row) => ({ revenue: totals.revenue + row.revenue, target: totals.target + row.target, ads: totals.ads + row.ads }),
+    { revenue: 0, target: 0, ads: 0 }
+  );
+  const teamPeriodTarget = teamSummaryTotals.target * targetRangeFactor;
+  const teamPeriodCompletion = teamPeriodTarget > 0 ? (teamSummaryTotals.revenue / teamPeriodTarget) * 100 : null;
+  const teamPieStops = teamSummaryRows.length
+    ? (() => {
+        let edge = 0;
+        return teamSummaryRows.map((row, index) => {
+          const share = teamSummaryTotals.revenue > 0
+            ? (row.revenue / teamSummaryTotals.revenue) * 100
+            : 100 / teamSummaryRows.length;
+          const next = edge + share;
+          const stop = `${memberColors[index % memberColors.length]} ${edge.toFixed(2)}% ${next.toFixed(2)}%`;
+          edge = next;
+          return stop;
+        }).join(', ');
+      })()
+    : '#1c3450 0% 100%';
+  const teamProgressRows = teamSummaryRows.map((row) => {
+    const target = row.target * targetRangeFactor;
+    const pct = target > 0 ? (row.revenue / target) * 100 : null;
+    const forecast = elapsedDays > 0 ? (row.revenue / elapsedDays) * rangeDays : 0;
+    const forecastPct = target > 0 ? (forecast / target) * 100 : null;
+    const state = forecastPct == null ? 'unassigned' : forecastPct >= 100 ? 'on' : forecastPct >= 80 ? 'slow' : 'risk';
+    return { ...row, target, pct, dailyRevenue: elapsedDays > 0 ? row.revenue / elapsedDays : 0, forecastPct, state };
+  });
+  const topRevenueTeam = [...teamSummaryRows].sort((a, b) => b.revenue - a.revenue)[0] ?? null;
+  const bestTeamEfficiency = [...teamSummaryRows]
+    .filter((row) => row.revenue > 0 && row.adsPct != null)
+    .sort((a, b) => (a.adsPct ?? Infinity) - (b.adsPct ?? Infinity))[0] ?? null;
+  const supportTeam = [...teamProgressRows]
+    .filter((row) => row.target > 0)
+    .sort((a, b) => (a.pct ?? 0) - (b.pct ?? 0))[0] ?? null;
   const progressRows = tableRows.map((row) => {
     const monthlyTarget = staffTargets.get(row.m.id) || 0;
     const target = monthlyTarget * targetRangeFactor;
@@ -1028,25 +1063,70 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       {loading ? (
         <div className="team-dashboard-loading"><Loader2 size={22} className="animate-spin" /> Đang tải dashboard team…</div>
       ) : viewMode === 'team' ? (
-        <section className="team-dashboard-card team-dashboard-panel">
-          <div className="team-dashboard-panel-title"><div><h2>Tổng hợp tiền theo team</h2><p>{monthLabel}</p></div></div>
-          <div className="team-dashboard-table-wrap">
-            <table className="team-dashboard-table">
-              <thead><tr><th>Team</th><th>Doanh thu (VNĐ)</th><th>Mục tiêu</th><th>Hoàn thành</th><th>Chi phí</th><th>CP/DT</th></tr></thead>
-              <tbody>
-                {teamSummaryRows.map((row) => <tr key={normalizeTeamLookupKey(row.label)}>
-                  <td className="person team-name">{row.label}</td>
-                  <td className="td-good">{formatVndDots(row.revenue)}</td>
-                  <td>{row.target > 0 ? formatVndDots(row.target) : '—'}</td>
-                  <td>{row.targetPct == null ? '—' : `${row.targetPct.toFixed(1)}%`}</td>
-                  <td>{formatVndDots(row.ads)}</td>
-                  <td>{row.adsPct == null ? '—' : `${row.adsPct.toFixed(1)}%`}</td>
-                </tr>)}
-                {!teamSummaryRows.length ? <tr><td colSpan={6} className="td-empty">Chưa có team trong danh sách.</td></tr> : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <>
+          <section className="team-dashboard-summary-grid" aria-label="Tổng quan theo team">
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Doanh thu các team</p><strong>{formatVndDots(teamSummaryTotals.revenue)}</strong><p className="td-sub">Mục tiêu kỳ {teamPeriodTarget > 0 ? formatVndDots(teamPeriodTarget) : 'chưa thiết lập'} <span className={teamPeriodCompletion != null && teamPeriodCompletion >= periodPacePct ? 'td-good' : 'td-warn'}>{teamPeriodCompletion == null ? '—' : `${teamPeriodCompletion.toFixed(1)}%`}</span></p></article>
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Chi phí quảng cáo</p><strong>{formatVndDots(teamSummaryTotals.ads)}</strong><p className="td-sub">CP/DT hiện tại <span>{teamSummaryTotals.revenue > 0 ? `${((teamSummaryTotals.ads / teamSummaryTotals.revenue) * 100).toFixed(1)}%` : '—'}</span></p></article>
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Số team</p><strong>{teamSummaryRows.length.toLocaleString('vi-VN')}</strong><p className="td-sub">Trong kỳ {monthLabel}</p></article>
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Team dẫn đầu doanh thu</p><strong>{topRevenueTeam?.label || '—'}</strong><p className="td-sub">{formatVndDots(topRevenueTeam?.revenue || 0)}</p></article>
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Team có CP/DT tốt nhất</p><strong>{bestTeamEfficiency?.label || '—'}</strong><p className="td-sub">{bestTeamEfficiency?.adsPct == null ? 'Chưa có dữ liệu' : `${bestTeamEfficiency.adsPct.toFixed(1)}%`}</p></article>
+          </section>
+
+          <section className="team-dashboard-main-grid">
+            <article className="team-dashboard-card team-dashboard-panel">
+              <div className="team-dashboard-panel-title"><div><h2>Tổng hợp tiền theo team</h2><p>{monthLabel} · Hoàn thành = Doanh thu (VNĐ) ÷ Mục tiêu</p></div></div>
+              <div className="team-dashboard-table-wrap">
+                <table className="team-dashboard-table">
+                  <thead><tr><th>Team</th><th>Doanh thu (VNĐ)</th><th>Mục tiêu</th><th>Hoàn thành</th><th>Chi phí</th><th>CP/DT</th></tr></thead>
+                  <tbody>
+                    {teamSummaryRows.map((row) => {
+                      const completion = row.target > 0 ? (row.revenue / row.target) * 100 : null;
+                      return <tr key={normalizeTeamLookupKey(row.label)}>
+                        <td className="person team-name">{row.label}</td>
+                        <td className="td-good">{formatVndDots(row.revenue)}</td>
+                        <td>{row.target > 0 ? formatVndDots(row.target) : '—'}</td>
+                        <td>{completion == null ? '—' : `${completion.toFixed(1)}%`}</td>
+                        <td>{formatVndDots(row.ads)}</td>
+                        <td>{row.adsPct == null ? '—' : `${row.adsPct.toFixed(1)}%`}</td>
+                      </tr>;
+                    })}
+                    {!teamSummaryRows.length ? <tr><td colSpan={6} className="td-empty">Chưa có team trong danh sách.</td></tr> : null}
+                  </tbody>
+                </table>
+              </div>
+            </article>
+
+            <aside className="team-dashboard-card team-dashboard-panel team-dashboard-share">
+              <div className="team-dashboard-panel-title"><div><h2>Tỷ trọng doanh thu theo team</h2><p>Theo doanh thu thực đạt · {teamSummaryRows.length} team</p></div></div>
+              <div className="team-dashboard-pie-wrap"><div className="team-dashboard-pie" style={{ background: `conic-gradient(${teamPieStops})` }}><span>TEAM</span></div></div>
+              <div className="team-dashboard-legend">
+                {teamSummaryRows.map((row, index) => <div className="team-dashboard-legend-item" key={normalizeTeamLookupKey(row.label)}><div className="team-dashboard-legend-name"><i style={{ background: memberColors[index % memberColors.length] }} /> <span>{row.label}</span></div><strong>{teamSummaryTotals.revenue > 0 ? `${((row.revenue / teamSummaryTotals.revenue) * 100).toFixed(1)}%` : '0%'}</strong></div>)}
+                {!teamSummaryRows.length ? <p className="td-sub">Chưa có dữ liệu doanh thu để phân bổ.</p> : null}
+              </div>
+            </aside>
+          </section>
+
+          <section className="team-dashboard-card team-dashboard-progress">
+            <div className="team-dashboard-panel-title"><div><h2>Tiến độ KPI theo team</h2><p>Doanh thu hiện tại so với mục tiêu trong kỳ · Vạch dọc là nhịp thời gian đã qua: {periodPacePct.toFixed(0)}% · Dự báo theo doanh thu bình quân mỗi ngày</p></div></div>
+            <div className="team-dashboard-table-wrap"><table className="team-dashboard-table team-dashboard-progress-table"><thead><tr><th>Team</th><th>Doanh thu (VNĐ)</th><th>Mục tiêu kỳ</th><th>Tiến độ</th><th>%</th><th>Doanh thu/ngày</th><th>Dự báo</th><th>Trạng thái</th></tr></thead><tbody>
+              {teamProgressRows.map((row) => {
+                const barColor = row.state === 'on' ? 'green' : row.state === 'slow' ? 'orange' : row.state === 'risk' ? 'red' : 'orange';
+                const stateText = row.state === 'on' ? 'Đúng nhịp' : row.state === 'slow' ? 'Chậm nhịp' : row.state === 'risk' ? 'Nguy cơ hụt' : 'Chưa gán KPI';
+                const forecast = elapsedDays > 0 ? (row.revenue / elapsedDays) * rangeDays : 0;
+                return <tr key={normalizeTeamLookupKey(row.label)}><td className="person">{row.label}</td><td>{formatVndDots(row.revenue)}</td><td>{row.target > 0 ? formatVndDots(row.target) : 'Chưa gán KPI'}</td>
+                  <td><div className="team-dashboard-track"><i className="team-dashboard-marker" style={{ left: `${periodPacePct}%` }} /><i className={`team-dashboard-fill ${barColor}`} style={{ width: `${Math.min(100, Math.max(0, row.pct || 0))}%` }} /></div></td>
+                  <td className={`td-progress-pct ${row.state === 'on' ? 'td-good' : row.state === 'slow' ? 'td-warn' : row.state === 'risk' ? 'td-bad' : ''}`}>{row.pct == null ? '—' : `${row.pct.toFixed(1)}%`}</td><td>{formatVndDots(row.dailyRevenue)}</td><td className={row.forecastPct != null && row.forecastPct >= 100 ? 'td-good' : row.forecastPct != null && row.forecastPct < 80 ? 'td-bad' : 'td-warn'}>{row.forecastPct == null ? '—' : `${row.forecastPct.toFixed(0)}%`}</td><td><span className={`team-dashboard-status ${row.state}`}>{stateText}</span></td></tr>;
+              })}
+              {!teamProgressRows.length ? <tr><td colSpan={8} className="td-empty">Chưa có team có dữ liệu trong kỳ này.</td></tr> : null}
+            </tbody></table></div>
+          </section>
+
+          <section className="team-dashboard-mini-grid">
+            <article className="team-dashboard-card team-dashboard-mini"><h3>Top doanh thu</h3><strong>{topRevenueTeam ? `${topRevenueTeam.label} · ${formatVndDots(topRevenueTeam.revenue)}` : 'Chưa có dữ liệu'}</strong><p>{topRevenueTeam && teamSummaryTotals.revenue > 0 ? `Đóng góp ${((topRevenueTeam.revenue / teamSummaryTotals.revenue) * 100).toFixed(1)}% doanh thu các team` : 'Số liệu sẽ hiện khi có báo cáo.'}</p></article>
+            <article className="team-dashboard-card team-dashboard-mini"><h3>Hiệu suất quảng cáo tốt nhất</h3><strong>{bestTeamEfficiency ? `${bestTeamEfficiency.label} · ${bestTeamEfficiency.adsPct?.toFixed(1)}%` : 'Chưa có dữ liệu'}</strong><p>{bestTeamEfficiency ? 'CP/DT thấp nhất trong các team có doanh thu.' : 'Chưa thể tính CP/DT trong kỳ này.'}</p></article>
+            <article className="team-dashboard-card team-dashboard-mini"><h3>Cần ưu tiên hỗ trợ</h3><strong className={supportTeam?.state === 'risk' ? 'td-bad' : ''}>{supportTeam ? `${supportTeam.label} · trễ ${Math.max(0, periodPacePct - (supportTeam.pct ?? 0)).toFixed(0)} điểm %` : 'Chưa có KPI để so sánh'}</strong><p>{supportTeam ? 'Dựa trên tiến độ KPI so với thời gian đã qua.' : 'Gán KPI tháng cho team để theo dõi nhịp.'}</p></article>
+          </section>
+        </>
       ) : (
         <>
           <section className="team-dashboard-summary-grid" aria-label="Tổng quan team">

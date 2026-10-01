@@ -172,7 +172,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
       type RowUp = { id: string; patch: UpcareReportsPatch };
       const toUpdate: RowUp[] = [];
       let skippedNoDbRow = 0;
-      const unmatchedCodes: string[] = [];
+      const unmatchedPairs: string[] = [];
 
       for (const r of rowsAggregated) {
         const ymd = normalizeReportDate(r.reportDate);
@@ -182,7 +182,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
         const id = idByKey.get(k);
         if (!id) {
           skippedNoDbRow += 1;
-          unmatchedCodes.push(c);
+          unmatchedPairs.push(`${ymd} + ${c}`);
           continue;
         }
         const amt = Number(r.amount) || 0;
@@ -198,7 +198,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
 
       if (toUpdate.length === 0) {
         window.alert(
-          `Kh\u00f4ng c\u1eadp nh\u1eadt \u0111\u01b0\u1ee3c d\u00f2ng n\u00e0o cho ng\u00e0y ${reportDate}. Kh\u00f4ng t\u00ecm th\u1ea5y key Ng\u00e0y + M\u00e3 NV trong detail_reports: ${Array.from(new Set(unmatchedCodes)).join(', ') || 'kh\u00f4ng c\u00f3 m\u00e3 kh\u1edbp'}.`
+          `Kh\u00f4ng c\u1eadp nh\u1eadt \u0111\u01b0\u1ee3c d\u00f2ng n\u00e0o cho ng\u00e0y ${reportDate}. Kh\u00f4ng t\u00ecm th\u1ea5y c\u1eb7p Ng\u00e0y + M\u00e3 NV trong detail_reports: ${Array.from(new Set(unmatchedPairs)).join('; ') || 'kh\u00f4ng c\u00f3 m\u00e3 kh\u1edbp'}.`
         );
         return;
       }
@@ -238,7 +238,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
           : '';
       const tailSkip =
         skippedNoDbRow > 0
-          ? ` ${skippedNoDbRow} cặp (ngày+mã) không có trong detail_reports — bỏ qua (không thêm dòng).`
+          ? ` ${skippedNoDbRow} cặp (ngày+mã) không có trong detail_reports — bỏ qua (không thêm dòng): ${Array.from(new Set(unmatchedPairs)).join('; ')}.`
           : '';
       const okMsg = `Đã cập nhật ${toUpdate.length} bản ghi đúng theo ngày trong detail_reports (cột revenue, tien_viet, order_count).${tailNoCode}${tailMerge}${tailSkip}`;
       try { window.alert(okMsg); } catch {}
