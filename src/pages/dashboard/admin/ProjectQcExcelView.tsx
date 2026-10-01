@@ -89,10 +89,9 @@ export const ProjectQcExcelView: React.FC = () => {
   const defaultTo = toYmd(new Date());
   const defaultFrom = defaultTo;
 
-  const [draftMaNv, setDraftMaNv] = useState('');
   const [draftFrom, setDraftFrom] = useState(defaultFrom);
   const [draftTo, setDraftTo] = useState(defaultTo);
-  const [applied, setApplied] = useState({ maNv: '', from: defaultFrom, to: defaultTo });
+  const [applied, setApplied] = useState({ from: defaultFrom, to: defaultTo });
   const loadVersion = useRef(0);
   const dailyLoadVersion = useRef(0);
 
@@ -131,8 +130,8 @@ export const ProjectQcExcelView: React.FC = () => {
       .lte('report_date', applied.to)
       .order('report_date', { ascending: false })
       .order('ma_nv', { ascending: true })
-      .order('ten_chien_dich', { ascending: true });
-    if (applied.maNv) q = q.eq('ma_nv', applied.maNv);
+      .order('ten_chien_dich', { ascending: true })
+      .order('id', { ascending: true });
     const { data, error: qErr } = await fetchAllRows<typeof dailyDetails[number]>(q);
     if (version !== dailyLoadVersion.current) return;
     if (qErr) {
@@ -149,8 +148,7 @@ export const ProjectQcExcelView: React.FC = () => {
   const handleDeleteAllDailyDetails = async () => {
     const ids = dailyDetails.map((row) => row.id);
     if (!ids.length || dailyDeleting || dailyLoading) return;
-    const employeeFilter = applied.maNv ? `, mã NV ${applied.maNv}` : '';
-    const prompt = `Xóa toàn bộ ${ids.length} dòng Chi tiết MKT theo bộ lọc ngày ${applied.from} đến ${applied.to}${employeeFilter}? Dữ liệu báo cáo MKT này sẽ bị xóa.`;
+    const prompt = `Xóa toàn bộ ${ids.length} dòng Chi tiết MKT theo bộ lọc ngày ${applied.from} đến ${applied.to}? Dữ liệu báo cáo MKT này sẽ bị xóa.`;
     if (!window.confirm(prompt)) return;
 
     setDailyDeleting(true);
@@ -184,9 +182,8 @@ export const ProjectQcExcelView: React.FC = () => {
       .lte('ngay', applied.to)
       .not('ten_chien_dich', 'ilike', 'all')
       .order('ngay', { ascending: false, nullsFirst: true })
-      .order('created_at', { ascending: false });
-
-    if (applied.maNv) q = q.eq('ma_nv', applied.maNv);
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true });
 
     const { data, error: qErr } = await fetchAllRows<RowWithCode>(q);
     if (version !== loadVersion.current) return;
@@ -199,12 +196,7 @@ export const ProjectQcExcelView: React.FC = () => {
       );
       setRows([]);
     } else {
-      const filtered = (data || []).filter((row) => {
-        const day = String(row.ngay || '').slice(0, 10);
-        if (!day || day < applied.from || day > applied.to) return false;
-        return !applied.maNv || normalizeEmployeeCode(row.ma_nv) === normalizeEmployeeCode(applied.maNv);
-      });
-      setRows(filtered as RowWithCode[]);
+      setRows((data || []) as RowWithCode[]);
       setPage(1);
     }
     setLoading(false);
@@ -220,7 +212,6 @@ export const ProjectQcExcelView: React.FC = () => {
     setSelectedIds(new Set());
     setPage(1);
     setApplied({
-      maNv: draftMaNv.trim(),
       from: draftFrom,
       to: draftTo,
     });
@@ -266,7 +257,8 @@ export const ProjectQcExcelView: React.FC = () => {
         .from(QC_EXCEL_TABLE)
         .select('id, ma_nv, ngay, ten_chien_dich, so_tien_da_chi_tieu_vnd, so_tro_chuyen_tin_nhan')
         .gte('ngay', dateFrom)
-        .lte('ngay', dateTo));
+        .lte('ngay', dateTo)
+        .order('id', { ascending: true }));
       if (existingError) {
         console.error('project-qc-excel duplicate check:', existingError);
         window.alert(`Không kiểm tra được dữ liệu trùng: ${existingError.message || 'Unknown'}. Chưa nhập file.`);
@@ -552,8 +544,7 @@ export const ProjectQcExcelView: React.FC = () => {
   const handleDeleteAllFiltered = async () => {
     const ids = rows.map((row) => row.id);
     if (!ids.length || deleting || loading) return;
-    const employeeFilter = applied.maNv ? `, mã NV ${applied.maNv}` : '';
-    const prompt = `Xóa toàn bộ ${ids.length} dòng QC theo bộ lọc ngày ${applied.from} đến ${applied.to}${employeeFilter}? Thao tác này không thể hoàn tác.`;
+    const prompt = `Xóa toàn bộ ${ids.length} dòng QC theo bộ lọc ngày ${applied.from} đến ${applied.to}? Thao tác này không thể hoàn tác.`;
     if (!window.confirm(prompt)) return;
 
     setDeleting(true);
@@ -652,11 +643,6 @@ export const ProjectQcExcelView: React.FC = () => {
       >
         <div className="p-[14px_16px] border-b border-[var(--border)] bg-[var(--bg3)] space-y-3">
           <div className="flex flex-wrap gap-3 items-end">
-            <label className="flex flex-col gap-1 min-w-[160px]">
-              <span className="text-[9px] font-extrabold uppercase text-[var(--text3)]">Mã NV</span>
-              <input type="text" value={draftMaNv} onChange={(e) => setDraftMaNv(e.target.value)} placeholder="Tất cả"
-                className="bg-[var(--bg2)] border border-[var(--border)] rounded-[8px] text-[12px] p-2 text-[var(--text)]" />
-            </label>
             <label className="flex flex-col gap-1 min-w-[130px]">
               <span className="text-[9px] font-extrabold uppercase text-[var(--text3)]">Từ ngày</span>
               <input
@@ -685,6 +671,7 @@ export const ProjectQcExcelView: React.FC = () => {
             </button>
           </div>
           <p className="text-[10px] text-[var(--text3)] leading-relaxed max-w-[1000px]">
+            Đang hiển thị dữ liệu của tất cả nhân viên trong khoảng ngày đã chọn.{' '}
             Cột Excel: Ngày, Mã NV, Tên chiến dịch, Số tiền đã chi tiêu (VND), Số trò chuyện qua tin nhắn.
             Mã NV có thể điền riêng hoặc tự lấy từ ngoặc vuông trong tên chiến dịch.
             Bảng DB: <code className="text-[var(--text2)]">{QC_EXCEL_TABLE}</code>.
