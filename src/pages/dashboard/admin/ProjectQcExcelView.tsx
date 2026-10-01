@@ -77,12 +77,6 @@ async function deleteMktDailyRows(ids: string[]): Promise<number> {
   return deletedCount;
 }
 
-function addDays(d: Date, n: number): Date {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  x.setDate(x.getDate() + n);
-  return x;
-}
-
 function toYmd(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -93,7 +87,7 @@ function toYmd(d: Date): string {
 
 export const ProjectQcExcelView: React.FC = () => {
   const defaultTo = toYmd(new Date());
-  const defaultFrom = toYmd(addDays(new Date(), -90));
+  const defaultFrom = defaultTo;
 
   const [draftMaNv, setDraftMaNv] = useState('');
   const [draftFrom, setDraftFrom] = useState(defaultFrom);
