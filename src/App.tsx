@@ -8,11 +8,12 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from './api/supabase';
 import { fetchAllRows } from './api/fetchAllRows';
+import { fetchMetaAdsLeaderboard, type MetaAdsLeaderboardAccount } from './api/metaAds';
 import {
   defaultUpcareMktDateRange,
-  fetchUpcareMktEmployees,
+  fetchUpcareSaleSnapshot,
   isUpcareLeaderboardEnabled,
-  mapUpcareMktRowsToLeaderboardEmployees,
+  mapUpcareSaleRowsToLeaderboardEmployees,
 } from './api/upcareCrm';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardAdminLayout } from './pages/DashboardAdminLayout';
@@ -24,6 +25,29 @@ import { crmNavTierFromUser, defaultViewForTier } from './utils/crmNavAccess';
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const AVATARS_BUCKET = import.meta.env.VITE_SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
 const AUTH_STORAGE_KEY = 'fe_vinhdanh_auth_user';
+// Synthetic demo roster only; demoMode bypasses all database and integration requests.
+const DEMO_EMPLOYEES: Employee[] = Array.from({ length: 20 }, (_, index) => {
+  const rank = index + 1;
+  const label = String(rank).padStart(2, '0');
+  return {
+    id: `demo-${label}`,
+    name: `Nhân viên MKT Demo ${label}`,
+    code: `DEMO.${label}`,
+    team: 'MKT',
+    score: 186_500_000 - (rank - 1) * 8_350_000,
+    avatar_url: null,
+    rank,
+  };
+});
+const DEMO_AD_ACCOUNTS: MetaAdsLeaderboardAccount[] = [
+  { account_id: 'demo-vnd-01', account_name: 'Ads Demo VN 01', currency: 'VND', purchase_value: 325_000_000, purchase_count: 42, last_synced_at: null },
+  { account_id: 'demo-vnd-02', account_name: 'Ads Demo VN 02', currency: 'VND', purchase_value: 246_500_000, purchase_count: 35, last_synced_at: null },
+  { account_id: 'demo-vnd-03', account_name: 'Ads Demo VN 03', currency: 'VND', purchase_value: 182_000_000, purchase_count: 28, last_synced_at: null },
+  { account_id: 'demo-vnd-04', account_name: 'Ads Demo VN 04', currency: 'VND', purchase_value: 96_750_000, purchase_count: 17, last_synced_at: null },
+  { account_id: 'demo-usd-01', account_name: 'Ads Demo USD 01', currency: 'USD', purchase_value: 12_450, purchase_count: 31, last_synced_at: null },
+  { account_id: 'demo-usd-02', account_name: 'Ads Demo USD 02', currency: 'USD', purchase_value: 9_820, purchase_count: 24, last_synced_at: null },
+  { account_id: 'demo-usd-03', account_name: 'Ads Demo USD 03', currency: 'USD', purchase_value: 6_100, purchase_count: 16, last_synced_at: null },
+];
 
 function logSupabaseError(action: string, error: { code?: string; message?: string; details?: string; hint?: string } | null) {
   if (!error) return;
@@ -45,10 +69,16 @@ function logSupabaseError(action: string, error: { code?: string; message?: stri
 
 function AppRoutes() {
   const navigate = useNavigate();
+  const demoMode = import.meta.env.DEV && new URLSearchParams(window.location.search).get('demo') === '1';
   const [employees, setEmployees] = useState<Employee[]>([]);
-  /** BXH trang chủ: Fabico MKT API nếu bật, không thì cùng nguồn Supabase employees */
+  /** BXH nhân viên: Odoo Sale snapshots; Meta Ads stays on its own leaderboard. */
   const [boardEmployees, setBoardEmployees] = useState<Employee[]>([]);
   const [boardSource, setBoardSource] = useState<'upcare' | 'supabase'>('supabase');
+  const [employeeBoardError, setEmployeeBoardError] = useState<string | null>(null);
+  const [boardLastSyncedAt, setBoardLastSyncedAt] = useState<string | null>(null);
+  const [adAccounts, setAdAccounts] = useState<MetaAdsLeaderboardAccount[]>([]);
+  const [adAccountsError, setAdAccountsError] = useState<string | null>(null);
+  const [adAccountsLastSyncedAt, setAdAccountsLastSyncedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMenuBar, setShowMenuBar] = useState(true);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -70,15 +100,20 @@ function AppRoutes() {
   }, []);
 
   useEffect(() => {
+    if (demoMode) {
+      setLoading(false);
+      return;
+    }
     if (!authUser) {
       setLoading(false);
       return;
     }
     fetchEmployees();
-  }, [authUser]);
+  }, [authUser, demoMode]);
 
   const fetchEmployees = async () => {
     setLoading(true);
+    const boardDateRange = defaultUpcareMktDateRange();
     const { data, error } = await fetchAllRows<Employee>(supabase.from(EMPLOYEES_TABLE).select('*').order('score', { ascending: false }));
 
     let rankedData: Employee[] = [];
@@ -94,11 +129,14 @@ function AppRoutes() {
 
     let board = rankedData;
     let source: 'upcare' | 'supabase' = 'supabase';
+    let odooLastSyncedAt: string | null = null;
+    let employeeError: string | null = null;
     if (isUpcareLeaderboardEnabled()) {
       try {
-        const { dateFrom, dateTo } = defaultUpcareMktDateRange();
-        const mktRows = await fetchUpcareMktEmployees({ dateFrom, dateTo });
-        board = mapUpcareMktRowsToLeaderboardEmployees(mktRows);
+        const snapshot = await fetchUpcareSaleSnapshot(boardDateRange);
+        if (snapshot.employees.length === 0) throw new Error('Chưa có snapshot Odoo Sale trong Supabase cho khoảng ngày này.');
+        board = mapUpcareSaleRowsToLeaderboardEmployees(snapshot.employees).slice(0, 20);
+        odooLastSyncedAt = snapshot.lastSyncedAt;
         // Không dùng avatar từ API Fabico
         board = board.map((b) => ({ ...b, avatar_url: null }));
         // Ưu tiên avatar theo code ↔ ma_ns trong bảng employees (dùng rankedData vừa fetch để tránh lệch state)
@@ -155,13 +193,30 @@ function AppRoutes() {
           .map((e, i) => ({ ...e, rank: i + 1 }));
         source = 'upcare';
       } catch (e) {
-        console.warn('[BXH] Fabico employee/mkt:', e);
-        board = rankedData;
-        source = 'supabase';
+        employeeError = e instanceof Error ? e.message : 'Không tải được leaderboard Odoo Sale.';
+        console.warn('[BXH] Odoo employee/sale snapshot:', employeeError);
+        board = [];
+        source = 'upcare';
       }
     }
+    board = board.slice(0, 20).map((employee, index) => ({ ...employee, rank: index + 1 }));
     setBoardEmployees(board);
     setBoardSource(source);
+    setEmployeeBoardError(employeeError);
+    setBoardLastSyncedAt(odooLastSyncedAt);
+
+    try {
+      const adsBoard = await fetchMetaAdsLeaderboard(boardDateRange);
+      setAdAccounts(adsBoard.accounts);
+      setAdAccountsLastSyncedAt(adsBoard.lastSyncedAt);
+      setAdAccountsError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Không tải được bảng xếp hạng Ads.';
+      console.warn('[BXH] Meta Ads:', message);
+      setAdAccounts([]);
+      setAdAccountsLastSyncedAt(null);
+      setAdAccountsError(message);
+    }
 
     setLoading(false);
   };
@@ -213,6 +268,31 @@ function AppRoutes() {
     navigate('/login', { replace: true });
   };
 
+  if (demoMode) {
+    return (
+      <>
+        <div className="fixed inset-x-0 top-0 z-[100] bg-amber-300 px-3 py-2 text-center text-xs font-bold text-black shadow-lg">
+          DEMO · DỮ LIỆU GIẢ LẬP — không kết nối Odoo, Meta Ads hoặc database
+        </div>
+        <div className="pt-8">
+          <LeaderboardPage
+            employees={DEMO_EMPLOYEES}
+            boardSource="demo"
+            boardLastSyncedAt={null}
+            employeeBoardError={null}
+            adAccounts={DEMO_AD_ACCOUNTS}
+            adAccountsError={null}
+            adAccountsLastSyncedAt={null}
+            loading={false}
+            showMenuBar={showMenuBar}
+            setShowMenuBar={setShowMenuBar}
+            onLogout={() => undefined}
+          />
+        </div>
+      </>
+    );
+  }
+
   if (authChecking) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-black text-white font-sans antialiased">
@@ -235,6 +315,11 @@ function AppRoutes() {
             <LeaderboardPage
               employees={boardEmployees}
               boardSource={boardSource}
+              boardLastSyncedAt={boardLastSyncedAt}
+              employeeBoardError={employeeBoardError}
+              adAccounts={adAccounts}
+              adAccountsError={adAccountsError}
+              adAccountsLastSyncedAt={adAccountsLastSyncedAt}
               loading={loading}
               showMenuBar={showMenuBar}
               setShowMenuBar={setShowMenuBar}
