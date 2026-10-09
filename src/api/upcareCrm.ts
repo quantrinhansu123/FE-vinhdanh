@@ -12,28 +12,13 @@ export type UpcareMktEmployeeRow = {
   count?: number;
 };
 
-export type UpcareMktSnapshotResponse = {
-  dateFrom: string;
-  dateTo: string;
-  employees: UpcareMktEmployeeRow[];
-  lastSyncedAt: string | null;
-};
-
-export type UpcareSaleSnapshotResponse = UpcareMktSnapshotResponse;
-
-/** Khoảng ngày mặc định cho BXH (7 ngày gần nhất theo lịch Việt Nam). */
+/** Khoảng ngày mặc định cho BXH / employee mkt (7 ngày gần nhất, local date). */
 export function defaultUpcareMktDateRange(): { dateFrom: string; dateTo: string } {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const dateTo = `${values.year}-${values.month}-${values.day}`;
-  const from = new Date(`${dateTo}T00:00:00.000Z`);
-  from.setUTCDate(from.getUTCDate() - 6);
-  return { dateFrom: from.toISOString().slice(0, 10), dateTo };
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(from.getDate() - 6);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { dateFrom: iso(from), dateTo: iso(to) };
 }
 
 /** Map API /api/employee/mkt → Employee (score = amount). Team sẽ được gán từ bảng employees. */
@@ -49,8 +34,6 @@ export function mapUpcareMktRowsToLeaderboardEmployees(rows: UpcareMktEmployeeRo
     rank: index + 1,
   }));
 }
-
-export const mapUpcareSaleRowsToLeaderboardEmployees = mapUpcareMktRowsToLeaderboardEmployees;
 
 function upcareApiRoot(): string {
   return '/api/upcare-crm';
@@ -143,58 +126,4 @@ export async function fetchUpcareMktEmployees(params: {
   }
   if (!Array.isArray(data)) throw new Error('API kh\u00f4ng tr\u1ea3 v\u1ec1 m\u1ea3ng JSON.');
   return data as UpcareMktEmployeeRow[];
-}
-
-/** Read the last hourly snapshot from the app database; no Odoo credentials reach the browser. */
-export async function fetchUpcareMktSnapshot(params: {
-  dateFrom: string;
-  dateTo: string;
-}): Promise<UpcareMktSnapshotResponse> {
-  const qs = new URLSearchParams({ date_from: params.dateFrom, date_to: params.dateTo });
-  const response = await fetch(`/api/upcare-mkt-leaderboard?${qs.toString()}`, {
-    headers: { Accept: 'application/json' },
-    cache: 'no-store',
-  });
-  const text = await response.text();
-  let payload: unknown;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    throw new Error(`Odoo snapshot API trả dữ liệu không hợp lệ (HTTP ${response.status}).`);
-  }
-  if (!response.ok) {
-    const error = payload && typeof payload === 'object' ? payload as { message?: unknown } : {};
-    throw new Error(typeof error.message === 'string' ? error.message : `Không tải được snapshot Odoo (HTTP ${response.status}).`);
-  }
-  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as UpcareMktSnapshotResponse).employees)) {
-    throw new Error('Odoo snapshot API không đúng định dạng.');
-  }
-  return payload as UpcareMktSnapshotResponse;
-}
-
-/** Read the hourly Odoo Sale employee snapshot from the app database. */
-export async function fetchUpcareSaleSnapshot(params: {
-  dateFrom: string;
-  dateTo: string;
-}): Promise<UpcareSaleSnapshotResponse> {
-  const qs = new URLSearchParams({ date_from: params.dateFrom, date_to: params.dateTo });
-  const response = await fetch(`/api/upcare-sale-leaderboard?${qs.toString()}`, {
-    headers: { Accept: 'application/json' },
-    cache: 'no-store',
-  });
-  const text = await response.text();
-  let payload: unknown;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    throw new Error(`Odoo Sale API trả dữ liệu không hợp lệ (HTTP ${response.status}).`);
-  }
-  if (!response.ok) {
-    const error = payload && typeof payload === 'object' ? payload as { message?: unknown } : {};
-    throw new Error(typeof error.message === 'string' ? error.message : `Không tải được snapshot Odoo Sale (HTTP ${response.status}).`);
-  }
-  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as UpcareSaleSnapshotResponse).employees)) {
-    throw new Error('Odoo Sale leaderboard không đúng định dạng.');
-  }
-  return payload as UpcareSaleSnapshotResponse;
 }

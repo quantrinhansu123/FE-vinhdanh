@@ -2,13 +2,6 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/" }
-  ],
-  "crons": [
-    { "path": "/api/marketing-sync", "schedule": "0 * * * *" }
-  ],
-  "functions": {
-    "api/marketing-sync.ts": { "maxDuration": 300 },
-    "api/meta-ads-sync.ts": { "maxDuration": 300 }
-  }
+  ]
 }
 

@@ -75,7 +75,6 @@ export function createUpcareClient(env: UpcareEnv, options: ClientOptions = {}) 
   const db = env.UPCARE_CRM_OAUTH_DB?.trim() || '';
   const login = env.UPCARE_CRM_OAUTH_LOGIN?.trim() || '';
   const password = env.UPCARE_CRM_OAUTH_PASSWORD || '';
-  const bootstrapBearer = normalizeToken(env.UPCARE_CRM_OAUTH_BOOTSTRAP_BEARER || '');
   const canLogin = Boolean(db && login && password);
   let bearer = normalizeToken(env.UPCARE_CRM_BEARER_TOKEN || '');
   let cookie = env.UPCARE_CRM_COOKIE?.trim() || '';
@@ -93,10 +92,7 @@ export function createUpcareClient(env: UpcareEnv, options: ClientOptions = {}) 
     form.append('password', password);
     const response = await request(`${base}/api/oauth/token`, {
       method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        ...(bootstrapBearer ? { Authorization: `Bearer ${bootstrapBearer}` } : {}),
-      },
+      headers: { Accept: 'application/json' },
       body: form,
       redirect: 'error',
       signal: AbortSignal.timeout(20000),
@@ -121,12 +117,8 @@ export function createUpcareClient(env: UpcareEnv, options: ClientOptions = {}) 
   return {
     async request(pathAndQuery: string, init: RequestInit = {}): Promise<Response> {
       const url = new URL(`${base}${pathAndQuery}`);
-      // Allow only approved employee summary reads, never credential/token endpoints.
-      if (
-        url.origin !== new URL(base).origin
-        || !['/api/employee/mkt', '/api/employee/sale'].includes(url.pathname)
-        || (init.method && init.method !== 'GET')
-      ) {
+      // Expose only MKT data to the browser, never credential/token endpoints.
+      if (url.origin !== new URL(base).origin || url.pathname !== '/api/employee/mkt' || (init.method && init.method !== 'GET')) {
         throw new Error('Unsupported Upcare request');
       }
       if (pendingLogin) await pendingLogin;

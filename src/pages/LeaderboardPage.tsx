@@ -2,7 +2,6 @@
  * Trang chủ — bảng xếp hạng nhân viên (vinh danh)
  */
 
-import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import {
@@ -20,17 +19,11 @@ import top2Img from '../assets/top2.png';
 import top3Img from '../assets/top3.png';
 
 import type { Employee } from '../types';
-import type { MetaAdsLeaderboardAccount } from '../api/metaAds';
 
 interface LeaderboardPageProps {
   employees: Employee[];
   /** Nguồn dữ liệu BXH: Fabico /api/employee/mkt hoặc Supabase employees */
-  boardSource?: 'upcare' | 'supabase' | 'demo';
-  boardLastSyncedAt: string | null;
-  employeeBoardError?: string | null;
-  adAccounts: MetaAdsLeaderboardAccount[];
-  adAccountsError: string | null;
-  adAccountsLastSyncedAt: string | null;
+  boardSource?: 'upcare' | 'supabase';
   loading: boolean;
   showMenuBar: boolean;
   setShowMenuBar: (v: boolean) => void;
@@ -40,57 +33,19 @@ interface LeaderboardPageProps {
 export function LeaderboardPage({
   employees,
   boardSource = 'supabase',
-  boardLastSyncedAt,
-  employeeBoardError = null,
-  adAccounts,
-  adAccountsError,
-  adAccountsLastSyncedAt,
   loading,
   showMenuBar,
   setShowMenuBar,
   onLogout,
 }: LeaderboardPageProps) {
-  const [boardType, setBoardType] = useState<'employees' | 'ads'>('employees');
-  const [selectedCurrency, setSelectedCurrency] = useState('');
-  const currencyGroups = [...new Set(adAccounts.map((account) => account.currency || 'UNKNOWN'))].sort();
-  const activeCurrency = currencyGroups.includes(selectedCurrency) ? selectedCurrency : currencyGroups[0] || '';
-  const activeEmployees: Employee[] = boardType === 'employees'
-    ? employees
-    : adAccounts
-      .filter((account) => (account.currency || 'UNKNOWN') === activeCurrency)
-      .sort((a, b) => b.purchase_value - a.purchase_value || a.account_id.localeCompare(b.account_id))
-      .map((account, index) => ({
-        id: `meta-account-${account.account_id}`,
-        name: account.account_name || `act_${account.account_id}`,
-        code: account.account_id,
-        team: account.currency || 'Chưa rõ tiền tệ',
-        score: account.purchase_value,
-        avatar_url: null,
-        rank: index + 1,
-      }));
-  const top3 = activeEmployees.slice(0, 3);
+  const top3 = employees.slice(0, 3);
   const podiumOrder = [
     top3.find((e) => e.rank === 3),
     top3.find((e) => e.rank === 1),
     top3.find((e) => e.rank === 2),
   ].filter(Boolean) as Employee[];
 
-  const others = activeEmployees.slice(3);
-  const boardHeading = boardType === 'ads'
-    ? `Purchase Meta · ${activeCurrency === 'UNKNOWN' ? 'chưa rõ tiền tệ' : activeCurrency}`
-    : boardSource === 'demo'
-      ? 'Dữ liệu giả lập · 20 nhân viên'
-    : boardSource === 'upcare'
-      ? 'Doanh số Sale — Odoo (7 ngày gần nhất)'
-      : 'Bảng xếp hạng nhân viên';
-  const scoreCaption = boardType === 'ads'
-    ? 'Purchase Meta'
-    : boardSource === 'upcare'
-      ? 'Doanh số Sale'
-      : boardSource === 'demo'
-        ? 'Doanh số Demo'
-        : 'Điểm';
-  const scoreSuffix = boardType === 'ads' && activeCurrency !== 'UNKNOWN' ? ` ${activeCurrency}` : '';
+  const others = employees.slice(3);
 
   const navBtn =
     'px-3 py-2 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-xl transition-all border border-white/10 backdrop-blur-md text-xs font-semibold flex items-center gap-1';
@@ -140,38 +95,7 @@ export function LeaderboardPage({
         <LogOut size={14} /> Đăng xuất
       </button>
 
-      <header className="relative z-20 mb-4 w-full pt-6 pb-2 flex flex-col items-center justify-center">
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={() => setBoardType('employees')}
-            className={`rounded-full border px-4 py-2 text-xs font-bold backdrop-blur-md transition ${boardType === 'employees' ? 'border-yellow-300/70 bg-yellow-400/20 text-yellow-100' : 'border-white/15 bg-black/35 text-white/70 hover:bg-black/55'}`}
-          >
-            Nhân viên · Odoo
-          </button>
-          <button
-            type="button"
-            onClick={() => setBoardType('ads')}
-            className={`rounded-full border px-4 py-2 text-xs font-bold backdrop-blur-md transition ${boardType === 'ads' ? 'border-cyan-300/70 bg-cyan-400/20 text-cyan-100' : 'border-white/15 bg-black/35 text-white/70 hover:bg-black/55'}`}
-          >
-            Tài khoản Ads · Meta
-          </button>
-          {boardType === 'ads' && currencyGroups.length > 1 ? (
-            <div className="flex flex-wrap items-center justify-center gap-1.5">
-              {currencyGroups.map((currency) => (
-                <button
-                  key={currency}
-                  type="button"
-                  onClick={() => setSelectedCurrency(currency)}
-                  className={`rounded-full border px-3 py-1.5 text-[10px] font-bold backdrop-blur-md transition ${activeCurrency === currency ? 'border-cyan-200/70 bg-cyan-400/20 text-cyan-100' : 'border-white/15 bg-black/35 text-white/65 hover:bg-black/55'}`}
-                >
-                  {currency === 'UNKNOWN' ? 'Chưa rõ tiền tệ' : currency}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      </header>
+      <header className="relative z-20 mb-4 w-full pt-6 pb-2 flex flex-col items-center justify-center" />
 
       <div className="relative z-10 w-full flex-1 flex flex-col items-center justify-center px-0 pb-0">
         {loading ? (
@@ -184,48 +108,28 @@ export function LeaderboardPage({
             <div className="w-full flex flex-col items-center justify-center bg-transparent p-4 relative overflow-hidden flex-1">
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-b from-yellow-500/5 to-transparent pointer-events-none" />
 
-              {boardType === 'ads' ? (
-                <div className="relative z-10 text-center text-[10px] text-cyan-100/80 uppercase tracking-widest mb-1 lg:mb-0 lg:absolute lg:top-2">
-                  {boardHeading}
-                  {adAccountsLastSyncedAt ? <span className="ml-2 normal-case tracking-normal text-white/45">· cập nhật {new Date(adAccountsLastSyncedAt).toLocaleString('vi-VN')}</span> : null}
-                </div>
-              ) : boardSource === 'upcare' ? (
+              {boardSource === 'upcare' ? (
                 <p className="relative z-10 text-center text-[10px] text-cyan-200/70 uppercase tracking-widest mb-1 lg:mb-0 lg:absolute lg:top-2">
-                  {boardHeading}
-                  {boardLastSyncedAt ? <span className="ml-2 normal-case tracking-normal text-white/45">· snapshot {new Date(boardLastSyncedAt).toLocaleString('vi-VN')}</span> : null}
+                  Doanh số MKT — Fabico (7 ngày gần nhất)
                 </p>
               ) : null}
 
-              {boardType === 'ads' && adAccountsError ? (
-                <div className="relative z-20 mx-auto max-w-xl rounded-xl border border-white/15 bg-black/55 px-5 py-4 text-center text-xs text-white/80 backdrop-blur-md">
-                  {adAccountsError}
-                </div>
-              ) : boardType === 'employees' && employeeBoardError ? (
-                <div className="relative z-20 mx-auto max-w-xl rounded-xl border border-amber-300/30 bg-black/55 px-5 py-4 text-center text-xs text-amber-100 backdrop-blur-md">
-                  {employeeBoardError}
-                </div>
-              ) : activeEmployees.length === 0 ? (
-                <div className="relative z-20 mx-auto max-w-xl rounded-xl border border-white/15 bg-black/55 px-5 py-4 text-center text-xs text-white/80 backdrop-blur-md">
-                  {boardType === 'ads' ? 'Chưa có dữ liệu Meta Ads trong khoảng ngày này. Chạy đồng bộ để nạp doanh số purchase.' : 'Chưa có dữ liệu nhân viên.'}
-                </div>
-              ) : (
-                <div className="flex items-end justify-center gap-20 lg:gap-32 w-full h-full pb-12 lg:pb-32 relative z-10 transform translate-y-[90px] -translate-x-[120px]">
-                  {podiumOrder.map((winner) => (
-                    <div
-                      key={winner.id}
-                      className={`${
-                        winner.rank === 1
-                          ? 'order-2 -mt-4 z-20 transform -translate-y-12'
-                          : winner.rank === 2
-                            ? 'order-3 transform translate-y-4'
-                            : 'order-1 transform translate-y-4'
-                      }`}
-                    >
-                      <WinnerCard winner={winner} isCenter={winner.rank === 1} scoreCaption={scoreCaption} scoreSuffix={scoreSuffix} />
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="flex items-end justify-center gap-20 lg:gap-32 w-full h-full pb-12 lg:pb-32 relative z-10 transform translate-y-[90px] -translate-x-[120px]">
+                {podiumOrder.map((winner) => (
+                  <div
+                    key={winner.id}
+                    className={`${
+                      winner.rank === 1
+                        ? 'order-2 -mt-4 z-20 transform -translate-y-12'
+                        : winner.rank === 2
+                          ? 'order-3 transform translate-y-4'
+                          : 'order-1 transform translate-y-4'
+                    }`}
+                  >
+                    <WinnerCard winner={winner} isCenter={winner.rank === 1} />
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="hidden lg:flex absolute right-4 top-4 bottom-4 w-[280px] xl:w-[320px] flex-col z-30">
@@ -234,23 +138,15 @@ export function LeaderboardPage({
                   <div className="min-w-0">
                     <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                       <Trophy size={14} className="text-yellow-400" />
-                      {boardType === 'ads' ? 'Tài khoản Ads' : 'Bảng Xếp Hạng'}
+                      Bảng Xếp Hạng
                     </h2>
-                    {boardType === 'ads' ? (
-                      <p className="text-[8px] text-cyan-300/80 font-normal normal-case tracking-normal mt-0.5 truncate" title="Giá trị purchase do Meta ghi nhận, theo tiền tệ từng tài khoản">
-                        Meta purchase · {activeCurrency === 'UNKNOWN' ? 'tiền tệ chưa rõ' : activeCurrency}
-                      </p>
-                    ) : boardSource === 'demo' ? (
-                      <p className="text-[8px] text-amber-200/80 font-normal normal-case tracking-normal mt-0.5 truncate">
-                        Dữ liệu giả lập · 20 nhân viên
-                      </p>
-                    ) : boardSource === 'upcare' ? (
-                      <p className="text-[8px] text-cyan-300/80 font-normal normal-case tracking-normal mt-0.5 truncate" title="Doanh số Odoo theo khoảng 7 ngày gần nhất">
-                        Odoo Sale · 7 ngày{boardLastSyncedAt ? ` · snapshot ${new Date(boardLastSyncedAt).toLocaleString('vi-VN')}` : ''}
+                    {boardSource === 'upcare' ? (
+                      <p className="text-[8px] text-cyan-300/80 font-normal normal-case tracking-normal mt-0.5 truncate" title="Doanh số theo khoảng 7 ngày gần nhất từ crm.fabico.cloud">
+                        Fabico MKT · 7 ngày
                       </p>
                     ) : null}
                   </div>
-                  <div className="text-white/40 text-[9px] font-mono shrink-0">TOP 4 - {activeEmployees.length}</div>
+                  <div className="text-white/40 text-[9px] font-mono shrink-0">TOP 4 - {employees.length}</div>
                 </div>
 
                 <div className="grid grid-cols-12 gap-1 px-2.5 py-2 bg-black/20 text-yellow-400/80 font-bold uppercase tracking-wider text-[11px] sticky top-0 z-10 backdrop-blur-sm shrink-0">
@@ -283,7 +179,6 @@ export function LeaderboardPage({
                           />
                           <div className="flex flex-col min-w-0">
                             <span className="text-white font-semibold text-[12px] truncate">{winner.name}</span>
-                            {boardType === 'ads' ? <span className="text-[8px] text-white/45 font-mono truncate">{winner.code}</span> : null}
                           </div>
                         </div>
                         <div className="col-span-4 flex justify-end items-center gap-2">
@@ -305,17 +200,7 @@ export function LeaderboardPage({
   );
 }
 
-function WinnerCard({
-  winner,
-  isCenter = false,
-  scoreCaption = 'Doanh số',
-  scoreSuffix = '',
-}: {
-  winner: Employee;
-  isCenter?: boolean;
-  scoreCaption?: string;
-  scoreSuffix?: string;
-}) {
+function WinnerCard({ winner, isCenter = false }: { winner: Employee; isCenter?: boolean }) {
   const containerSize = isCenter ? 'w-48 h-48 lg:w-60 lg:h-60' : 'w-36 h-36 lg:w-44 lg:h-44';
 
   return (
@@ -368,7 +253,7 @@ function WinnerCard({
 
       <div className={`${isCenter ? 'mt-20' : 'mt-14'} text-center flex flex-col items-center`}>
         <div className="mt-1 text-yellow-400 font-bold text-xs lg:text-sm bg-black/40 px-3 py-0.5 rounded-full border-2 border-white backdrop-blur-sm shadow-[0_0_20px_rgba(255,255,255,0.6),inset_0_0_10px_rgba(255,255,255,0.2)]">
-          {scoreCaption}: {winner.score.toLocaleString()}{scoreSuffix}
+          Doanh số: {winner.score.toLocaleString()}
         </div>
       </div>
     </motion.div>
