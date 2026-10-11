@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, FileSpreadsheet, Loader2, Trash2, Upload } from 'lucide-react';
+import { Download, Eye, EyeOff, FileSpreadsheet, Loader2, Trash2, Upload } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
-import { syncEmployeeAuthAccounts } from '../../../api/employeeAuthAccount';
 import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { Employee } from '../../../types';
 import { StaffFormModal } from './StaffFormModal';
@@ -12,7 +11,7 @@ const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() ||
 const PAGE_SIZE = 10;
 
 const STAFF_SELECT =
-  'id, name, team, score, avatar_url, email, ma_ns, vi_tri, du_an_ten';
+  'id, name, team, score, avatar_url, email, pass, ma_ns, vi_tri, du_an_ten';
 
 function displayMaNs(row: Employee): string {
   const m = row.ma_ns?.trim();
@@ -22,13 +21,13 @@ function displayMaNs(row: Employee): string {
 
 /** Keep report-linked staff visible even when they do not have login credentials. */
 function belongsToThisApp(row: Employee): boolean {
-  return Boolean(row.ma_ns?.trim() || row.email?.trim());
+  return Boolean(row.ma_ns?.trim() || (row.email?.trim() && row.pass?.trim()));
 }
 
 function getDeleteErrorMessage(error: { code?: string; message?: string }): string {
   const message = error.message || '';
   if (error.code === '42501' || /row-level security|permission denied/i.test(message)) {
-    return `${message} — kiểm tra employees có migration supabase/create_employees_table.sql và tài khoản Auth có app_metadata.role = admin.`;
+    return `${message} — chạy supabase/alter_employees_crm_staff_ui.sql trong Supabase SQL Editor để cấp policy DELETE cho employees.`;
   }
   if (
     (error.code === '23502' || /not-null constraint/i.test(message)) &&
@@ -43,7 +42,7 @@ function getDeleteErrorMessage(error: { code?: string; message?: string }): stri
 }
 
 function noDeletePermissionMessage(): string {
-  return 'Không xóa được dòng nào. Kiểm tra migration supabase/create_employees_table.sql và app_metadata.role = admin của tài khoản Supabase Auth.';
+  return 'Không xóa được dòng nào. Kiểm tra policy RLS DELETE của employees; chạy supabase/alter_employees_crm_staff_ui.sql trong Supabase SQL Editor nếu database cũ chưa có policy này.';
 }
 
 function initialsFromName(name: string): string {
@@ -102,6 +101,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
   const [importErrors, setImportErrors] = useState<{ row: number; message: string }[]>([]);
   const [importBusy, setImportBusy] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(() => new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const selectPageRef = useRef<HTMLInputElement>(null);
@@ -232,7 +232,6 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
     setImportBusy(true);
     setError(null);
     setImportMessage(null);
-    let employeesInserted = false;
     try {
       const existing: { ma_ns?: string | null; email?: string | null }[] = [];
       for (let from = 0; ; from += 1000) {
@@ -263,40 +262,16 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
         return;
       }
 
-      const rowsForEmployees = freshRows.map(({ pass: _password, ...row }) => row);
-      const { error: insertError } = await supabase.from(EMPLOYEES_TABLE).insert(rowsForEmployees);
+      const { error: insertError } = await supabase.from(EMPLOYEES_TABLE).insert(freshRows);
       if (insertError) throw insertError;
-      employeesInserted = true;
-      const rowsWithPasswords = freshRows.filter((row) => row.pass?.trim());
-      const authResults = await syncEmployeeAuthAccounts(rowsWithPasswords.map((row) => ({
-        email: row.email || '',
-        password: row.pass,
-        name: row.name,
-      })));
-      const failedAuthResults = authResults.filter((result) => !result.ok);
-      const updatedAuthCount = authResults.length - failedAuthResults.length;
-      const authMessage = rowsWithPasswords.length
-        ? `; đã đồng bộ ${updatedAuthCount}/${rowsWithPasswords.length} tài khoản đăng nhập`
-        : '; không có mật khẩu để tạo tài khoản đăng nhập';
-      setImportMessage(`Đã thêm ${freshRows.length} nhân sự${skipped ? `, bỏ qua ${skipped} dòng trùng` : ''}${authMessage}.`);
-      if (failedAuthResults.length) {
-        setError(failedAuthResults.map((result) => `${result.email}: ${result.error || 'lỗi đồng bộ Auth'}`).join('\n'));
-      }
+      setImportMessage(`Đã thêm ${freshRows.length} nhân sự${skipped ? `, bỏ qua ${skipped} dòng trùng` : ''}.`);
       setImportRows([]);
       setImportErrors([]);
       await load();
       await onEmployeesRefresh?.();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Không thể nhập dữ liệu Excel.';
-      if (employeesInserted) {
-        setImportRows([]);
-        setImportErrors([]);
-        setError(`Đã lưu nhân sự vào bảng nhưng chưa đồng bộ được tài khoản Supabase Auth: ${message} Hãy mở Sửa nhân sự, nhập lại mật khẩu rồi lưu.`);
-        await load();
-        await onEmployeesRefresh?.();
-      } else {
-        setError(message);
-      }
+      setError(message);
     } finally {
       setImportBusy(false);
     }
@@ -631,7 +606,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
                   setSelectedIds(new Set());
                 }}
                 className="rounded-xl border border-white/10 px-3 py-2.5 text-xs font-semibold text-[var(--hrm-on-variant)] hover:bg-white/5"
-                title="Hiện nhân sự có mã ma_ns hoặc địa chỉ email."
+                title="Hiện nhân sự có mã ma_ns hoặc có đủ email và mật khẩu đăng nhập."
               >
                 {showNonAppStaff ? 'Chỉ nhân sự app' : `Hiện tất cả (+${nonAppStaffCount} ngoài app)`}
               </button>
@@ -702,16 +677,17 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
                     <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Vị trí</th>
                     <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Dự án</th>
                     <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Email</th>
+                    <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Mật khẩu</th>
                     <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)] text-right">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.05]">
                   {filtered.length === 0 && !loading ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-14 text-center text-[var(--hrm-on-variant)] space-y-4">
+                      <td colSpan={9} className="px-6 py-14 text-center text-[var(--hrm-on-variant)] space-y-4">
                         <p>
                           Chưa có nhân sự hoặc thiếu cột CRM. Chạy{' '}
-                          <code className="text-[var(--hrm-on-surface)]">supabase/create_employees_table.sql</code> nếu cần.
+                          <code className="text-[var(--hrm-on-surface)]">supabase/alter_employees_crm_staff_ui.sql</code> nếu cần.
                         </p>
                         <button
                           type="button"
@@ -755,6 +731,29 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
                         <td className="px-5 py-4 max-w-[170px] truncate text-sm text-[var(--hrm-on-variant)]" title={row.vi_tri || ''}>{row.vi_tri?.trim() || '—'}</td>
                         <td className="px-5 py-4 max-w-[200px] truncate text-sm text-[var(--hrm-on-variant)]" title={row.du_an_ten || ''}>{row.du_an_ten?.trim() || '—'}</td>
                         <td className="px-5 py-4 max-w-[230px] truncate text-sm text-[var(--hrm-on-variant)]" title={row.email || ''}>{row.email?.trim() || '—'}</td>
+                        <td className="px-5 py-4">
+                          {row.pass?.trim() ? (
+                            <div className="flex items-center gap-2">
+                              <code className="max-w-[150px] truncate rounded bg-[var(--hrm-surface-lowest)] px-2 py-1 text-xs text-[var(--hrm-on-variant)]">
+                                {visiblePasswords.has(row.id) ? row.pass : '••••••••'}
+                              </code>
+                              <button
+                                type="button"
+                                onClick={() => setVisiblePasswords((current) => {
+                                  const next = new Set(current);
+                                  if (next.has(row.id)) next.delete(row.id);
+                                  else next.add(row.id);
+                                  return next;
+                                })}
+                                className="rounded p-1 text-[var(--hrm-on-variant)] hover:bg-white/5 hover:text-[var(--hrm-on-surface)]"
+                                title={visiblePasswords.has(row.id) ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                                aria-label={visiblePasswords.has(row.id) ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                              >
+                                {visiblePasswords.has(row.id) ? <EyeOff size={15} /> : <Eye size={15} />}
+                              </button>
+                            </div>
+                          ) : <span className="text-xs text-[var(--hrm-on-variant)]">Chưa đặt</span>}
+                        </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex justify-end gap-1">
                             <button type="button" onClick={(e) => openView(e, row)} disabled={deletingId === row.id} className={`${iconBtn} hover:text-[var(--hrm-primary)] hover:bg-[color-mix(in_srgb,var(--hrm-primary)_10%,transparent)]`} title="Xem" aria-label="Xem">

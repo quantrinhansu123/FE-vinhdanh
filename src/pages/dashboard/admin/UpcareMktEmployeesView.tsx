@@ -54,7 +54,7 @@ function nextReportDate(value: string): string {
   return toLocalYyyyMmDd(date);
 }
 
-export const UpcareMktEmployeesView: React.FC<{ currentUserEmail?: string | null }> = ({ currentUserEmail }) => {
+export const UpcareMktEmployeesView: React.FC = () => {
   const initialDate = useMemo(() => defaultDate(), []);
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [loadedDate, setLoadedDate] = useState<string | null>(null);
@@ -113,14 +113,21 @@ export const UpcareMktEmployeesView: React.FC<{ currentUserEmail?: string | null
     return `/api/upcare-crm?${qs.toString()}`;
   }, [selectedDate, projectParam, projectUuid]);
 
-  const reportAuthorEmail = useMemo(() => {
-    const email = currentUserEmail?.trim();
-    return email && /\S+@\S+\.\S+/.test(email) ? email : null;
-  }, [currentUserEmail]);
+  const currentUserEmail = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('fe_vinhdanh_auth_user');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { email?: string | null };
+      const e = parsed?.email?.trim();
+      return e && /\S+@\S+\.\S+/.test(e) ? e : null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const pushToDetailReports = useCallback(async () => {
     if (!rows.length) return;
-    if (!reportAuthorEmail) {
+    if (!currentUserEmail) {
       setError('Không xác định được email người đẩy. Vui lòng đăng nhập lại.');
       return;
     }
@@ -255,7 +262,7 @@ export const UpcareMktEmployeesView: React.FC<{ currentUserEmail?: string | null
     } finally {
       setSaving(false);
     }
-  }, [rows, selectedDate, loadedDate, reportAuthorEmail]);
+  }, [rows, selectedDate, loadedDate, currentUserEmail]);
 
   return (
     <div className="-m-3 min-h-[calc(100vh-5.5rem)] bg-[#070d1f] p-6 font-[Inter,sans-serif] text-[#dfe4fe] sm:p-8 ag-prism-scroll">
