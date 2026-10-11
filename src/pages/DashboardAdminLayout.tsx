@@ -183,7 +183,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'markets': return <MarketsView />;
       case 'budget': return <BudgetView />;
       case 'reconcile': return <ReconcileView />;
-      case 'upcare-mkt': return <UpcareMktEmployeesView />;
+      case 'upcare-mkt': return <UpcareMktEmployeesView currentUserEmail={reportUser?.email} />;
       case 'admin-ranking': return <AdminRankingView />;
       case 'compare': return <CompareView />;
 

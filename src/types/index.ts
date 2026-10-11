@@ -11,7 +11,6 @@ export interface Employee {
   score: number;
   avatar_url: string | null;
   email?: string;
-  pass?: string;
   rank?: number;
   /** CRM Module 3 — staff list */
   ma_ns?: string | null;
@@ -100,6 +99,8 @@ export interface AuthUser {
   name: string;
   team: string;
   avatar_url: string | null;
+  /** False when this Supabase Auth account has no matching employees row yet. */
+  employeeProfileAvailable?: boolean;
   /** Vị trí nhân sự (employees.vi_tri) — dùng cho rule báo cáo MKT */
   vi_tri?: string | null;
   /** Mã NS (employees.ma_ns) — dùng làm Mã TK Ads trên form báo cáo MKT */

@@ -11,6 +11,7 @@ import {
   Menu,
   EyeOff,
   LayoutDashboard,
+  BarChart3,
 } from 'lucide-react';
 
 import backgroundImg from '../assets/background.png';
@@ -80,6 +81,9 @@ export function LeaderboardPage({
             transition={{ duration: 0.2 }}
             className="absolute top-4 left-16 z-50 flex flex-wrap gap-2 max-w-[calc(100vw-5rem)]"
           >
+            <Link to="/meta" className={navBtn}>
+              <BarChart3 size={14} /> Tài khoản Ads · Meta
+            </Link>
             <Link to="/crm-admin/admin-dash" className={navBtn}>
               <LayoutDashboard size={14} /> CRM Admin
             </Link>
