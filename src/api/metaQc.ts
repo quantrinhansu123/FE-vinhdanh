@@ -27,6 +27,14 @@ async function request<T>(method: 'GET' | 'POST', body?: unknown, action = ''): 
 export const getMetaQcAccounts = () => request<{ accounts: string[] }>('GET');
 export const loginMetaQc = (email: string, password: string) =>
   request<{ accounts: string[] }>('POST', { email, password }, 'login');
-export const importMetaQc = (account_id: string, since: string, until: string) =>
-  request<{ account_id: string; rows_saved: number; missing_employee_code: number; account_timezone: string }>(
+export type MetaQcRow = {
+  ngay: string; ma_nv: string | null; ten_chien_dich: string;
+  so_tien_da_chi_tieu_vnd: number; so_tro_chuyen_tin_nhan: number;
+};
+export type MetaQcResult = {
+  account_id: string; rows: MetaQcRow[]; range: { since: string; until: string };
+  missing_employee_code: number; account_timezone: string;
+};
+export const fetchMetaQc = (account_id: string, since: string, until: string) =>
+  request<MetaQcResult>(
     'POST', { account_id, since, until });

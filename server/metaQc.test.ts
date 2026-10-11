@@ -71,8 +71,8 @@ test('CRM login verifies password and role on the server, without exposing crede
   assert.equal((await call({ ...login, fetch: async () => Response.json([{ ...employee, vi_tri: 'MKT' }]) })).status, 403);
 });
 
-test('authenticated import fetches Meta then makes exactly one scoped private QC transaction', async () => {
-  let writes = 0;
+test('authenticated QC request returns live rows without calling the storage RPC', async () => {
+  const databaseCalls: string[] = [];
   const cookie = `meta_qc_session=${signMetaQcSession('user-1', secret)}`;
   const result = await call({ method: 'POST', cookie, body: { account_id: '123', since: '2026-10-01', until: '2026-10-01' }, fetch: async (input, init) => {
     const url = new URL(String(input));
@@ -81,19 +81,33 @@ test('authenticated import fetches Meta then makes exactly one scoped private QC
       return Response.json(url.pathname.endsWith('/insights') ? { data: [ad] } : { account_id: '123', timezone_name: report.account_timezone });
     }
     assert.equal(new Headers(init?.headers).get('apikey'), 'test-service-key');
-    if (url.pathname.endsWith('/rpc/replace_meta_qc_excel')) {
-      writes++;
-      const data = JSON.parse(String(init?.body));
-      assert.equal(data.p_account_id, '123');
-      assert.equal(data.p_since, '2026-10-01');
-      assert.deepEqual(data.p_rows, metaReportToQcRows(report));
-      return Response.json(1);
-    }
+    databaseCalls.push(`${init?.method || 'GET'} ${url.pathname}`);
+    assert.equal(init?.method || 'GET', 'GET');
+    assert.equal(url.pathname, '/rest/v1/employees');
     return Response.json({ email: employee.email, vi_tri: employee.vi_tri });
   } });
   assert.equal(result.status, 200);
-  assert.equal(writes, 1);
-  assert.equal(result.data.rows_saved, 1);
+  assert.deepEqual(databaseCalls, ['GET /rest/v1/employees']);
+  assert.equal(result.data.account_id, '123');
+  assert.deepEqual(result.data.rows, metaReportToQcRows(report));
+  assert.deepEqual(result.data.range, report.range);
+  assert.equal(result.data.rows_saved, undefined);
+  assert.equal(JSON.stringify(result.data).includes('test-meta-token'), false);
+});
+
+test('empty Meta results return an empty successful preview without storage', async () => {
+  const result = await call({ method: 'POST', cookie: `meta_qc_session=${signMetaQcSession('user-1', secret)}`,
+    body: { account_id: '123', since: '2026-10-01', until: '2026-10-01' }, fetch: async (input, init) => {
+      const url = new URL(String(input));
+      assert.equal(init?.method || 'GET', 'GET');
+      if (url.hostname === 'graph.facebook.com') return Response.json(url.pathname.endsWith('/insights')
+        ? { data: [] } : { account_id: '123', timezone_name: report.account_timezone });
+      assert.equal(url.pathname, '/rest/v1/employees');
+      return Response.json({ email: employee.email, vi_tri: employee.vi_tri });
+    } });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.data.rows, []);
+  assert.equal(result.data.missing_employee_code, 0);
 });
 
 test('an existing session does not authorize an employee whose role was removed', async () => {

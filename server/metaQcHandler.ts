@@ -114,12 +114,7 @@ export function createMetaQcHandler(env: Record<string, string | undefined>, opt
       const signal = AbortSignal.timeout(45000);
       const report = await createMetaClient(env, options).insights(account, range, signal);
       const rows = metaReportToQcRows(report);
-      const { data: count, error } = await db.rpc('replace_meta_qc_excel', {
-        p_account_id: report.account_id, p_since: range.since, p_until: range.until, p_rows: rows,
-      }).abortSignal(AbortSignal.timeout(10000));
-      if (error) throw new MetaError(502, 'meta_qc_storage_failed',
-        'Không lưu được dữ liệu. Kiểm tra migration supabase/create_meta_qc_import.sql và quyền server.');
-      return json(200, { account_id: report.account_id, rows_saved: Number(count) || 0,
+      return json(200, { account_id: report.account_id, rows, range,
         missing_employee_code: rows.filter(row => !row.ma_nv).length, account_timezone: report.account_timezone });
     } catch (error) {
       if (error instanceof MetaError) return json(error.status, { error: error.code, message: error.message });

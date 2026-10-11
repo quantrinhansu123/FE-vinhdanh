@@ -6,11 +6,12 @@ No additional npm dependency is required.
 
 ## QC Excel button
 
-The **Lấy từ API Meta** button in **Dữ liệu QC Excel** imports campaign/day
-spend and messaging conversations into the existing QC table. It applies the
-date inputs currently shown on the page. Run `supabase/create_meta_qc_import.sql`
-after the existing `create_du_an_qc_excel.sql` migration to enable atomic imports.
-No direct browser access to the private `meta_ads_insights` table is required.
+The default **Meta trực tiếp** tab displays campaign/day spend and messaging
+conversations returned by **Lấy từ API Meta**. This flow does not write to
+Supabase and does not require `create_meta_qc_import.sql` or the Meta insights
+storage migration. Results remain in page memory and must be fetched again
+after reloading or leaving the page. The separate **Dữ liệu Excel đã lưu** tab
+retains the existing database-backed Excel and MKT operations.
 
 The import dialog verifies an Admin CRM account against `employees` on the
 server and uses a signed, HttpOnly cookie valid for one hour. The existing
@@ -18,19 +19,20 @@ super-admin email and Admin/director positions accepted by CRM navigation are
 supported. The server rechecks the account's current role on each request.
 Meta tokens, the API secret and Supabase service credentials stay on the server.
 
-Choose one account or all configured accounts. Imports run one account at a
-time and report failures per account. A successful import replaces only that
-account's Meta-generated QC rows in the requested range (source marker
-`meta-api:<account_id>`). Identical rows already imported manually from Excel
-are skipped. Other manual rows stay in place; different revisions imported
-from Excel cannot be identified as the same account automatically.
+Choose one account or all configured accounts. Requests run one account at a
+time and display successful results immediately, reporting failures per account.
+Refetching the same date range replaces each successful account's preview,
+including an empty result, without duplicating rows. Failed accounts retain
+their previous preview. Fetching a different range clears the previous preview.
+`POST /api/meta-qc` returns `{ account_id, rows, range, missing_employee_code,
+account_timezone }`; no storage RPC is invoked. Supabase is still used to
+verify the CRM account and its current role, so server credentials are required.
 
 Only VND accounts are imported into the VND fields. The employee code is taken
 from the first `[Mã NV]` in the campaign name. Missing codes are reported and
 remain blank for review. Messaging counts use the single action type
 `onsite_conversion.messaging_conversation_started_7d`. Daily data remains in
-the ad account's timezone. Use the existing **Đồng bộ QC vào chi tiết MKT**
-action after reviewing the imported rows.
+the ad account's timezone. Live previews are not written to MKT reports.
 
 ## Setup
 
@@ -40,7 +42,7 @@ action after reviewing the imported rows.
 2. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the server.
    The existing public `VITE_SUPABASE_URL` is accepted as a URL fallback.
    Secrets must never use the `VITE_` prefix.
-3. Run `supabase/create_meta_ads_insights.sql` in the Supabase SQL Editor.
+3. Only for persistent CLI/API sync, run `supabase/create_meta_ads_insights.sql` in the Supabase SQL Editor.
    It creates a private `meta_ads_insights` table and a transaction function
    accessible only to `service_role`.
 4. Generate a separate API authorization secret using
