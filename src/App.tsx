@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from './api/supabase';
 import { fetchAllRows } from './api/fetchAllRows';
 import {
@@ -17,13 +18,59 @@ import {
 import { LoginPage } from './pages/LoginPage';
 import { DashboardAdminLayout } from './pages/DashboardAdminLayout';
 import { LeaderboardPage } from './pages/LeaderboardPage';
-import type { Employee, AuthUser } from './types';
+import { MetaAdsLeaderboardPage } from './pages/MetaAdsLeaderboardPage';
+import type { Employee, AuthUser, UserRole } from './types';
 import { crmAdminPathForView } from './utils/crmAdminRoutes';
 import { crmNavTierFromUser, defaultViewForTier } from './utils/crmNavAccess';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
-const AVATARS_BUCKET = import.meta.env.VITE_SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
-const AUTH_STORAGE_KEY = 'fe_vinhdanh_auth_user';
+const USER_ROLES: UserRole[] = ['admin', 'director', 'project_manager', 'manager', 'leader', 'mkt', 'user'];
+
+function roleFromSession(session: Session): UserRole {
+  const role = session.user.app_metadata?.role;
+  return USER_ROLES.includes(role as UserRole) ? role as UserRole : 'user';
+}
+
+async function employeeProfileForSession(session: Session): Promise<AuthUser> {
+  const email = session.user.email?.trim().toLowerCase();
+  if (!email) throw new Error('Tài khoản Supabase Auth chưa có email.');
+
+  const fallbackProfile = (): AuthUser => ({
+    id: session.user.id,
+    email,
+    role: roleFromSession(session),
+    name: String(session.user.user_metadata?.name || session.user.user_metadata?.full_name || email),
+    team: '',
+    avatar_url: null,
+    employeeProfileAvailable: false,
+  });
+
+  const { data, error } = await supabase
+    .from(EMPLOYEES_TABLE)
+    .select('id, name, email, team, avatar_url, vi_tri, ma_ns')
+    .ilike('email', email)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === 'PGRST205') return fallbackProfile();
+    logSupabaseError('loading signed-in employee', error);
+    throw new Error('Không tải được hồ sơ nhân viên từ Supabase.');
+  }
+  if (!data?.email) return fallbackProfile();
+
+  return {
+    id: String(data.id || session.user.id),
+    email: String(data.email),
+    role: roleFromSession(session),
+    name: String(data.name || ''),
+    team: String(data.team || ''),
+    avatar_url: data.avatar_url || null,
+    employeeProfileAvailable: true,
+    vi_tri: data.vi_tri?.trim() ? data.vi_tri.trim() : null,
+    ma_ns: data.ma_ns?.trim() ? data.ma_ns.trim() : null,
+  };
+}
 
 function logSupabaseError(action: string, error: { code?: string; message?: string; details?: string; hint?: string } | null) {
   if (!error) return;
@@ -52,25 +99,52 @@ function AppRoutes() {
   const [loading, setLoading] = useState(true);
   const [showMenuBar, setShowMenuBar] = useState(true);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authSession, setAuthSession] = useState<Session | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
+  const [authProfileLoading, setAuthProfileLoading] = useState(false);
 
   useEffect(() => {
-    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as AuthUser;
-        if (parsed?.email) {
-          setAuthUser(parsed);
-        }
-      } catch (error) {
-        console.warn('Invalid login cache, reset required.', error);
-      }
-    }
-    setAuthChecking(false);
+    let active = true;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthSession(session);
+      setAuthChecking(false);
+    });
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) console.warn('Supabase Auth session:', error.message);
+      setAuthSession(data.session);
+      setAuthChecking(false);
+    });
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
-    if (!authUser) {
+    let active = true;
+    if (!authSession) {
+      setAuthUser(null);
+      setAuthProfileLoading(false);
+      return;
+    }
+    setAuthProfileLoading(true);
+    void employeeProfileForSession(authSession)
+      .then((profile) => { if (active) setAuthUser(profile); })
+      .catch((error: unknown) => {
+        if (active) {
+          setAuthUser(null);
+          console.warn('[Auth] Employee profile is unavailable:', error instanceof Error ? error.message : 'unknown error');
+        }
+      })
+      .finally(() => { if (active) setAuthProfileLoading(false); });
+    return () => { active = false; };
+  }, [authSession?.user.id]);
+
+  useEffect(() => {
+    if (!authUser || !authUser.employeeProfileAvailable) {
+      setEmployees([]);
+      setBoardEmployees([]);
       setLoading(false);
       return;
     }
@@ -79,7 +153,10 @@ function AppRoutes() {
 
   const fetchEmployees = async () => {
     setLoading(true);
-    const { data, error } = await fetchAllRows<Employee>(supabase.from(EMPLOYEES_TABLE).select('*').order('score', { ascending: false }));
+    const { data, error } = await fetchAllRows<Employee>(supabase
+      .from(EMPLOYEES_TABLE)
+      .select('id, name, team, score, avatar_url, email, ma_ns, ngay_bat_dau, leader, du_an_ten, vi_tri, so_fanpage, trang_thai')
+      .order('score', { ascending: false }));
 
     let rankedData: Employee[] = [];
     if (error) {
@@ -168,52 +245,28 @@ function AppRoutes() {
 
   const handleLogin = async (email: string, password: string) => {
     const normalizedEmail = email.trim().toLowerCase();
-    const { data, error } = await supabase
-      .from(EMPLOYEES_TABLE)
-      .select('id, name, email, pass, team, avatar_url, vi_tri, ma_ns')
-      .ilike('email', normalizedEmail)
-      .eq('pass', password)
-      .limit(1);
+    const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+    if (error || !data.session) throw new Error('Sai email/mật khẩu hoặc tài khoản Supabase Auth chưa được tạo.');
 
-    if (error) {
-      throw new Error(error.message || 'Không thể đăng nhập');
+    try {
+      const profile = await employeeProfileForSession(data.session);
+      setAuthSession(data.session);
+      setAuthUser(profile);
+    } catch (profileError) {
+      await supabase.auth.signOut();
+      throw profileError;
     }
-
-    const user = (data || [])[0] as {
-      id?: string;
-      email?: string;
-      name?: string;
-      team?: string;
-      avatar_url?: string | null;
-      vi_tri?: string | null;
-      ma_ns?: string | null;
-    } | undefined;
-    if (!user?.email) {
-      throw new Error('Sai email hoặc mật khẩu');
-    }
-
-    const nextUser: AuthUser = {
-      id: String(user.id || ''),
-      email: String(user.email),
-      role: normalizedEmail === 'upedu2024@gmail.com' ? 'admin' : 'user',
-      name: String(user.name || ''),
-      team: String(user.team || ''),
-      avatar_url: user.avatar_url || null,
-      vi_tri: user.vi_tri?.trim() ? user.vi_tri.trim() : null,
-      ma_ns: user.ma_ns?.trim() ? user.ma_ns.trim() : null,
-    };
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextUser));
-    setAuthUser(nextUser);
-    navigate('/', { replace: true });
+    navigate(profile.employeeProfileAvailable ? '/' : '/meta', { replace: true });
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setAuthSession(null);
     setAuthUser(null);
     navigate('/login', { replace: true });
   };
 
-  if (authChecking) {
+  if (authChecking || authProfileLoading) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-black text-white font-sans antialiased">
         <Loader2 className="animate-spin" size={28} />
@@ -231,7 +284,7 @@ function AppRoutes() {
       <Route
         path="/"
         element={
-          authUser ? (
+          authUser?.employeeProfileAvailable ? (
             <LeaderboardPage
               employees={boardEmployees}
               boardSource={boardSource}
@@ -240,10 +293,13 @@ function AppRoutes() {
               setShowMenuBar={setShowMenuBar}
               onLogout={handleLogout}
             />
-          ) : (
-            <Navigate to="/login" replace />
-          )
+          ) : authUser ? <Navigate to="/meta" replace /> : <Navigate to="/login" replace />
         }
+      />
+
+      <Route
+        path="/meta"
+        element={authUser ? <MetaAdsLeaderboardPage onLogout={handleLogout} hasEmployeeProfile={Boolean(authUser.employeeProfileAvailable)} /> : <Navigate to="/login" replace />}
       />
 
       <Route path="/admin" element={<Navigate to="/crm-admin/teams" replace />} />
@@ -268,7 +324,7 @@ function AppRoutes() {
       <Route
         path="/crm-admin/*"
         element={
-          authUser ? (
+          authUser?.employeeProfileAvailable ? (
             <DashboardAdminLayout
               employees={employees}
               onEmployeesRefresh={fetchEmployees}
@@ -279,9 +335,7 @@ function AppRoutes() {
               avatarUrl={authUser.avatar_url}
               reportUser={authUser}
             />
-          ) : (
-            <Navigate to="/login" replace />
-          )
+          ) : authUser ? <Navigate to="/meta" replace /> : <Navigate to="/login" replace />
         }
       />
 
