@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
+import { syncEmployeeAuthAccounts } from '../../../api/employeeAuthAccount';
 import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { CrmTeamRow, Employee } from '../../../types';
 import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
@@ -76,13 +77,13 @@ type Props = {
 };
 
 export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSaved }) => {
-  const isEdit = Boolean(initial?.id);
-
   const [maNs, setMaNs] = useState('');
   const [name, setName] = useState('');
   const [team, setTeam] = useState('');
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
+  const [savedEmployeeId, setSavedEmployeeId] = useState<string | null>(null);
+  const isEdit = Boolean(initial?.id || savedEmployeeId);
   const [score, setScore] = useState('0');
   const [ngayBatDau, setNgayBatDau] = useState('');
   const [viTri, setViTri] = useState('');
@@ -109,6 +110,7 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
       setTeam(initial.team || '');
       setEmail(initial.email || '');
       setPass('');
+      setSavedEmployeeId(null);
       setScore(String(initial.score ?? 0));
       setNgayBatDau(toInputDate(initial.ngay_bat_dau));
       setViTri(initial.vi_tri || '');
@@ -122,6 +124,7 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
       setTeam('');
       setEmail('');
       setPass('');
+      setSavedEmployeeId(null);
       setScore('0');
       setNgayBatDau('');
       setViTri('');
@@ -193,6 +196,11 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
 
     const scoreNum = parseOptionalInt(score) ?? 0;
     const fanpageNum = parseOptionalInt(soFanpage) ?? 0;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (pass.trim() && !normalizedEmail) {
+      setFormError('Cần nhập email để tạo tài khoản đăng nhập.');
+      return;
+    }
 
     const basePayload: Record<string, unknown> = {
       ma_ns: maNs.trim() || null,
@@ -205,13 +213,6 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
       so_fanpage: fanpageNum,
       trang_thai: trangThai,
     };
-
-    if (!isEdit && pass.trim()) {
-      basePayload.pass = pass.trim();
-    }
-    if (isEdit && pass.trim()) {
-      basePayload.pass = pass.trim();
-    }
 
     setSaving(true);
     try {
@@ -243,18 +244,37 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
         basePayload.avatar_url = urlData.publicUrl;
       }
 
-      if (isEdit && initial?.id) {
-        const payload = { ...basePayload };
-        if (!pass.trim()) {
-          delete payload.pass;
-        }
-        const { error: uErr } = await supabase.from(EMPLOYEES_TABLE).update(payload).eq('id', initial.id);
+      let employeeId = initial?.id || savedEmployeeId;
+      if (employeeId) {
+        const { error: uErr } = await supabase.from(EMPLOYEES_TABLE).update(basePayload).eq('id', employeeId);
         if (uErr) throw uErr;
       } else {
-        const { error: iErr } = await supabase.from(EMPLOYEES_TABLE).insert(basePayload);
+        const { data: inserted, error: iErr } = await supabase.from(EMPLOYEES_TABLE).insert(basePayload).select('id').single();
         if (iErr) throw iErr;
+        employeeId = String(inserted.id);
+        setSavedEmployeeId(employeeId);
       }
-      onSaved();
+
+      const previousEmail = initial?.email?.trim().toLowerCase() || '';
+      const needsAuthSync = Boolean(normalizedEmail && (pass.trim() || (initial?.id && previousEmail !== normalizedEmail)));
+      if (needsAuthSync) {
+        onSaved();
+        try {
+          const results = await syncEmployeeAuthAccounts([{
+            email: normalizedEmail,
+            oldEmail: previousEmail || undefined,
+            password: pass.trim() || undefined,
+            name: ten,
+          }]);
+          const result = results[0];
+          if (result && !result.ok) throw new Error(result.error || 'Không đồng bộ được tài khoản đăng nhập.');
+        } catch (authError) {
+          const message = authError instanceof Error ? authError.message : 'Không đồng bộ được tài khoản Supabase Auth.';
+          throw new Error(`Hồ sơ nhân sự đã lưu, nhưng tài khoản đăng nhập chưa đồng bộ: ${message}`);
+        }
+      } else {
+        onSaved();
+      }
       onClose();
     } catch (err: unknown) {
       setFormError(getSaveErrorMessage(err));
