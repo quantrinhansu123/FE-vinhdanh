@@ -29,7 +29,7 @@ export const Topbar: React.FC<TopbarProps> = ({ title, onToggleNotif, hasNewNoti
       <header className="stitch-topbar">
         <h1>{title}</h1>
         <div className="stitch-topbar-actions">
-          <label className="stitch-topbar-select"><span className="sr-only">Dự án</span><select defaultValue="Tất cả dự án"><option>Tất cả dự án</option><option>BIOKAMA</option><option>FABICO</option><option>MASSHU</option><option>YASU</option></select></label>
+          <label className="stitch-topbar-select"><span className="sr-only">Dự án</span><select defaultValue="Tất cả dự án"><option>Tất cả dự án</option><option>FABICO</option></select></label>
           <label className="stitch-topbar-select"><span className="sr-only">Kỳ báo cáo</span><select defaultValue="Tháng này"><option>Tháng này</option><option>Tuần này</option><option>Hôm nay</option><option>Tháng trước</option></select></label>
           <span className="stitch-topbar-live"><i aria-hidden="true" />LIVE</span>
           <time className="stitch-topbar-clock">{time}</time>
@@ -48,10 +48,7 @@ export const Topbar: React.FC<TopbarProps> = ({ title, onToggleNotif, hasNewNoti
       <div className="ml-auto flex items-center gap-[8px]">
         <select className="bg-[var(--bg2)] border border-[var(--border)] rounded-[6px] text-[var(--text2)] font-[var(--f)] text-[11px] p-[4px_8px] cursor-pointer outline-none">
           <option>Tất cả dự án</option>
-          <option>BIOKAMA</option>
           <option>FABICO</option>
-          <option>MASSHU</option>
-          <option>YASU</option>
         </select>
         
         <select className="bg-[var(--bg2)] border border-[var(--border)] rounded-[6px] text-[var(--text2)] font-[var(--f)] text-[11px] p-[4px_8px] cursor-pointer outline-none">

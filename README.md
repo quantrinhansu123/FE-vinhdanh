@@ -4,6 +4,8 @@
 
 ## Run Locally
 
+Meta advertising data API and private Supabase sync: [setup and usage](docs/meta-ads.md).
+
 **Prerequisites:**  Node.js
 
 

@@ -32,6 +32,7 @@ import {
 } from 'recharts';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { ADS_LIMIT_PERCENT, CLOSE_WARNING_PERCENT, CLOSE_GOOD_PERCENT, adsTone, closeTone, performancePillClass, performanceTextClass } from '../../../utils/performanceThresholds';
 import type { AuthUser } from '../../../types';
 import { crmNavTierFromUser } from '../../../utils/crmNavAccess';
 import {
@@ -201,11 +202,12 @@ function Card({
   value: string;
   sub: string;
   status: string;
-  tone: 'green' | 'red' | 'amber' | 'blue' | 'purple';
+  tone: 'green' | 'red' | 'amber' | 'blue' | 'purple' | 'neutral';
   icon: React.ReactNode;
   progress?: number;
 }) {
   const accent = {
+    neutral: { border: 'border-l-slate-400', text: 'text-slate-500', icon: 'bg-slate-50 text-slate-500 border border-slate-200', badge: 'bg-slate-50 text-slate-500 border border-slate-200' },
     green: { border: 'border-l-emerald-600', text: 'text-emerald-700', icon: 'bg-emerald-50 text-emerald-700 border border-emerald-200', badge: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
     red: { border: 'border-l-rose-600', text: 'text-rose-700', icon: 'bg-rose-50 text-rose-700 border border-rose-200', badge: 'bg-rose-50 text-rose-700 border border-rose-200' },
     amber: { border: 'border-l-amber-600', text: 'text-amber-800', icon: 'bg-amber-50 text-amber-800 border border-amber-200', badge: 'bg-amber-50 text-amber-800 border border-amber-200' },
@@ -213,6 +215,7 @@ function Card({
     purple: { border: 'border-l-purple-600', text: 'text-purple-800', icon: 'bg-purple-50 text-purple-800 border border-purple-200', badge: 'bg-purple-50 text-purple-800 border border-purple-200' },
   }[tone];
   const bar = {
+    neutral: 'bg-slate-400',
     green: 'bg-emerald-600',
     red: 'bg-rose-600',
     amber: 'bg-amber-500',
@@ -377,10 +380,12 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
   const forecastAdCost = (metrics.adCost / days) * daysInMonth * 1.06;
   const forecastAdsPct = forecastRevenue > 0 ? (forecastAdCost / forecastRevenue) * 100 : 0;
   const revenueProgress = targetVnd ? Math.min(100, (metrics.revenue / targetVnd) * 100) : undefined;
+  const adsStatus = adsTone(metrics.revenue > 0 ? metrics.adsPct : metrics.adCost > 0 ? 100 : null);
+  const closeStatus = closeTone(metrics.leads > 0 ? metrics.closePct : null);
   const alerts = [
-    ...(metrics.revenue > 0 && metrics.adsPct > 30 ? [`%ADS ${formatPercent(metrics.adsPct)} đang vượt trần 30%.`] : []),
+    ...(adsStatus === 'red' ? [metrics.revenue > 0 ? `%ADS ${formatPercent(metrics.adsPct)} đang vượt trần ${ADS_LIMIT_PERCENT}%.` : 'Có chi phí Ads nhưng chưa có doanh thu.'] : []),
     ...(metrics.mess > 0 && metrics.leadPct < 30 ? [`Tỷ lệ nhận data ${formatPercent(metrics.leadPct)} thấp hơn mục tiêu 30%.`] : []),
-    ...(metrics.leads > 0 && metrics.closePct < 32 ? [`Tỷ lệ chốt ${formatPercent(metrics.closePct)} thấp hơn mục tiêu 32%.`] : []),
+    ...(metrics.leads > 0 && metrics.closePct < CLOSE_WARNING_PERCENT ? [`Tỷ lệ chốt ${formatPercent(metrics.closePct)} thấp hơn ${CLOSE_WARNING_PERCENT}%.`] : []),
   ];
   const displayRows = [...daily].reverse();
   const filteredDisplayRows = displayRows.filter((row) => {
@@ -389,7 +394,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
       const leadPct = row.mess ? row.leads / row.mess * 100 : 0;
       const closePct = row.leads ? row.orders / row.leads * 100 : 0;
       const adsPct = row.revenue ? row.adCost / row.revenue * 100 : 0;
-      return (row.adCost > 0 && row.revenue <= 0) || (row.revenue > 0 && adsPct > 30) || (row.mess > 0 && leadPct < 30) || (row.leads > 0 && closePct < 32);
+      return (row.adCost > 0 && row.revenue <= 0) || (row.revenue > 0 && adsPct > ADS_LIMIT_PERCENT) || (row.mess > 0 && leadPct < 30) || (row.leads > 0 && closePct < CLOSE_WARNING_PERCENT);
     }
     return true;
   });
@@ -519,11 +524,11 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
       </div>
       <section className="grid grid-cols-2 gap-2.5 xl:grid-cols-4" aria-label="Các chỉ số cá nhân">
         <Card label="Doanh số" value={formatMoney(metrics.revenue)} sub={targetVnd ? `Mục tiêu tháng ${formatKpiMoney(targetVnd)}` : 'Tổng doanh thu trong kỳ'} status={targetVnd && metrics.revenue >= targetVnd ? 'Đạt KPI' : 'Theo dõi'} tone="green" icon={<Target size={12} />} progress={revenueProgress} />
-        <Card label="Đơn chốt" value={formatCount(metrics.orders)} sub={`${formatCount(metrics.leads)} data nhận trong kỳ`} status={metrics.closePct >= 32 ? 'Tốt' : 'Theo dõi'} tone={metrics.closePct >= 32 ? 'green' : 'amber'} icon={<ShoppingCart size={12} />} progress={metrics.closePct / 32 * 100} />
-        <Card label="%ADS · Chi phí/Doanh thu" value={formatPercent(metrics.adsPct)} sub={`Chi phí Ads ${formatMoney(metrics.adCost)}`} status={metrics.adsPct <= 30 ? 'Trong ngưỡng' : 'Báo động'} tone={metrics.adsPct <= 30 ? 'blue' : 'red'} icon={<TriangleAlert size={12} />} progress={metrics.adsPct / 30 * 100} />
+        <Card label="Đơn chốt" value={formatCount(metrics.orders)} sub={`${formatCount(metrics.leads)} data nhận trong kỳ`} status={closeStatus === 'green' ? 'Tốt' : closeStatus === 'red' ? 'Chốt thấp' : closeStatus === 'neutral' ? 'Chưa có dữ liệu' : 'Theo dõi'} tone={closeStatus} icon={<ShoppingCart size={12} />} progress={metrics.closePct / CLOSE_GOOD_PERCENT * 100} />
+        <Card label="%ADS · Chi phí/Doanh thu" value={metrics.revenue > 0 ? formatPercent(metrics.adsPct) : '—'} sub={`Chi phí Ads ${formatMoney(metrics.adCost)} · Trần ${ADS_LIMIT_PERCENT}%`} status={adsStatus === 'red' ? 'Báo động' : adsStatus === 'amber' ? 'Theo dõi' : adsStatus === 'neutral' ? 'Chưa có dữ liệu' : 'Trong ngưỡng'} tone={adsStatus} icon={<TriangleAlert size={12} />} progress={metrics.adsPct / ADS_LIMIT_PERCENT * 100} />
         <Card label="Tin nhắn" value={formatCount(metrics.mess)} sub="Tổng tin nhắn trong kỳ" status="Trong kỳ" tone="purple" icon={<MessageSquareText size={12} />} />
         <Card label="Data nhận · Lead" value={formatCount(metrics.leads)} sub={`Tỷ lệ nhận data ${formatPercent(metrics.leadPct)}`} status={metrics.leadPct >= 30 ? 'Đạt mục tiêu' : 'Theo dõi'} tone={metrics.leadPct >= 30 ? 'green' : 'amber'} icon={<Users size={12} />} progress={metrics.leadPct / 30 * 100} />
-        <Card label="Tỷ lệ chốt" value={formatPercent(metrics.closePct)} sub="Đơn chốt / data nhận" status={metrics.closePct >= 32 ? 'Đạt mục tiêu' : 'Theo dõi'} tone={metrics.closePct >= 32 ? 'green' : 'amber'} icon={<CheckCircle2 size={12} />} progress={metrics.closePct / 32 * 100} />
+        <Card label="Tỷ lệ chốt" value={metrics.leads > 0 ? formatPercent(metrics.closePct) : '—'} sub="Đơn chốt / data nhận" status={closeStatus === 'green' ? 'Tốt' : closeStatus === 'red' ? 'Chốt thấp' : closeStatus === 'neutral' ? 'Chưa có dữ liệu' : 'Theo dõi'} tone={closeStatus} icon={<CheckCircle2 size={12} />} progress={metrics.closePct / CLOSE_GOOD_PERCENT * 100} />
         <Card label="CPL · Chi phí mỗi Lead" value={formatMoney(metrics.cpl)} sub="Chi phí Ads / data nhận" status="Theo dõi" tone="purple" icon={<Users size={12} />} progress={metrics.cpl ? 100 - Math.min(100, metrics.cpl / 1000000 * 20) : 4} />
         <Card label="AOV · Giá trị đơn trung bình" value={formatMoney(metrics.aov)} sub="Doanh số / đơn chốt" status="Theo dõi" tone="green" icon={<ShoppingCart size={12} />} progress={metrics.aov ? 70 : 4} />
         <Card label="CPA · Chi phí mỗi tin nhắn" value={formatMoney(metrics.cpa)} sub="Chi phí Ads / tin nhắn" status="Theo dõi" tone="amber" icon={<MessageSquareText size={12} />} progress={metrics.cpa ? 100 - Math.min(100, metrics.cpa / 1000000 * 20) : 4} />
@@ -542,7 +547,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
                   <YAxis yAxisId="money" tickFormatter={(value: number) => formatMoney(value)} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} width={60} />
                   <YAxis yAxisId="percent" orientation="right" tickFormatter={(value: number) => `${value}%`} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} width={38} />
                   <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8e5', borderRadius: 8, color: '#1f2937', fontSize: 11, boxShadow: '0 8px 24px rgba(15,23,42,.1)' }} labelFormatter={(value) => formatReportDateVi(String(value))} formatter={(value, name) => [name === '%ADS' ? `${Number(value).toFixed(1)}%` : formatMoney(Number(value)), name]} />
-                  <ReferenceLine yAxisId="percent" y={30} stroke="#f43f5e" strokeDasharray="5 5" />
+                  <ReferenceLine yAxisId="percent" y={ADS_LIMIT_PERCENT} stroke="#f43f5e" strokeDasharray="5 5" />
                   <Bar yAxisId="money" dataKey="revenue" name="Doanh số" fill="#16a34a" radius={[3, 3, 0, 0]} maxBarSize={15} />
                   <Bar yAxisId="money" dataKey="adCost" name="Chi phí Ads" fill="#6366f1" radius={[3, 3, 0, 0]} maxBarSize={15} />
                   <Line yAxisId="percent" type="monotone" dataKey={(row: DailyMetrics) => row.revenue ? row.adCost / row.revenue * 100 : 0} name="%ADS" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
@@ -550,7 +555,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
               </ResponsiveContainer>
             )}
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[9px] text-[#64748b]"><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-emerald-600" />Doanh số</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-indigo-500" />Chi phí</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-amber-500" />%ADS thực tế</span><span className="inline-flex items-center gap-1.5"><i className="h-px w-3 bg-rose-500" />Trần %ADS 30%</span></div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[9px] text-[#64748b]"><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-emerald-600" />Doanh số</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-indigo-500" />Chi phí</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-amber-500" />%ADS thực tế</span><span className="inline-flex items-center gap-1.5"><i className="h-px w-3 bg-rose-500" />Trần %ADS {ADS_LIMIT_PERCENT}%</span></div>
         </section>
 
         <section className="rounded-xl border border-[var(--stitch-border)] bg-white p-3.5 shadow-[var(--stitch-shadow)] sm:p-4">
@@ -559,7 +564,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
             {[
               { label: 'Doanh thu dự kiến', value: forecastRevenue, rate: 100, color: 'bg-purple-600', note: 'Đã trừ dự phòng hoàn hủy 5%' },
               { label: 'Chi phí quảng cáo dự kiến', value: forecastAdCost, rate: forecastRevenue ? forecastAdCost / forecastRevenue * 100 : 0, color: 'bg-sky-600', note: 'Đã cộng dự phòng phí 6%' },
-              { label: '%ADS dự kiến', value: forecastAdsPct, rate: forecastAdsPct, color: 'bg-emerald-600', note: 'Chi phí quảng cáo / doanh thu dự kiến' },
+              { label: '%ADS dự kiến', value: forecastAdsPct, rate: forecastAdsPct, color: adsTone(forecastAdsPct) === 'red' ? 'bg-rose-600' : adsTone(forecastAdsPct) === 'amber' ? 'bg-amber-500' : 'bg-emerald-600', note: 'Chi phí quảng cáo / doanh thu dự kiến' },
             ].map((stage) => (
               <div key={stage.label} className="rounded-lg border border-[var(--stitch-border)] bg-[#f8faf9] p-2.5">
                 <div className="flex items-baseline justify-between gap-2"><span className="text-[10px] font-bold text-[#64748b]">{stage.label}</span><strong className="text-base font-extrabold font-mono text-[#1f2937]">{stage.label.includes('%ADS') ? formatPercent(stage.value) : formatMoney(stage.value)}</strong></div>
@@ -598,7 +603,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
             const toneClass = item.tone === 'rose' ? 'border-rose-100 bg-rose-50 text-rose-700' : item.tone === 'amber' ? 'border-amber-100 bg-amber-50 text-amber-700' : item.tone === 'blue' ? 'border-sky-100 bg-sky-50 text-sky-700' : 'border-emerald-100 bg-emerald-50 text-emerald-700';
             return <article key={item.label} className={`min-w-0 rounded-lg border p-2 shadow-[0_2px_8px_rgba(15,80,43,.04)] ${toneClass}`}>
               <div className="flex items-center gap-1.5"><span className="grid h-7 w-7 shrink-0 place-items-center rounded bg-white/80">{item.icon}</span><span className="truncate text-[9px] font-bold leading-tight text-slate-600">{item.label}</span></div>
-              <strong className="mt-1 block truncate text-xl font-extrabold text-slate-900">{item.value}</strong>
+              <strong className={'mt-1 block truncate text-xl font-extrabold ' + (item.label === '% ADS TB' ? performanceTextClass(adsStatus) : item.label === 'Tỷ lệ chốt TB' ? performanceTextClass(closeStatus) : 'text-slate-900')}>{item.value}</strong>
               <p className="mt-1 truncate text-[9px] font-bold text-emerald-700">↗ {item.change} <span className="font-medium text-slate-500">so với kỳ trước</span></p>
             </article>;
           })}
@@ -616,13 +621,12 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
                 const adsPct = row.revenue ? row.adCost / row.revenue * 100 : 0;
                 const greenPill = 'inline-flex min-w-[58px] justify-center rounded-full bg-emerald-100 px-3 py-1.5 font-extrabold text-emerald-800';
                 const redPill = 'inline-flex min-w-[58px] justify-center rounded-full bg-rose-100 px-3 py-1.5 font-extrabold text-rose-700';
-                const amberPill = 'inline-flex min-w-[58px] justify-center rounded-full bg-amber-100 px-3 py-1.5 font-extrabold text-amber-800';
                 return <tr key={row.date} className={`border-b border-emerald-900/[0.04] hover:bg-emerald-50 ${index % 2 === 0 ? 'bg-emerald-50/70' : 'bg-white'}`}>
                   <td className="p-2.5">{index + 1}</td><td className="p-2.5 font-bold">{dateText(row.date)}</td><td className="p-2.5">{formatCount(row.mess)}</td><td className="p-2.5">{formatCount(row.leads)}</td>
                   <td className="p-2.5"><span className={leadPct >= 30 ? greenPill : redPill}>{formatPercent(leadPct)}</span></td><td className="p-2.5">{formatCount(row.orders)}</td>
-                  <td className="p-2.5"><span className={closePct >= 32 ? greenPill : amberPill}>{formatPercent(closePct)}</span></td>
+                  <td className="p-2.5"><span className={performancePillClass(closeTone(row.leads > 0 ? closePct : null))}>{row.leads > 0 ? formatPercent(closePct) : '—'}</span></td>
                   <td className="p-2.5 font-bold text-emerald-800">{row.revenue ? formatMoney(row.revenue) : '—'}</td><td className="p-2.5">{row.adCost ? formatMoney(row.adCost) : '—'}</td>
-                  <td className="p-2.5"><span className={adsPct <= 30 ? greenPill : redPill}>{formatPercent(adsPct)}</span></td>
+                  <td className="p-2.5"><span className={performancePillClass(adsTone(row.revenue > 0 ? adsPct : row.adCost > 0 ? 100 : null))}>{row.revenue > 0 ? formatPercent(adsPct) : '—'}</span></td>
                   <td className="p-2.5"><button type="button" title={`Xem riêng ngày ${dateText(row.date)}`} aria-label={`Xem riêng ngày ${dateText(row.date)}`} onClick={() => { setRange({ from: row.date, to: row.date }); setDraftRange({ from: row.date, to: row.date }); setPreset('custom'); }} className="rounded-md p-1 text-slate-500 hover:bg-emerald-100 hover:text-emerald-800"><MoreVertical size={17} /></button></td>
                 </tr>;
               }) : <tr><td colSpan={11} className="p-8 text-slate-500">{dailyFilter === 'all' ? 'Không có dữ liệu trong khoảng thời gian này.' : 'Không có ngày phù hợp với bộ lọc.'}</td></tr>}

@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { ADS_LIMIT_PERCENT as ADS_DT_WARN, ADS_WARNING_PERCENT as ADS_DT_MED, adsTone, closeTone, performanceTextClass, PERFORMANCE_COLORS } from '../../../utils/performanceThresholds';
+import type { PerformanceTone } from '../../../utils/performanceThresholds';
 import type { Employee, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { formatCompactVnd, formatReportDateVi } from '../mkt/mktDetailReportShared';
@@ -182,8 +184,6 @@ function groupRowsByMarketerKey(rows: ReportRow[]): Map<string, ReportRow[]> {
   return map;
 }
 
-const ADS_DT_WARN = 45;
-const ADS_DT_MED = 30;
 
 const iconFill: React.CSSProperties = { fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" };
 
@@ -260,7 +260,8 @@ const MetricCard: React.FC<{
   deltaTone?: 'good' | 'warning' | 'danger';
   trend: number[];
   tone?: 'warning' | 'muted';
-}> = ({ title, value, detail, icon: Icon, color, badge, delta, deltaTone = 'good', trend, tone }) => {
+  valueTone?: PerformanceTone;
+}> = ({ title, value, detail, icon: Icon, color, badge, delta, deltaTone = 'good', trend, tone, valueTone }) => {
   const finite = trend.filter(Number.isFinite);
   const min = Math.min(...finite);
   const max = Math.max(...finite);
@@ -269,7 +270,7 @@ const MetricCard: React.FC<{
   return (
     <article className={`personal-kpi-card ${tone ? `is-${tone}` : ''}`} style={{ '--metric-accent': color } as React.CSSProperties}>
       <div className="personal-kpi-top"><span className="personal-kpi-icon"><Icon size={17} strokeWidth={1.8} /></span><span className="personal-kpi-badge">{badge}</span></div>
-      <div className="personal-kpi-main"><p className="personal-kpi-title">{title}</p><div className="personal-kpi-value-row"><strong className="personal-kpi-value">{value}</strong>{delta != null && Number.isFinite(delta) ? <span className={`personal-kpi-delta is-${deltaTone}`}>{delta >= 0 ? '↑' : '↓'} {delta > 0 ? '+' : ''}{delta.toFixed(1)}%</span> : <span className="personal-kpi-delta is-muted">N/A</span>}</div></div>
+      <div className="personal-kpi-main"><p className="personal-kpi-title">{title}</p><div className="personal-kpi-value-row"><strong className={`personal-kpi-value ${valueTone ? performanceTextClass(valueTone) : ''}`}>{value}</strong>{delta != null && Number.isFinite(delta) ? <span className={`personal-kpi-delta is-${deltaTone}`}>{delta >= 0 ? '↑' : '↓'} {delta > 0 ? '+' : ''}{delta.toFixed(1)}%</span> : <span className="personal-kpi-delta is-muted">N/A</span>}</div></div>
       <div className="personal-kpi-footer"><span className="personal-kpi-detail">{detail}</span><svg className={`personal-kpi-sparkline ${!hasTrend ? 'is-empty' : ''}`} viewBox="0 0 64 20" fill="none" aria-hidden="true"><polyline points={hasTrend ? points : '2,11 62,11'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
     </article>
   );
@@ -476,7 +477,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
     () =>
       byMarketer.filter((m) => {
         if (m.revenue <= 0 || m.adCost <= 0) return false;
-        return (m.adCost / m.revenue) * 100 >= ADS_DT_WARN;
+        return (m.adCost / m.revenue) * 100 > ADS_DT_WARN;
       }),
     [byMarketer]
   );
@@ -489,7 +490,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
       const cpo = m.orders > 0 ? m.adCost / m.orders : null;
       const chot = tyLeChot(m.tongData, m.orders, m.tongLead);
       let status: 'good' | 'med' | 'bad' = 'good';
-      if (adsPct >= ADS_DT_WARN) status = 'bad';
+      if (adsPct > ADS_DT_WARN) status = 'bad';
       else if (adsPct >= ADS_DT_MED) status = 'med';
       const isBurn = status === 'bad' && m.revenue > 0;
       return { rank: idx + 1, m, adsPct, cpl, cpo, chot, status, isBurn };
@@ -733,8 +734,8 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
         <div className="personal-alert-copy">
           <h2>{burnMarketers.length ? `${burnMarketers.length} chỉ số đang vượt ngưỡng theo dõi` : 'Các chỉ số quảng cáo đang trong ngưỡng theo dõi'}</h2>
           <p>{burnMarketers.length
-            ? `CP/DT từ ${ADS_DT_WARN}% trở lên ở ${burnMarketers.slice(0, 4).map((item) => item.displayName).join(', ')}${burnMarketers.length > 4 ? ` và ${burnMarketers.length - 4} nhân sự khác` : ''}.`
-            : `Chưa ghi nhận nhân sự có CP/DT từ ${ADS_DT_WARN}% trong khoảng ${monthLabel}.`}</p>
+            ? `CP/DT trên ${ADS_DT_WARN}% ở ${burnMarketers.slice(0, 4).map((item) => item.displayName).join(', ')}${burnMarketers.length > 4 ? ` và ${burnMarketers.length - 4} nhân sự khác` : ''}.`
+            : `Chưa ghi nhận nhân sự có CP/DT trên ${ADS_DT_WARN}% trong khoảng ${monthLabel}.`}</p>
           <div className="personal-alert-bottom"><p>{rows.length ? `${rows.length.toLocaleString('vi-VN')} dòng báo cáo` : 'Chưa có dữ liệu báo cáo trong khoảng thời gian đã chọn.'}<span aria-hidden="true">·</span>{activeCampaigns} nhân sự có dữ liệu</p>{burnMarketers.length > 0 && <button type="button" onClick={() => navigate(crmAdminPathForView('burn-detect'))}>Xem chi tiết vi phạm →</button>}</div>
         </div>
       </section>
@@ -742,11 +743,11 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
       <section className="personal-kpi-grid" aria-label="Chỉ số tổng quan">
         <MetricCard title="Doanh số" value={formatCompactVnd(totals.revenue)} detail="so với kỳ trước" icon={TrendingUp} color="#10a768" badge="Doanh thu" delta={revDelta} trend={daily.slice(-8).map((d) => d.rev)} />
         <MetricCard title="Chi phí quảng cáo" value={formatCompactVnd(totals.adCost)} detail="so với kỳ trước" icon={CreditCard} color="#0284c7" badge="Chi phí" delta={spendDelta} deltaTone={spendDelta != null && spendDelta > 0 ? 'warning' : 'good'} trend={daily.slice(-8).map((d) => d.spend)} />
-        <MetricCard title="CP/DT" value={adsRevenuePct == null ? '—' : `${adsRevenuePct.toFixed(1)}%`} detail={`Ngưỡng theo dõi: ${ADS_DT_WARN}%`} icon={TriangleAlert} color={adsRevenuePct != null && adsRevenuePct >= ADS_DT_WARN ? '#f43f5e' : '#f59e0b'} badge={adsRevenuePct == null ? 'Chưa có dữ liệu' : adsRevenuePct >= ADS_DT_WARN ? 'Cần chú ý' : 'Trong ngưỡng'} delta={adsRevenuePct != null && prevTotals.adsDtPct != null ? adsRevenuePct - prevTotals.adsDtPct : null} deltaTone="danger" trend={daily.slice(-8).map((d) => d.adsPct)} tone={adsRevenuePct != null && adsRevenuePct >= ADS_DT_WARN ? 'warning' : undefined} />
+        <MetricCard title="CP/DT" value={adsRevenuePct == null ? '—' : `${adsRevenuePct.toFixed(1)}%`} detail={`Trần Ads: ${ADS_DT_WARN}% · Theo dõi từ ${ADS_DT_MED}%`} icon={TriangleAlert} color={PERFORMANCE_COLORS[adsTone(adsRevenuePct)]} valueTone={adsTone(adsRevenuePct)} badge={adsRevenuePct == null ? 'Chưa có dữ liệu' : adsTone(adsRevenuePct) === 'red' ? 'Vượt trần' : adsTone(adsRevenuePct) === 'amber' ? 'Theo dõi' : 'Trong ngưỡng'} delta={adsRevenuePct != null && prevTotals.adsDtPct != null ? adsRevenuePct - prevTotals.adsDtPct : null} deltaTone="danger" trend={daily.slice(-8).map((d) => d.adsPct)} tone={adsTone(adsRevenuePct) === 'red' ? 'warning' : undefined} />
         <MetricCard title="Tin nhắn" value={Math.round(totals.mess).toLocaleString('vi-VN')} detail="theo báo cáo" icon={MessageCircleMore} color="#a855f7" badge="Tương tác" delta={pctChange(totals.mess, prevTotals.mess)} trend={daily.slice(-8).map((d) => d.mess)} />
         <MetricCard title="Lead" value={Math.round(leadCount).toLocaleString('vi-VN')} detail={leadCount ? 'so với kỳ trước' : 'chưa phát sinh'} icon={UserRoundPlus} color="#38bdf8" badge="Khách tiềm năng" delta={pctChange(leadCount, previousLeadCount)} trend={daily.slice(-8).map((d) => d.leads || d.data)} />
         <MetricCard title="Đơn hàng" value={Math.round(totals.orders).toLocaleString('vi-VN')} detail={averageOrderValue == null ? 'Chưa có đơn hàng trong kỳ' : `Giá trị TB ${formatCompactVnd(averageOrderValue)}`} icon={ShoppingBag} color="#f59e0b" badge="Chuyển đổi" delta={pctChange(totals.orders, prevTotals.orders)} trend={daily.slice(-8).map((d) => d.orders)} />
-        <MetricCard title="Tỷ lệ chốt" value={closeRate == null ? '—' : `${closeRate.toFixed(1)}%`} detail={`${Math.round(totals.orders).toLocaleString('vi-VN')} đơn / ${Math.round(totals.tongData || totals.tongLead).toLocaleString('vi-VN')} data`} icon={Zap} color="#14b8a6" badge="Hiệu quả" trend={daily.slice(-8).map((d) => tyLeChot(d.data, d.orders, d.leads) || 0)} />
+        <MetricCard title="Tỷ lệ chốt" value={closeRate == null ? '—' : `${closeRate.toFixed(1)}%`} detail={`${Math.round(totals.orders).toLocaleString('vi-VN')} đơn / ${Math.round(totals.tongData || totals.tongLead).toLocaleString('vi-VN')} data`} icon={Zap} color={PERFORMANCE_COLORS[closeTone(closeRate)]} valueTone={closeTone(closeRate)} badge={closeRate == null ? 'Chưa có dữ liệu' : closeTone(closeRate) === 'green' ? 'Hiệu quả' : closeTone(closeRate) === 'amber' ? 'Theo dõi' : 'Chốt thấp'} trend={daily.slice(-8).map((d) => tyLeChot(d.data, d.orders, d.leads) || 0)} />
         <MetricCard title="CPL" value={costPerLead == null ? '—' : formatCompactVnd(costPerLead)} detail="Chi phí quảng cáo / lead" icon={ShieldCheck} color="#6366f1" badge="Chi phí / lead" trend={daily.slice(-8).map((d) => (d.leads || d.data) > 0 ? d.spend / (d.leads || d.data) : 0)} />
       </section>
 
@@ -813,10 +814,10 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
                     <td>{Math.round(point.leads).toLocaleString('vi-VN')}</td>
                     <td>{Math.round(point.data).toLocaleString('vi-VN')}</td>
                     <td>{Math.round(point.orders).toLocaleString('vi-VN')}</td>
-                    <td className={pointClose != null && pointClose >= 10 ? 'metric-positive' : ''}>{pointClose == null ? '—' : `${pointClose.toFixed(1)}%`}</td>
+                    <td className={performanceTextClass(closeTone(pointClose))}>{pointClose == null ? '—' : `${pointClose.toFixed(1)}%`}</td>
                     <td className="metric-positive">{formatCompactVnd(point.rev)}</td>
                     <td>{formatCompactVnd(point.spend)}</td>
-                    <td className={point.adsPct >= ADS_DT_WARN ? 'metric-negative' : ''}>{point.rev > 0 ? `${point.adsPct.toFixed(1)}%` : '—'}</td>
+                    <td className={performanceTextClass(adsTone(point.rev > 0 ? point.adsPct : null))}>{point.rev > 0 ? `${point.adsPct.toFixed(1)}%` : '—'}</td>
                   </tr>
                 );
               })}
@@ -835,7 +836,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
                 <tr key={m.key}>
                   <td style={{ textAlign: 'left' }}>{m.displayName}</td><td>{m.team || '—'}</td><td>{m.orders.toLocaleString('vi-VN')}</td>
                   <td className="metric-positive">{formatCompactVnd(m.revenue)}</td><td>{formatCompactVnd(m.adCost)}</td>
-                  <td className={status === 'bad' ? 'metric-negative' : ''}>{m.revenue > 0 ? `${adsPct.toFixed(1)}%` : '—'}</td>
+                  <td className={performanceTextClass(adsTone(m.revenue > 0 ? adsPct : null))}>{m.revenue > 0 ? `${adsPct.toFixed(1)}%` : '—'}</td>
                   <td>{status === 'bad' ? 'Cần theo dõi' : status === 'med' ? 'Theo dõi' : 'Tốt'}</td>
                   <td><button type="button" onClick={() => setMktDetailKey(m.key)} className="text-sky-300 hover:text-white" aria-label={`Chi tiết ${m.displayName}`}><Eye size={16} /></button></td>
                 </tr>

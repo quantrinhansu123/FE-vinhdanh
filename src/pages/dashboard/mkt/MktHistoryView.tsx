@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { ADS_LIMIT_PERCENT, ADS_WARNING_PERCENT, closeTone, performanceTextClass } from '../../../utils/performanceThresholds';
 import type { AuthUser, Employee, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { fetchUpcareMktEmployees, isUpcareMktConfigured } from '../../../api/upcareCrm';
@@ -92,8 +93,8 @@ function adsSpendTone(row: ReportRow, ads: number | null): string {
     return 'text-[var(--ld-error)]';
   }
   if (ads == null) return 'text-[var(--ld-on-surface-variant)]';
-  if (ads >= 45) return 'text-[var(--ld-error)]';
-  if (ads >= 35) return 'text-[var(--ld-tertiary)]';
+  if (ads > ADS_LIMIT_PERCENT) return 'text-[var(--ld-error)]';
+  if (ads >= ADS_WARNING_PERCENT) return 'text-[var(--ld-tertiary)]';
   return 'text-[var(--ld-secondary)]';
 }
 
@@ -109,13 +110,13 @@ function adsDtPill(row: ReportRow, ads: number | null): { label: string; box: st
   if (ads == null) {
     return { label: '—', box: 'bg-[var(--ld-surface-container-highest)] text-[var(--ld-on-surface-variant)] border border-[var(--ld-outline-variant)]/20' };
   }
-  if (ads >= 45) {
+  if (ads > ADS_LIMIT_PERCENT) {
     return {
       label: `${ads.toFixed(1)}%`,
       box: 'bg-[color-mix(in_srgb,var(--ld-error-container)_20%,transparent)] text-[var(--ld-error)] border border-[color-mix(in_srgb,var(--ld-error)_20%,transparent)]',
     };
   }
-  if (ads >= 35) {
+  if (ads >= ADS_WARNING_PERCENT) {
     return {
       label: `${ads.toFixed(1)}%`,
       box: 'bg-[color-mix(in_srgb,var(--ld-tertiary-container)_20%,transparent)] text-[var(--ld-tertiary)] border border-[color-mix(in_srgb,var(--ld-tertiary)_20%,transparent)]',
@@ -394,31 +395,39 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
     }
 
     const email = reportUser.email.trim().toLowerCase();
-    const multiDay = applied.from !== applied.to;
-    const warnMulti =
-      multiDay &&
-      !window.confirm(
-        `Khoảng ngày ${applied.from} → ${applied.to}: API Fabico trả một mức doanh số / nhân viên cho cả khoảng.\n` +
-          `Mọi dòng khớp Mã NV sẽ nhận cùng số đó (có thể trùng nếu nhiều dòng cùng NV).\n\nTiếp tục?`
-      );
-    if (warnMulti) return;
 
     setUpcareSyncBusy(true);
     try {
-      const mktRows = await fetchUpcareMktEmployees({
-        dateFrom: applied.from,
-        dateTo: applied.to,
-      });
-      const lookup = buildUpcareAmountLookup(mktRows);
+      // API trả tổng theo khoảng; truy vấn từng ngày để mỗi dòng nhận đúng số liệu ngày đó.
+      const reportDates = Array.from(new Set(
+        rows.map((row) => row.report_date?.slice(0, 10) || '')
+          .filter((date) => date >= applied.from && date <= applied.to)
+      )).sort();
+      const lookupByDate = new Map<string, ReturnType<typeof buildUpcareAmountLookup>>();
+      for (let i = 0; i < reportDates.length; i += 4) {
+        const batch = await Promise.all(reportDates.slice(i, i + 4).map(async (reportDate) => {
+          const mktRows = await fetchUpcareMktEmployees({ dateFrom: reportDate, dateTo: reportDate });
+          return [reportDate, buildUpcareAmountLookup(mktRows)] as const;
+        }));
+        for (const [reportDate, lookup] of batch) lookupByDate.set(reportDate, lookup);
+      }
 
-      const updates: { id: string; revenue: number }[] = [];
+      const updatesByPersonDay = new Map<string, { id: string; revenue: number }>();
       let skippedNoTag = 0;
       let skippedNoMatch = 0;
+      let skippedDuplicatePersonDay = 0;
       for (const row of rows) {
         const id = row.id?.trim();
         if (!id) continue;
-        if (!extractMaNvFromBracketPage(row.page)) {
+        const tag = extractMaNvFromBracketPage(row.page);
+        if (!tag) {
           skippedNoTag++;
+          continue;
+        }
+        const reportDate = row.report_date?.slice(0, 10) || '';
+        const lookup = lookupByDate.get(reportDate);
+        if (!lookup) {
+          skippedNoMatch++;
           continue;
         }
         const revenue = resolveUpcareAmountForReportRow(row, lookup, maNsLookup);
@@ -426,8 +435,25 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
           skippedNoMatch++;
           continue;
         }
-        updates.push({ id, revenue });
+        const staffMatch = matchEmployeeByBracketTag(tag, maNsLookup);
+        const personKey = /^\d+$/.test(tag)
+          ? `upcare:${Number(tag)}`
+          : staffMatch
+            ? `employee:${staffMatch.id}`
+            : `name:${tag.trim().toLocaleLowerCase()}`;
+        const personDayKey = `${reportDate}\0${personKey}`;
+        const existingUpdate = updatesByPersonDay.get(personDayKey);
+        if (existingUpdate) {
+          skippedDuplicatePersonDay++;
+          // Keep the same stable row as the summary card, regardless of query order.
+          if (id.localeCompare(existingUpdate.id) < 0) {
+            updatesByPersonDay.set(personDayKey, { id, revenue });
+          }
+        } else {
+          updatesByPersonDay.set(personDayKey, { id, revenue });
+        }
       }
+      const updates = Array.from(updatesByPersonDay.values());
 
       if (updates.length === 0) {
         window.alert(
@@ -442,8 +468,8 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
       if (
         !window.confirm(
           `Cập nhật doanh số (revenue) cho ${updates.length} dòng báo cáo theo Fabico CRM?\n` +
-            `Khoảng API: ${applied.from} … ${applied.to}\n` +
-            `Bỏ qua: không [Mã NV] trong Page ${skippedNoTag}, không khớp API ${skippedNoMatch}.`
+            `API sẽ gọi riêng cho ${reportDates.length} ngày từ ${applied.from} đến ${applied.to}.\n` +
+            `Bỏ qua: không [Mã NV] trong Page ${skippedNoTag}, không khớp API ${skippedNoMatch}, dòng trùng nhân viên/ngày ${skippedDuplicatePersonDay}.`
         )
       ) {
         return;
@@ -469,7 +495,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
         }
       }
 
-      setExcelMsg(`Đồng bộ Fabico: đã cập nhật doanh số cho ${ok} dòng (${applied.from} … ${applied.to}).`);
+      setExcelMsg(`Đồng bộ Fabico theo ngày: đã cập nhật doanh số cho ${ok} dòng (${applied.from} … ${applied.to}).`);
       await load();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Lỗi không xác định';
@@ -741,7 +767,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
             title={
               !isUpcareMktConfigured()
                 ? 'Cần VITE_UPCARE_CRM_BEARER_TOKEN'
-                : 'Gọi API Fabico /employee/mkt theo khoảng ngày đang lọc; khớp cột Mã NV với ID hoặc tên nhân viên'
+                : 'Gọi API Fabico /employee/mkt riêng cho từng ngày đang lọc; khớp Mã NV với ID hoặc tên nhân viên'
             }
             className="flex items-center gap-2 px-4 py-2 bg-[color-mix(in_srgb,var(--ld-primary)_12%,transparent)] text-[var(--ld-primary)] rounded-lg border border-[color-mix(in_srgb,var(--ld-primary)_35%,transparent)] text-xs leader-dash-label font-bold hover:bg-[color-mix(in_srgb,var(--ld-primary)_18%,transparent)] transition-all disabled:opacity-40"
           >
@@ -764,7 +790,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
           <span className="text-[var(--ld-on-surface)] font-bold">Doanh số</span> khi{' '}
           <span className="text-[var(--ld-on-surface)] font-bold">Mã NV</span> khớp —{' '}
           <span className="text-[var(--ld-on-surface)] font-bold">[số]</span> trong Page = ID nhân viên trên Fabico, hoặc{' '}
-          <span className="text-[var(--ld-on-surface)] font-bold">[mã_ns]</span> khớp nhân sự CRM + tên khớp Fabico. Nhiều ngày: API là tổng khoảng; xác nhận trước khi ghi.
+          <span className="text-[var(--ld-on-surface)] font-bold">[mã_ns]</span> khớp nhân sự CRM + tên khớp Fabico. Khoảng nhiều ngày được truy vấn riêng từng ngày để ghi đúng doanh số.
         </p>
         <p className="mt-2 text-[10px] text-[var(--ld-on-surface-variant)] leading-relaxed max-w-[920px]">
           Hai kiểu file: (1) Mẫu CRM — nút Tải mẫu Excel, cột ngày A–C. (2) Export Ads: chỉ nhập dòng có{' '}
@@ -915,7 +941,7 @@ export const MktHistoryView: React.FC<MktHistoryViewProps> = ({ reportUser = nul
                       <td className="p-3 text-right text-[var(--ld-on-surface)]">{row.order_count ?? '—'}</td>
                       <td className="p-3 text-right text-[var(--ld-on-surface-variant)]">
                         {chot != null ? (
-                          <span className={chot >= 20 ? 'text-[var(--ld-secondary)] font-semibold' : ''}>{chot.toFixed(1)}%</span>
+                          <span className={`font-semibold ${performanceTextClass(closeTone(chot))}`}>{chot.toFixed(1)}%</span>
                         ) : (
                           '—'
                         )}

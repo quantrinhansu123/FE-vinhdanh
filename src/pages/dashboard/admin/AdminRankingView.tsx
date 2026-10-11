@@ -128,7 +128,7 @@ export const AdminRankingView: React.FC = () => {
       <div className="mb-3 flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--bg2)] px-4 py-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#6d9fe5] to-[#3e659a] text-[11px] font-extrabold tracking-[-0.5px] text-white shadow-sm">MAP</div>
         <div className="min-w-0">
-          <div className="text-[12px] font-extrabold text-[var(--text)]">MAP - Marketing Analytic Platform</div>
+          <div className="text-[12px] font-extrabold text-[var(--text)]">MAP - Marketing Analytics System</div>
           <div className="text-[10px] text-[var(--text3)]">Bảng xếp hạng doanh số · {monthBadge}</div>
         </div>
       </div>

@@ -51,7 +51,7 @@ export const MktBillView: React.FC = () => {
           }} 
           indicator={{ 
             type: 'G', 
-            text: 'Ads/DT = 15.2% — An toàn (<39%)' 
+            text: 'Ads/DT = 15.2% — An toàn (<33%)'
           }} 
         />
 

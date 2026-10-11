@@ -1,4 +1,5 @@
 import React from 'react';
+import { adsTone, closeTone, performanceTextClass } from '../../../utils/performanceThresholds';
 
 interface SectionCardProps {
   title: string;
@@ -387,11 +388,11 @@ export const BillCard: React.FC<BillCardProps> = ({
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
           <span className="text-xs text-[#476355]">% Ads / Doanh số</span>
-          <span className="font-mono text-sm font-black text-[#006e51]">{performance.adsRatio}</span>
+          <span className={`font-mono text-sm font-black ${performanceTextClass(adsTone(parseFloat(performance.adsRatio.replace(',', '.'))))}`}>{performance.adsRatio}</span>
         </div>
         <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
           <span className="text-xs text-[#476355]">Tỷ lệ chốt</span>
-          <span className="font-mono text-sm font-black text-[#006e51]">{performance.closeRate}</span>
+          <span className={`font-mono text-sm font-black ${performanceTextClass(closeTone(parseFloat(performance.closeRate.replace(',', '.'))))}`}>{performance.closeRate}</span>
         </div>
         <div className="flex items-center justify-between py-2 border-b border-[#e2e8e5]">
           <span className="text-xs text-[#476355]">Tỷ lệ xin số</span>

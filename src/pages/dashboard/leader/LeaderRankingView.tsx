@@ -3,6 +3,7 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { SectionCard, RankItem, ProgressRow, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { ADS_LIMIT_PERCENT, ADS_WARNING_PERCENT } from '../../../utils/performanceThresholds';
 import type { AuthUser, Employee } from '../../../types';
 import { REPORTS_TABLE, formatCompactVnd, formatKpiMoney } from '../mkt/mktDetailReportShared';
 
@@ -39,8 +40,8 @@ function adsDtPct(ads: number, rev: number): number | null {
 
 function heatBadgeType(pct: number | null): 'G' | 'Y' | 'R' | undefined {
   if (pct == null || !Number.isFinite(pct)) return undefined;
-  if (pct < 30) return 'G';
-  if (pct <= 45) return 'Y';
+  if (pct < ADS_WARNING_PERCENT) return 'G';
+  if (pct <= ADS_LIMIT_PERCENT) return 'Y';
   return 'R';
 }
 
@@ -244,9 +245,9 @@ export const LeaderRankingView: React.FC<LeaderRankingViewProps> = ({ viewer = n
 
     const top = byEmployee.slice(0, 3);
     const sortedByAds = [...byEmployee].filter((x) => x.pctAds != null).sort((a, b) => (b.pctAds as number) - (a.pctAds as number));
-    const risk = sortedByAds[0] || null;
+    const risk = sortedByAds.find((row) => (row.pctAds as number) >= ADS_WARNING_PERCENT) || null;
 
-    const critical = risk && (risk.pctAds as number) >= 45;
+    const critical = risk && (risk.pctAds as number) > ADS_LIMIT_PERCENT;
     const riskType: 'G' | 'Y' | 'R' = critical ? 'R' : (risk ? 'Y' : 'G');
 
     let advisor = '';
@@ -390,8 +391,8 @@ export const LeaderRankingView: React.FC<LeaderRankingViewProps> = ({ viewer = n
           <SectionCard title="🎯 Tiêu chí xếp hạng Team">
             <div className="space-y-[12px]">
               <ProgressRow label="Doanh số (KPI)" valueText="40%" percent={40} color="var(--G)" subLabel="Trọng số cao nhất" />
-              <ProgressRow label="Tỷ lệ Ads/DT (<20%)" valueText="30%" percent={30} color="var(--accent)" />
-              <ProgressRow label="Tỷ lệ chốt Lead" valueText="20%" percent={20} color="var(--P)" />
+              <ProgressRow label={`Tỷ lệ Ads/DT (trần ${ADS_LIMIT_PERCENT}%)`} valueText="30%" percent={30} color="var(--accent)" subLabel={`Xanh < ${ADS_WARNING_PERCENT}% · Vàng ${ADS_WARNING_PERCENT}–${ADS_LIMIT_PERCENT}% · Đỏ > ${ADS_LIMIT_PERCENT}%`} />
+              <ProgressRow label="Tỷ lệ chốt Lead" valueText="20%" percent={20} color="var(--P)" subLabel="Xanh > 35% · Vàng 30–35% · Đỏ < 30%" />
               <ProgressRow label="Số lượng lead mới" valueText="10%" percent={10} color="var(--Y)" />
             </div>
           </SectionCard>

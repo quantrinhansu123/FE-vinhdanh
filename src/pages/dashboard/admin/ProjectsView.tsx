@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { isVisibleProject } from '../../../utils/managementVisibility';
 import type { DuAnRow } from '../../../types';
 import { ProjectFormModal } from './ProjectFormModal';
 
@@ -116,7 +117,7 @@ export const ProjectsView: React.FC = () => {
       setError(qErr.message || 'Không tải được danh sách dự án.');
       setRows([]);
     } else {
-      setRows((data || []) as DuAnRow[]);
+      setRows(((data || []) as DuAnRow[]).filter(isVisibleProject));
     }
     setLoading(false);
   }, []);

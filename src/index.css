@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+.performance-text-green { color: #059669 !important; }
+.performance-text-amber { color: #ca8a04 !important; }
+.performance-text-red { color: #e11d48 !important; }
+.performance-text-neutral { color: #64748b !important; }
+.performance-pill { display: inline-flex; min-width: 58px; justify-content: center; border-radius: 999px; padding: 6px 12px; font-weight: 800; }
+.performance-pill-green { background: #d1fae5; color: #047857 !important; }
+.performance-pill-amber { background: #fef3c7; color: #a16207 !important; }
+.performance-pill-red { background: #ffe4e6; color: #be123c !important; }
+.performance-pill-neutral { background: #f1f5f9; color: #64748b !important; }
+
 @theme {
   /* Toàn hệ thống dùng Roboto (sans + “mono” UI đều Roboto + tabular-nums nơi cần) */
   --font-sans: "Roboto", sans-serif;

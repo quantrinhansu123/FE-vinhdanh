@@ -3,6 +3,7 @@ import { CalendarDays, Eye, Loader2, RefreshCw, Users, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { ADS_LIMIT_PERCENT, ADS_WARNING_PERCENT, adsTone, closeTone, performanceTextClass } from '../../../utils/performanceThresholds';
 import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 import type { AuthUser, Employee } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
@@ -234,8 +235,8 @@ function leadCount(a: Agg): number {
 }
 
 function cpdtPillClass(pct: number): string {
-  if (pct < 30) return 'bg-[color-mix(in_srgb,var(--ld-secondary-container)_10%,transparent)] text-[var(--ld-secondary)]';
-  if (pct <= 45) return 'bg-[color-mix(in_srgb,var(--ld-tertiary-container)_10%,transparent)] text-[var(--ld-tertiary)]';
+  if (pct < ADS_WARNING_PERCENT) return 'bg-[color-mix(in_srgb,var(--ld-secondary-container)_10%,transparent)] text-[var(--ld-secondary)]';
+  if (pct <= ADS_LIMIT_PERCENT) return 'bg-[color-mix(in_srgb,var(--ld-tertiary-container)_10%,transparent)] text-[var(--ld-tertiary)]';
   return 'bg-[color-mix(in_srgb,var(--ld-error-container)_10%,transparent)] text-[var(--ld-error)]';
 }
 
@@ -863,7 +864,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
   );
 
   const needsAttention = useMemo(() => {
-    return tableRows.filter((r) => r.cpdt != null && r.cpdt > 35);
+    return tableRows.filter((r) => r.cpdt != null && r.cpdt > ADS_LIMIT_PERCENT);
   }, [tableRows]);
 
   const kpiLeadDen = teamTotals.leads > 0 ? teamTotals.leads : teamTotals.data;
@@ -872,7 +873,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
 
   const displayRows = useMemo(() => {
     if (!filterHighCpdt) return tableRows;
-    return tableRows.filter((r) => r.cpdt != null && r.cpdt > 35);
+    return tableRows.filter((r) => r.cpdt != null && r.cpdt > ADS_LIMIT_PERCENT);
   }, [tableRows, filterHighCpdt]);
 
   const cpaAlertRow = useMemo(
@@ -1066,7 +1067,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
         <>
           <section className="team-dashboard-summary-grid" aria-label="Tổng quan theo team">
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Doanh thu các team</p><strong>{formatVndDots(teamSummaryTotals.revenue)}</strong><p className="td-sub">Mục tiêu kỳ {teamPeriodTarget > 0 ? formatVndDots(teamPeriodTarget) : 'chưa thiết lập'} <span className={teamPeriodCompletion != null && teamPeriodCompletion >= periodPacePct ? 'td-good' : 'td-warn'}>{teamPeriodCompletion == null ? '—' : `${teamPeriodCompletion.toFixed(1)}%`}</span></p></article>
-            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Chi phí quảng cáo</p><strong>{formatVndDots(teamSummaryTotals.ads)}</strong><p className="td-sub">CP/DT hiện tại <span>{teamSummaryTotals.revenue > 0 ? `${((teamSummaryTotals.ads / teamSummaryTotals.revenue) * 100).toFixed(1)}%` : '—'}</span></p></article>
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Chi phí quảng cáo</p><strong>{formatVndDots(teamSummaryTotals.ads)}</strong><p className="td-sub">CP/DT hiện tại <span className={performanceTextClass(adsTone(teamSummaryTotals.revenue > 0 ? teamSummaryTotals.ads / teamSummaryTotals.revenue * 100 : null))}>{teamSummaryTotals.revenue > 0 ? `${((teamSummaryTotals.ads / teamSummaryTotals.revenue) * 100).toFixed(1)}%` : '—'}</span></p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Số team</p><strong>{teamSummaryRows.length.toLocaleString('vi-VN')}</strong><p className="td-sub">Trong kỳ {monthLabel}</p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Team dẫn đầu doanh thu</p><strong>{topRevenueTeam?.label || '—'}</strong><p className="td-sub">{formatVndDots(topRevenueTeam?.revenue || 0)}</p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Team có CP/DT tốt nhất</p><strong>{bestTeamEfficiency?.label || '—'}</strong><p className="td-sub">{bestTeamEfficiency?.adsPct == null ? 'Chưa có dữ liệu' : `${bestTeamEfficiency.adsPct.toFixed(1)}%`}</p></article>
@@ -1087,7 +1088,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                         <td>{row.target > 0 ? formatVndDots(row.target) : '—'}</td>
                         <td>{completion == null ? '—' : `${completion.toFixed(1)}%`}</td>
                         <td>{formatVndDots(row.ads)}</td>
-                        <td>{row.adsPct == null ? '—' : `${row.adsPct.toFixed(1)}%`}</td>
+                        <td className={performanceTextClass(adsTone(row.adsPct))}>{row.adsPct == null ? '—' : `${row.adsPct.toFixed(1)}%`}</td>
                       </tr>;
                     })}
                     {!teamSummaryRows.length ? <tr><td colSpan={6} className="td-empty">Chưa có team trong danh sách.</td></tr> : null}
@@ -1131,9 +1132,9 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
         <>
           <section className="team-dashboard-summary-grid" aria-label="Tổng quan team">
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Doanh số team</p><strong>{revStr}</strong><p className="td-sub">Mục tiêu kỳ {teamRangeTarget ? formatVndDots(teamRangeTarget) : 'chưa thiết lập'} <span className={kpiPctForRange != null && kpiPctForRange >= periodPacePct ? 'td-good' : 'td-warn'}>{kpiPctForRange == null ? '—' : `${kpiPctForRange.toFixed(1)}%`}</span></p></article>
-            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Chi phí quảng cáo</p><strong>{adsStr}</strong><p className="td-sub">CP/DT hiện tại <span className={adsTeamPct != null && adsTeamPct <= 30 ? 'td-good' : adsTeamPct != null && adsTeamPct <= 45 ? 'td-warn' : 'td-bad'}>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</span></p></article>
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Chi phí quảng cáo</p><strong>{adsStr}</strong><p className="td-sub">CP/DT hiện tại <span className={performanceTextClass(adsTone(adsTeamPct))}>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</span></p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Tổng Lead</p><strong>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</strong><p className="td-sub">CPL bình quân <span>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</span></p></article>
-            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Tổng đơn</p><strong>{teamTotals.orders.toLocaleString('vi-VN')}</strong><p className="td-sub">Tỷ lệ chốt <span className={chotTeam != null && chotTeam >= 15 ? 'td-good' : 'td-warn'}>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</span></p></article>
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Tổng đơn</p><strong>{teamTotals.orders.toLocaleString('vi-VN')}</strong><p className="td-sub">Tỷ lệ chốt <span className={performanceTextClass(closeTone(chotTeam))}>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</span></p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">AOV bình quân</p><strong>{averageOrderValue > 0 ? formatVndDots(averageOrderValue) : '—'}</strong><p className="td-sub">CPA mess <span>{teamCpa > 0 ? formatVndDots(teamCpa) : '—'}</span></p></article>
           </section>
 
@@ -1144,13 +1145,13 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                 <table className="team-dashboard-table">
                   <thead><tr><th>Nhân sự</th><th>Doanh số</th><th>Chi phí</th><th>CP/DT</th><th>Mess</th><th>CPA</th><th>Lead</th><th>CPL</th><th>Đơn</th><th>CPO</th><th>%CR</th><th>AOV</th></tr></thead>
                   <tbody>
-                    <tr className="team-row"><td className="person team-name">TEAM · {teamName || '—'}</td><td>{formatVndDots(teamTotals.rev)}</td><td>{formatVndDots(teamTotals.ads)}</td><td>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</td><td>{Math.round(teamMess).toLocaleString('vi-VN')}</td><td>{teamCpa > 0 ? formatVndDots(teamCpa) : '—'}</td><td>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</td><td>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</td><td>{teamTotals.orders.toLocaleString('vi-VN')}</td><td>{teamCpo > 0 ? formatVndDots(teamCpo) : '—'}</td><td>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</td><td>{averageOrderValue > 0 ? formatVndDots(averageOrderValue) : '—'}</td></tr>
+                    <tr className="team-row"><td className="person team-name">TEAM · {teamName || '—'}</td><td>{formatVndDots(teamTotals.rev)}</td><td>{formatVndDots(teamTotals.ads)}</td><td className={performanceTextClass(adsTone(adsTeamPct))}>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</td><td>{Math.round(teamMess).toLocaleString('vi-VN')}</td><td>{teamCpa > 0 ? formatVndDots(teamCpa) : '—'}</td><td>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</td><td>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</td><td>{teamTotals.orders.toLocaleString('vi-VN')}</td><td>{teamCpo > 0 ? formatVndDots(teamCpo) : '—'}</td><td className={performanceTextClass(closeTone(chotTeam))}>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</td><td>{averageOrderValue > 0 ? formatVndDots(averageOrderValue) : '—'}</td></tr>
                     {tableRows.map((row, index) => <tr key={row.m.id}>
                       <td className="person"><span className={`td-rank ${index === 0 ? 'top' : ''}`}>{index + 1}</span>{mktNameWithCode(row.m, mktNameByCode)}</td>
                       <td className={index === 0 ? 'td-good' : ''}>{formatVndDots(row.a.rev)}</td><td>{formatVndDots(row.a.ads)}</td>
-                      <td className={row.cpdt == null ? '' : row.cpdt <= 30 ? 'td-good' : row.cpdt <= 45 ? 'td-warn' : 'td-bad'}>{row.cpdt == null ? '—' : `${row.cpdt.toFixed(1)}%`}</td>
+                      <td className={performanceTextClass(adsTone(row.cpdt))}>{row.cpdt == null ? '—' : `${row.cpdt.toFixed(1)}%`}</td>
                       <td>{Math.round(row.mess).toLocaleString('vi-VN')}</td><td>{row.cpa > 0 ? formatVndDots(row.cpa) : '—'}</td><td>{Math.round(row.lead).toLocaleString('vi-VN')}</td><td>{row.cpl > 0 ? formatVndDots(row.cpl) : '—'}</td>
-                      <td>{row.a.orders.toLocaleString('vi-VN')}</td><td>{row.cpo > 0 ? formatVndDots(row.cpo) : '—'}</td><td>{row.crPct == null ? '—' : `${row.crPct.toFixed(1)}%`}</td><td>{row.aov > 0 ? formatVndDots(row.aov) : '—'}</td>
+                      <td>{row.a.orders.toLocaleString('vi-VN')}</td><td>{row.cpo > 0 ? formatVndDots(row.cpo) : '—'}</td><td className={performanceTextClass(closeTone(row.crPct))}>{row.crPct == null ? '—' : `${row.crPct.toFixed(1)}%`}</td><td>{row.aov > 0 ? formatVndDots(row.aov) : '—'}</td>
                     </tr>)}
                     {!tableRows.length ? <tr><td colSpan={12} className="td-empty">Chưa có báo cáo của thành viên trong khoảng ngày này.</td></tr> : null}
                   </tbody>

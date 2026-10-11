@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { ADS_LIMIT_PERCENT as ADS_CRITICAL, ADS_WARNING_PERCENT as ADS_WARN, CLOSE_WARNING_PERCENT as LOW_CLOSE_PCT } from '../../../utils/performanceThresholds';
 import type { DuAnRow, ReportRow } from '../../../types';
 import { formatCompactVnd } from '../mkt/mktDetailReportShared';
 import { ProjectFormModal } from './ProjectFormModal';
@@ -9,12 +10,9 @@ import { ProjectFormModal } from './ProjectFormModal';
 const REPORTS_TABLE = 'detail_reports';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
 
-const ADS_CRITICAL = 45;
-const ADS_WARN = 30;
 const PAGE_SIZE = 8;
 
 const MIN_LEAD_FOR_LOW_CLOSE = 15;
-const LOW_CLOSE_PCT = 15;
 const MIN_CHI_FOR_ZERO_LEAD = 3_000_000;
 
 function toLocalYyyyMmDd(d: Date): string {

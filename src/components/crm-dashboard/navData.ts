@@ -17,18 +17,8 @@ export const ADMIN_NAV: NavGroup[] = [
       { id: 'projects', label: 'Dự án', icon: '📁' },
       { id: 'teams', label: 'Team', icon: '👥' },
       { id: 'staff', label: 'Nhân sự', icon: '👤' },
-      { id: 'ad-accounts', label: 'TK Ads', icon: '🎯' },
       { id: 'kpis', label: 'KPIs', icon: '📊' },
-      { id: 'agencies', label: 'Agency', icon: '🏢' },
       { id: 'products', label: 'Sản phẩm', icon: '📦' },
-      { id: 'markets', label: 'Thị trường', icon: '🌍' },
-    ]
-  },
-  {
-    label: 'Tài chính',
-    items: [
-      { id: 'budget', label: 'Ngân sách', icon: '💰', badge: { text: '3', type: 'y' } },
-      { id: 'reconcile', label: 'Đối chiếu 3 lớp', icon: '⚖️' },
     ]
   },
   {
@@ -47,18 +37,10 @@ export const LEADER_NAV: NavGroup[] = [
   {
     label: 'Dashboard',
     items: [
+      { id: 'mkt-dash', label: 'Dashboard cá nhân', icon: '📊' },
       { id: 'leader-dash', label: 'Team Overview', icon: '📊' },
       { id: 'leader-rank', label: 'Xếp hạng', icon: '🏆' },
       { id: 'heatmap', label: 'Heatmap Ads/DT', icon: '🌡️' },
-    ]
-  },
-  {
-    label: 'Quản lý',
-    items: [
-      { id: 'leader-mkt', label: 'Marketing', icon: '👤' },
-      { id: 'leader-tkqc', label: 'Quản lý TKQC', icon: '📣' },
-      { id: 'leader-budget', label: 'Xin ngân sách', icon: '💰' },
-      { id: 'kpi-target', label: 'KPI Mục tiêu', icon: '🎯' },
     ]
   }
 ];
@@ -82,18 +64,6 @@ export const MKT_NAV: NavGroup[] = [
       { id: 'mkt-dash', label: 'Dashboard cá nhân', icon: '📊' },
       { id: 'leader-dash', label: 'Dashboard team', icon: '' },
     ],
-  },
-  {
-    label: 'Báo cáo',
-    items: [
-      { id: 'mkt-history', label: 'Tải báo cáo Excel', icon: '📥' },
-    ]
-  },
-  {
-    label: 'Tài khoản',
-    items: [
-      { id: 'mkt-accounts', label: 'TK Ads của tôi', icon: '🎯' },
-    ]
   }
 ];
 

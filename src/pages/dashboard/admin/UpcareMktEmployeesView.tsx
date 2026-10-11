@@ -13,7 +13,7 @@ import { isMissingTienVietError } from '../../../utils/detailReportsVnd';
 import { normalizeMaNsCode, REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboard/mkt/mktDetailReportShared';
 
 /** Fabico MKT → detail_reports: cập nhật doanh thu + số đơn (không đụng name/email/code/report_date). */
-type UpcareReportsPatch = { revenue: number; tien_viet: number; order_count: number };
+type UpcareReportsPatch = { revenue: number; tien_viet: number; order_count: number; tong_data_nhan: number };
 type UpcareDailyEmployeeRow = UpcareMktEmployeeRow & { reportDate: string };
 import { downloadMktReportExcelTemplate } from '../../dashboard/mkt/mktHistoryExcel';
 
@@ -26,10 +26,11 @@ function aggregateUpcareRowsBySameCode(list: UpcareDailyEmployeeRow[]): UpcareDa
     const prev = m.get(key);
     if (prev) {
       prev.amount = (Number(prev.amount) || 0) + (Number(r.amount) || 0);
+      prev.dataCount = (Number(prev.dataCount) || 0) + (Number(r.dataCount) || 0);
       prev.count = (Number(prev.count) || 0) + (Number(r.count) || 0);
       if (!prev.name?.trim() && r.name?.trim()) prev.name = r.name;
     } else {
-      m.set(key, { ...r, code: c, amount: Number(r.amount) || 0, count: Number(r.count) || 0 });
+      m.set(key, { ...r, code: c, amount: Number(r.amount) || 0, dataCount: Number(r.dataCount) || 0, count: Number(r.count) || 0 });
     }
   }
   return Array.from(m.values());
@@ -54,10 +55,22 @@ function nextReportDate(value: string): string {
   return toLocalYyyyMmDd(date);
 }
 
+function inclusiveDates(from: string, to: string): string[] {
+  const dates: string[] = [];
+  const [year, month, day] = from.split('-').map(Number);
+  const cursor = new Date(year, month - 1, day);
+  while (toLocalYyyyMmDd(cursor) <= to) {
+    dates.push(toLocalYyyyMmDd(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
 export const UpcareMktEmployeesView: React.FC = () => {
   const initialDate = useMemo(() => defaultDate(), []);
-  const [selectedDate, setSelectedDate] = useState(initialDate);
-  const [loadedDate, setLoadedDate] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState(initialDate);
+  const [dateTo, setDateTo] = useState(initialDate);
+  const [loadedRange, setLoadedRange] = useState<string | null>(null);
   const [rows, setRows] = useState<UpcareDailyEmployeeRow[]>([]);
   const [codeFilter, setCodeFilter] = useState('');
   const [loading, setLoading] = useState(false);
@@ -70,22 +83,32 @@ export const UpcareMktEmployeesView: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      if (!selectedDate) throw new Error('Vui lòng chọn ngày cần tải.');
-      const daily = await fetchUpcareMktEmployees({ dateFrom: selectedDate, dateTo: selectedDate });
-      const sorted = daily
-        .map((row) => ({ ...row, reportDate: selectedDate }))
-        .sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0));
+      if (!dateFrom || !dateTo) throw new Error('Vui lòng chọn ngày bắt đầu và ngày kết thúc.');
+      if (dateFrom > dateTo) throw new Error('Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.');
+      const days = inclusiveDates(dateFrom, dateTo);
+      const rowsByDay: UpcareDailyEmployeeRow[] = [];
+      // Upcare returns employee totals without a date for range requests, so query each day separately.
+      for (let i = 0; i < days.length; i += 4) {
+        const batch = await Promise.all(days.slice(i, i + 4).map(async (reportDate) => {
+          const dayRows = await fetchUpcareMktEmployees({ dateFrom: reportDate, dateTo: reportDate });
+          return dayRows.map((row) => ({ ...row, reportDate }));
+        }));
+        rowsByDay.push(...batch.flat());
+      }
+      const sorted = rowsByDay.sort((a, b) =>
+        a.reportDate.localeCompare(b.reportDate) || (Number(b.amount) || 0) - (Number(a.amount) || 0)
+      );
       setRows(sorted);
-      setLoadedDate(selectedDate);
+      setLoadedRange(`${dateFrom}:${dateTo}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Không tải được dữ liệu.';
       setError(msg);
       setRows([]);
-      setLoadedDate(null);
+      setLoadedRange(null);
     } finally {
       setLoading(false);
     }
-  }, [selectedDate]);
+  }, [dateFrom, dateTo]);
 
   // Không tự tải khi mở trang; chỉ tải khi người dùng bấm nút
 
@@ -107,11 +130,24 @@ export const UpcareMktEmployeesView: React.FC = () => {
     return rows.filter((row) => String(row.code ?? '').trim().toLocaleLowerCase().includes(query));
   }, [rows, codeFilter]);
 
-  const apiUrl = useMemo(() => {
-    const qs = new URLSearchParams({ date_from: selectedDate, date_to: selectedDate });
-    if (projectUuid) qs.set(projectParam, projectUuid);
-    return `/api/upcare-crm?${qs.toString()}`;
-  }, [selectedDate, projectParam, projectUuid]);
+  const filteredTotals = useMemo(() => filteredRows.reduce(
+    (totals, row) => ({
+      data: totals.data + (Number(row.dataCount) || 0),
+      orders: totals.orders + (Number(row.count) || 0),
+      amount: totals.amount + (Number(row.amount) || 0),
+    }),
+    { data: 0, orders: 0, amount: 0 },
+  ), [filteredRows]);
+
+  const groupedRows = useMemo(() => {
+    const groups = new Map<string, UpcareDailyEmployeeRow[]>();
+    for (const row of filteredRows) {
+      const group = groups.get(row.reportDate) || [];
+      group.push(row);
+      groups.set(row.reportDate, group);
+    }
+    return Array.from(groups, ([date, dayRows]) => ({ date, rows: dayRows }));
+  }, [filteredRows]);
 
   const currentUserEmail = useMemo(() => {
     try {
@@ -133,12 +169,11 @@ export const UpcareMktEmployeesView: React.FC = () => {
     }
     setSaving(true);
     try {
-      if (!selectedDate || loadedDate !== selectedDate) {
-        setError('Hãy tải dữ liệu lại cho ngày đang chọn trước khi đẩy.');
+      if (!dateFrom || !dateTo || loadedRange !== `${dateFrom}:${dateTo}`) {
+        setError('Hãy tải lại dữ liệu cho khoảng ngày đang chọn trước khi đẩy.');
         return;
       }
-      const reportDate = normalizeReportDate(selectedDate);
-      const nextDate = nextReportDate(reportDate);
+      const nextDate = nextReportDate(dateTo);
 
       // Chỉ đẩy dòng có mã (code); không có mã thì bỏ qua hoàn toàn
       const rowsWithCode = rows.filter((r) => {
@@ -162,7 +197,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
       const { data: existing, error: selErr } = await fetchAllRows<{ id: string; report_date: string; code: string | null }>(
         supabase.from(REPORTS_TABLE)
           .select('id, report_date, code')
-          .gte('report_date', reportDate)
+          .gte('report_date', dateFrom)
           .lt('report_date', nextDate)
       );
       if (selErr) throw selErr;
@@ -183,7 +218,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
 
       for (const r of rowsAggregated) {
         const ymd = normalizeReportDate(r.reportDate);
-        if (ymd !== reportDate) continue;
+        if (ymd < dateFrom || ymd > dateTo) continue;
         const c = String(r.code).trim();
         const k = `${ymd}\0${normalizeMaNsCode(c)}`;
         const id = idByKey.get(k);
@@ -199,13 +234,14 @@ export const UpcareMktEmployeesView: React.FC = () => {
             revenue: amt,
             tien_viet: Math.round(amt * 25000),
             order_count: Number(r.count) || 0,
+            tong_data_nhan: Number(r.dataCount) || 0,
           },
         });
       }
 
       if (toUpdate.length === 0) {
         window.alert(
-          `Kh\u00f4ng c\u1eadp nh\u1eadt \u0111\u01b0\u1ee3c d\u00f2ng n\u00e0o cho ng\u00e0y ${reportDate}. Kh\u00f4ng t\u00ecm th\u1ea5y c\u1eb7p Ng\u00e0y + M\u00e3 NV trong detail_reports: ${Array.from(new Set(unmatchedPairs)).join('; ') || 'kh\u00f4ng c\u00f3 m\u00e3 kh\u1edbp'}.`
+          `Kh\u00f4ng c\u1eadp nh\u1eadt \u0111\u01b0\u1ee3c d\u00f2ng n\u00e0o trong kho\u1ea3ng ${dateFrom} \u0111\u1ebfn ${dateTo}. Kh\u00f4ng t\u00ecm th\u1ea5y c\u1eb7p Ng\u00e0y + M\u00e3 NV trong detail_reports: ${Array.from(new Set(unmatchedPairs)).join('; ') || 'kh\u00f4ng c\u00f3 m\u00e3 kh\u1edbp'}.`
         );
         return;
       }
@@ -223,7 +259,11 @@ export const UpcareMktEmployeesView: React.FC = () => {
         if (err && isMissingTienVietError(err)) {
           const retry = await Promise.all(
             part.map(({ id, patch }) =>
-              supabase.from(REPORTS_TABLE).update({ revenue: patch.revenue }).eq('id', id)
+              supabase.from(REPORTS_TABLE).update({
+                revenue: patch.revenue,
+                order_count: patch.order_count,
+                tong_data_nhan: patch.tong_data_nhan,
+              }).eq('id', id)
             )
           );
           err = retry.find((x) => x.error)?.error;
@@ -251,7 +291,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
       try { window.alert(okMsg); } catch {}
       // Ẩn dữ liệu source sau khi đẩy
       setRows([]);
-      setLoadedDate(null);
+      setLoadedRange(null);
     } catch (e) {
       const raw = e && typeof e === 'object' && 'message' in e ? String((e as any).message) : 'Ghi dữ liệu thất bại.';
       setError(
@@ -262,7 +302,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [rows, selectedDate, loadedDate, currentUserEmail]);
+  }, [rows, dateFrom, dateTo, loadedRange, currentUserEmail]);
 
   return (
     <div className="-m-3 min-h-[calc(100vh-5.5rem)] bg-[#070d1f] p-6 font-[Inter,sans-serif] text-[#dfe4fe] sm:p-8 ag-prism-scroll">
@@ -276,18 +316,9 @@ export const UpcareMktEmployeesView: React.FC = () => {
                 <span className="ml-2 text-[#69f6b8]">(server proxy: /api/upcare-crm)</span>
               ) : null}
             </p>
-                <p className="mt-1 text-xs text-[#a5aac2]">
-                  URL hiện tại:{' '}
-                  <a
-                    href={apiUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="break-all text-[#3bbffa] hover:underline"
-                    title="Mở API với khoảng ngày đã chọn"
-                  >
-                    {apiUrl}
-                  </a>
-                </p>
+            <p className="mt-1 text-xs text-[#a5aac2]">
+              Mỗi ngày gọi riêng qua proxy với <code className="text-[#3bbffa]">date_from = date_to</code>, sau đó hiển thị tách theo ngày.
+            </p>
             {projectUuid ? (
               <p className="mt-1 text-xs text-[#a5aac2]">
                 Scope: <code className="text-[#3bbffa]">{projectParam}</code>={projectUuid}
@@ -298,14 +329,28 @@ export const UpcareMktEmployeesView: React.FC = () => {
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1 text-xs font-medium text-[#a5aac2]">
-              Ngày báo cáo
+              Từ ngày
               <input
                 type="date"
-                value={selectedDate}
+                value={dateFrom}
                 onChange={(e) => {
-                  setSelectedDate(e.target.value);
+                  setDateFrom(e.target.value);
                   setRows([]);
-                  setLoadedDate(null);
+                  setLoadedRange(null);
+                  setError(null);
+                }}
+                className="rounded-lg border-none bg-[#0c1326] px-3 py-2 text-sm text-[#dfe4fe] ring-1 ring-[#41475b]/30 focus:outline-none focus:ring-[#3bbffa]/50"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-medium text-[#a5aac2]">
+              Đến ngày
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setRows([]);
+                  setLoadedRange(null);
                   setError(null);
                 }}
                 className="rounded-lg border-none bg-[#0c1326] px-3 py-2 text-sm text-[#dfe4fe] ring-1 ring-[#41475b]/30 focus:outline-none focus:ring-[#3bbffa]/50"
@@ -314,7 +359,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
             <button
               type="button"
               onClick={() => void load()}
-              disabled={loading || !configured}
+              disabled={loading || !configured || !dateFrom || !dateTo || dateFrom > dateTo}
               className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-[#3bbffa] to-[#22b1ec] px-5 py-2.5 text-sm font-bold text-[#002b3d] shadow-lg shadow-[#3bbffa]/15 transition-all hover:brightness-110 disabled:opacity-50"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -331,7 +376,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
             <button
               type="button"
               onClick={() => void pushToDetailReports()}
-              disabled={saving || loading || rows.length === 0 || loadedDate !== selectedDate}
+              disabled={saving || loading || rows.length === 0 || loadedRange !== `${dateFrom}:${dateTo}`}
               className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-[#69f6b8] to-[#4de2a2] px-5 py-2.5 text-sm font-bold text-[#013828] shadow-lg shadow-[#69f6b8]/15 transition-all hover:brightness-110 disabled:opacity-50"
               title="Gọi Upcare riêng cho từng ngày. Chỉ cập nhật bản ghi đã có trong detail_reports trùng ngày + mã; không tạo dòng mới."
             >
@@ -364,12 +409,27 @@ export const UpcareMktEmployeesView: React.FC = () => {
           <div className="rounded-xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-200">{error}</div>
         ) : null}
 
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-[#41475b]/20 bg-[#0c1326] px-5 py-4">
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-[#a5aac2]">Tổng data theo bộ lọc</p>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums text-[#dfe4fe]">{filteredTotals.data.toLocaleString('vi-VN')}</p>
+          </div>
+          <div className="rounded-xl border border-[#41475b]/20 bg-[#0c1326] px-5 py-4">
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-[#a5aac2]">Tổng đơn chốt theo bộ lọc</p>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums text-[#dfe4fe]">{filteredTotals.orders.toLocaleString('vi-VN')}</p>
+          </div>
+          <div className="rounded-xl border border-[#41475b]/20 bg-[#0c1326] px-5 py-4">
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-[#a5aac2]">Tổng tiền theo bộ lọc</p>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums text-[#69f6b8]">{formatAmount(filteredTotals.amount)}</p>
+          </div>
+        </div>
+
         <div className="overflow-hidden rounded-xl border border-[#41475b]/20 bg-[#0c1326] shadow-xl">
           <div className="flex flex-col gap-3 border-b border-[#41475b]/15 px-4 py-3 sm:flex-row sm:items-end sm:justify-between sm:px-6">
             <p className="text-xs text-[#a5aac2]">
               {loading ? 'Đang tải…' : codeFilter.trim()
-                ? `Hiển thị ${filteredRows.length}/${rows.length} nhân sự MKT trong ngày ${loadedDate || selectedDate}`
-                : `${rows.length} nhân sự MKT trong ngày ${loadedDate || selectedDate} (sắp xếp theo amount giảm dần)`}
+                ? `Hiển thị ${filteredRows.length}/${rows.length} nhân sự MKT từ ${dateFrom} đến ${dateTo}`
+                : `${rows.length} dòng dữ liệu từ ${dateFrom} đến ${dateTo}, tách theo từng ngày`}
             </p>
             <label className="flex flex-col gap-1 text-xs font-medium text-[#a5aac2]">
               Lọc theo Code
@@ -391,14 +451,15 @@ export const UpcareMktEmployeesView: React.FC = () => {
                   <th className="px-4 py-3 sm:px-6">ID</th>
                   <th className="px-4 py-3 sm:px-6">Code</th>
                   <th className="px-4 py-3 sm:px-6">Tên</th>
-                  <th className="px-4 py-3 text-right sm:px-6">Số đơn</th>
-                  <th className="px-4 py-3 text-right sm:px-6">Amount</th>
+                  <th className="px-4 py-3 text-right sm:px-6">Data</th>
+                  <th className="px-4 py-3 text-right sm:px-6">Số đơn chốt</th>
+                  <th className="px-4 py-3 text-right sm:px-6">Doanh số</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#41475b]/10">
                 {loading && rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-[#a5aac2]">
+                    <td colSpan={8} className="px-6 py-12 text-center text-[#a5aac2]">
                       <span className="inline-flex items-center gap-2">
                         <Loader2 className="h-5 w-5 animate-spin" />
                         Đang tải…
@@ -408,19 +469,26 @@ export const UpcareMktEmployeesView: React.FC = () => {
                 ) : null}
                 {!loading && configured && rows.length === 0 && !error ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-[#a5aac2]">
+                    <td colSpan={8} className="px-6 py-12 text-center text-[#a5aac2]">
                       Không có bản ghi. Chọn khoảng ngày và bấm Tải dữ liệu.
                     </td>
                   </tr>
                 ) : null}
                 {!loading && rows.length > 0 && filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-[#a5aac2]">
+                    <td colSpan={8} className="px-6 py-12 text-center text-[#a5aac2]">
                       Không tìm thấy Code “{codeFilter.trim()}”.
                     </td>
                   </tr>
                 ) : null}
-                {filteredRows.map((row, idx) => (
+                {groupedRows.map(({ date, rows: dayRows }) => (
+                  <React.Fragment key={date}>
+                    <tr className="border-y border-[#3bbffa]/20 bg-[#11192e]">
+                      <td colSpan={8} className="px-4 py-2 font-semibold text-[#3bbffa] sm:px-6">
+                        Ngày báo cáo: {date} <span className="ml-2 text-xs font-normal text-[#a5aac2]">({dayRows.length} dòng)</span>
+                      </td>
+                    </tr>
+                    {dayRows.map((row, idx) => (
                   <tr key={row.id} className="bg-[#11192e]/50 transition-colors hover:bg-[#171f36]">
                     <td className="px-4 py-3 tabular-nums text-[#a5aac2] sm:px-6">{idx + 1}</td>
                     <td className="px-4 py-3 sm:px-6">
@@ -448,12 +516,17 @@ export const UpcareMktEmployeesView: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums text-[#a5aac2] sm:px-6">
+                      {(Number(row.dataCount) || 0).toLocaleString('vi-VN')}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums text-[#a5aac2] sm:px-6">
                       {(Number(row.count) || 0).toLocaleString('vi-VN')}
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums text-[#69f6b8] sm:px-6">
                       {formatAmount(Number(row.amount) || 0)}
                     </td>
                   </tr>
+                    ))}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

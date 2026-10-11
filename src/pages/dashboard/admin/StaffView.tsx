@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Eye, EyeOff, FileSpreadsheet, Loader2, Trash2, Upload } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { isVisibleStaff } from '../../../utils/managementVisibility';
 import type { Employee } from '../../../types';
 import { StaffFormModal } from './StaffFormModal';
 import { StaffDetailModal } from './StaffDetailModal';
@@ -125,7 +126,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
       setError(res.error.message || 'Không tải được danh sách nhân sự.');
       setRows([]);
     } else {
-      setRows((res.data || []) as Employee[]);
+      setRows(((res.data || []) as Employee[]).filter(isVisibleStaff));
     }
     setLoading(false);
   }, []);

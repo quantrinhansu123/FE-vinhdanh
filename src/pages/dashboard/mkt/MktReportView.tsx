@@ -4,6 +4,7 @@ import { RefreshCw, Loader2 } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { adsTone, closeTone, performanceTextClass } from '../../../utils/performanceThresholds';
 import type { AuthUser, ReportRow } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import '../../../styles/stitchSystem.css';
@@ -807,7 +808,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
           </div>
           <div className="flex flex-col gap-1.5 min-w-0">
             <span className="text-[9px] font-bold uppercase text-[var(--text3)]">Tỷ lệ chốt</span>
-            <div className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] text-[var(--G)] font-[var(--mono)] text-[13px] font-bold p-2.5 w-full min-h-[42px] flex items-center">
+            <div className={`bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] font-[var(--mono)] text-[13px] font-bold p-2.5 w-full min-h-[42px] flex items-center ${performanceTextClass(closeTone(tyLeChotPct))}`}>
               {tyLeChotPct != null && Number.isFinite(tyLeChotPct) ? `${tyLeChotPct.toFixed(1)}%` : '—'}
             </div>
           </div>
@@ -839,7 +840,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
           <div className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] p-[12px_14px]">
             <div className="text-[9px] text-[var(--text3)] mb-[5px] uppercase font-bold tracking-[0.5px]">Ads / Doanh số</div>
-            <div className={`text-[16px] font-bold font-[var(--mono)] ${adsDsPct != null && adsDsPct <= 35 ? 'text-[var(--G)]' : 'text-[var(--text)]'}`}>
+            <div className={`text-[16px] font-bold font-[var(--mono)] ${performanceTextClass(adsTone(adsDsPct))}`}>
               {adsDsPct != null ? `${adsDsPct.toFixed(1)}%` : '—'}
             </div>
           </div>
@@ -851,7 +852,7 @@ export const MktReportView: React.FC<MktReportViewProps> = ({ reportUser = null 
           </div>
           <div className="bg-[var(--bg4)] border border-[var(--border)] rounded-[8px] p-[12px_14px]">
             <div className="text-[9px] text-[var(--text3)] mb-[5px] uppercase font-bold tracking-[0.5px]">Tỷ lệ chốt</div>
-            <div className="text-[16px] font-bold text-[var(--G)] font-[var(--mono)]">
+            <div className={`text-[16px] font-bold font-[var(--mono)] ${performanceTextClass(closeTone(tyLeChotPct))}`}>
               {tyLeChotPct != null ? `${tyLeChotPct.toFixed(1)}%` : '—'}
             </div>
           </div>

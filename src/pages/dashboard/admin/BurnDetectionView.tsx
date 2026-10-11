@@ -2,15 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { ADS_LIMIT_PERCENT as ADS_CRITICAL, ADS_WARNING_PERCENT as ADS_WARN, CLOSE_WARNING_PERCENT, closeTone, performanceTextClass } from '../../../utils/performanceThresholds';
 import type { ReportRow } from '../../../types';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 const DU_AN_TABLE = import.meta.env.VITE_SUPABASE_DU_AN_TABLE?.trim() || 'du_an';
 const TKQC_TABLE = import.meta.env.VITE_SUPABASE_TKQC_TABLE?.trim() || 'tkqc';
 
-const ADS_CRITICAL = 45;
-const ADS_WARN = 30;
-const WASTE_TARGET_FRAC = 0.35;
+const WASTE_TARGET_FRAC = ADS_CRITICAL / 100;
 
 type DuAnOpt = { id: string; ma_du_an: string | null; ten_du_an: string };
 type TkqcOpt = { id: string; ma_tkqc: string };
@@ -73,7 +72,7 @@ function wasteVnd(revenue: number, adCost: number): number {
 function burnScoreValue(adsPct: number, revenue: number, closePct: number | null): number {
   if (adCostOnly(revenue, adsPct)) return Math.min(100, Math.round(adsPct));
   let s = adsPct;
-  if (closePct != null && closePct < 18) s += 12;
+  if (closePct != null && closePct < CLOSE_WARNING_PERCENT) s += 12;
   return Math.min(100, Math.round(s));
 }
 
@@ -524,12 +523,7 @@ export const BurnDetectionView: React.FC = () => {
                     s.tier === 'crit' ? 'text-[var(--ld-error)]' : s.tier === 'warn' ? 'text-[var(--ld-tertiary)]' : 'text-[var(--ld-secondary)]';
                   const barBg =
                     s.tier === 'crit' ? 'bg-[var(--ld-error)]' : s.tier === 'warn' ? 'bg-[var(--ld-tertiary)]' : 'bg-[var(--ld-secondary)]';
-                  const closeCls =
-                    s.tier === 'crit'
-                      ? 'text-[var(--ld-error)]'
-                      : s.tier === 'warn'
-                        ? 'text-[var(--ld-tertiary)]'
-                        : 'text-[var(--ld-secondary)]';
+                  const closeCls = performanceTextClass(closeTone(s.closePct));
                   const avatarRing =
                     s.tier === 'crit'
                       ? 'bg-[color-mix(in_srgb,var(--ld-error)_20%,transparent)] text-[var(--ld-error)]'
@@ -616,7 +610,7 @@ export const BurnDetectionView: React.FC = () => {
             Vùng cảnh báo
           </h4>
           <p className="text-xs text-[var(--ld-on-surface-variant)] leading-relaxed">
-            {ADS_WARN}% &lt; Ads/Revenue ≤ {ADS_CRITICAL}%. Theo dõi tỷ lệ chốt và CPL/CPO.
+            {ADS_WARN}% ≤ Ads/Revenue ≤ {ADS_CRITICAL}%. Theo dõi tỷ lệ chốt và CPL/CPO.
           </p>
         </div>
         <div className="bg-[var(--ld-surface-container-low)] p-5 rounded-xl border-l-4 border-[var(--ld-secondary)]">
@@ -634,7 +628,7 @@ export const BurnDetectionView: React.FC = () => {
           <div>
             <p className="text-xs font-bold text-[var(--ld-on-surface)]">Burn score</p>
             <p className="text-[10px] text-[var(--ld-on-surface-variant)] leading-snug">
-              Ưu tiên Ads/DT; cộng thêm nếu Close% &lt; 18%. Waste = max(0, Chi − {Math.round(WASTE_TARGET_FRAC * 100)}%×DT).
+              Ưu tiên Ads/DT; cộng thêm nếu Close% &lt; {CLOSE_WARNING_PERCENT}%. Waste = max(0, Chi − {Math.round(WASTE_TARGET_FRAC * 100)}%×DT).
             </p>
           </div>
         </div>

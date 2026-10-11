@@ -3,6 +3,27 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 import { createUpcareClient, UpcareAuthError } from './server/upcareClient';
+import { createMetaHandler } from './server/metaHandler';
+import { createMetaQcHandler } from './server/metaQcHandler';
+import { createImageLinkHandler } from './server/imageLinkHandler';
+
+function createLocalMetaApi(env: Record<string, string>) {
+  const handler = createMetaHandler({ ...env, ...process.env });
+  const qcHandler = createMetaQcHandler({ ...env, ...process.env });
+  const imageLinkHandler = createImageLinkHandler();
+  return {
+    name: 'meta-server-api',
+    configureServer(server: import('vite').ViteDevServer) {
+      server.middlewares.use((req, res, next) => {
+        const route = new URL(req.url || '/', 'http://localhost').pathname;
+        if (route === '/api/image-link') return void imageLinkHandler(req, res);
+        if (route === '/api/meta-qc') return void qcHandler(req, res);
+        if (route === '/api/meta-ads') return void handler(req, res);
+        return next();
+      });
+    },
+  };
+}
 
 function createLocalUpcareProxy(env: Record<string, string>) {
   const client = createUpcareClient(env);
@@ -47,7 +68,7 @@ function createLocalUpcareProxy(env: Record<string, string>) {
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    plugins: [react(), tailwindcss(), createLocalUpcareProxy(env)],
+    plugins: [react(), tailwindcss(), createLocalUpcareProxy(env), createLocalMetaApi(env)],
     cacheDir: path.resolve(__dirname, 'node_modules/.vite-3001'),
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
@@ -61,6 +82,7 @@ export default defineConfig(({mode}) => {
       include: ['recharts'],
     },
     server: {
+      watch: { ignored: ['**/build/**'] },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

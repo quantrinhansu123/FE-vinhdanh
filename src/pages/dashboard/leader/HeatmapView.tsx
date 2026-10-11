@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calendar, Loader2, RefreshCw, TrendingUp, Zap } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { ADS_LIMIT_PERCENT, ADS_WARNING_PERCENT, adsTone, performanceTextClass } from '../../../utils/performanceThresholds';
 import { REPORTS_TABLE, toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
 import '../../../styles/stitchSystem.css';
 
@@ -34,8 +35,8 @@ function adsDtPct(ad: number, rev: number): number | null {
 }
 
 function heatType(pct: number): 'G' | 'Y' | 'R' {
-  if (pct < 30) return 'G';
-  if (pct <= 45) return 'Y';
+  if (pct < ADS_WARNING_PERCENT) return 'G';
+  if (pct <= ADS_LIMIT_PERCENT) return 'Y';
   return 'R';
 }
 
@@ -381,7 +382,7 @@ export const HeatmapView: React.FC = () => {
                           </div>
                         </td>
                         <td className="p-2 align-middle">
-                          <div className="w-full min-h-[56px] rounded-xl bg-[#f0f4f1] border border-[#e2e8e5]/80 flex items-center justify-center font-mono font-bold text-sm text-[#006e51]">
+                          <div className={`w-full min-h-[56px] rounded-xl bg-[#f0f4f1] border border-[#e2e8e5]/80 flex items-center justify-center font-mono font-bold text-sm ${performanceTextClass(adsTone(avgPct))}`}>
                             {avgPct != null ? `${avgPct.toFixed(1)}%` : '—'}
                           </div>
                         </td>
@@ -408,19 +409,19 @@ export const HeatmapView: React.FC = () => {
             <div className="flex items-center gap-2.5">
               <div className="w-3.5 h-3.5 rounded-sm bg-[#ecfdf5] border border-[#a7f3d0]" />
               <span className="font-sans text-xs font-semibold text-[#191c1b]">
-                OK (&lt; 30%)
+                OK (&lt; {ADS_WARNING_PERCENT}%)
               </span>
             </div>
             <div className="flex items-center gap-2.5">
               <div className="w-3.5 h-3.5 rounded-sm bg-[#fefce8] border border-[#fde68a]" />
               <span className="font-sans text-xs font-semibold text-[#191c1b]">
-                WARNING (30–45%)
+                WARNING ({ADS_WARNING_PERCENT}–{ADS_LIMIT_PERCENT}%)
               </span>
             </div>
             <div className="flex items-center gap-2.5">
               <div className="w-3.5 h-3.5 rounded-sm bg-[#fff1f2] border border-[#fecdd3]" />
               <span className="font-sans text-xs font-semibold text-[#191c1b]">
-                DANGER (&gt; 45%)
+                DANGER (&gt; {ADS_LIMIT_PERCENT}%)
               </span>
             </div>
           </div>
@@ -476,7 +477,7 @@ export const HeatmapView: React.FC = () => {
           </div>
           <h3 className="font-sans font-bold text-base text-[#191c1b] mb-1">Ô nguy cơ cao</h3>
           <p className="font-sans text-xs text-[#476355] mb-4 leading-relaxed">
-            Số ô có Ads/DT &gt; 45% (ngưỡng cần tối ưu ngân sách ngay).
+            Số ô có Ads/DT &gt; {ADS_LIMIT_PERCENT}% (ngưỡng cần tối ưu ngân sách ngay).
           </p>
           <div className="flex items-end gap-2">
             <span className="text-3xl font-extrabold font-mono text-[#e11d48]">{String(insights.danger).padStart(2, '0')}</span>

@@ -9,8 +9,71 @@ export type UpcareMktEmployeeRow = {
   name: string;
   avatar: string | null;
   amount: number;
+  dataCount?: number;
   count?: number;
 };
+
+type RawUpcareMktRow = Record<string, unknown>;
+
+function toUpcareMktRow(raw: RawUpcareMktRow): UpcareMktEmployeeRow | null {
+  const id = Number(raw.id);
+  if (!Number.isFinite(id)) return null;
+  const total = Number(raw.amount ?? raw.total);
+  const dataCount = Number(raw.dataCount ?? raw.data_count);
+  const saleCount = Number(raw.count ?? raw.sale_count);
+  const code = raw.code ?? raw.f99_uid;
+  return {
+    id,
+    code: typeof code === 'string' || typeof code === 'number' ? code : undefined,
+    name: typeof raw.name === 'string' ? raw.name : '',
+    avatar: typeof raw.avatar === 'string' ? raw.avatar : null,
+    amount: Number.isFinite(total) ? total : 0,
+    dataCount: Number.isFinite(dataCount) ? dataCount : 0,
+    count: Number.isFinite(saleCount) ? saleCount : 0,
+  };
+}
+
+/** Accept a flat array or Fabico's `{ "YYYY-MM-DD": [...] }` response. */
+function normalizeUpcareMktResponse(data: unknown): UpcareMktEmployeeRow[] {
+  if (Array.isArray(data)) {
+    return data
+      .filter((row): row is RawUpcareMktRow => Boolean(row) && typeof row === 'object' && !Array.isArray(row))
+      .map(toUpcareMktRow)
+      .filter((row): row is UpcareMktEmployeeRow => row !== null);
+  }
+
+  if (!data || typeof data !== 'object') {
+    throw new Error('API Fabico không trả về mảng nhân viên hoặc object ngày → mảng nhân viên.');
+  }
+
+  const dailyBuckets = Object.values(data as Record<string, unknown>);
+  if (!dailyBuckets.every(Array.isArray)) {
+    throw new Error('Cấu trúc API Fabico không hợp lệ: mong đợi object ngày → mảng nhân viên.');
+  }
+
+  // Range queries return one employee list per date. Sum each employee across dates
+  // so range callers such as the 7-day leaderboard receive period totals.
+  const byId = new Map<number, UpcareMktEmployeeRow>();
+  for (const bucket of dailyBuckets as unknown[][]) {
+    for (const raw of bucket) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+      const row = toUpcareMktRow(raw as RawUpcareMktRow);
+      if (!row) continue;
+      const previous = byId.get(row.id);
+      if (previous) {
+        previous.amount += row.amount;
+        previous.dataCount = (previous.dataCount || 0) + (row.dataCount || 0);
+        previous.count = (previous.count || 0) + (row.count || 0);
+        if (!previous.code && row.code) previous.code = row.code;
+        if (!previous.name && row.name) previous.name = row.name;
+        if (!previous.avatar && row.avatar) previous.avatar = row.avatar;
+      } else {
+        byId.set(row.id, row);
+      }
+    }
+  }
+  return Array.from(byId.values());
+}
 
 /** Khoảng ngày mặc định cho BXH / employee mkt (7 ngày gần nhất, local date). */
 export function defaultUpcareMktDateRange(): { dateFrom: string; dateTo: string } {
@@ -124,6 +187,5 @@ export async function fetchUpcareMktEmployees(params: {
   } catch {
     throw new Error('Kh\u00f4ng parse \u0111\u01b0\u1ee3c JSON t\u1eeb Upcare API.');
   }
-  if (!Array.isArray(data)) throw new Error('API kh\u00f4ng tr\u1ea3 v\u1ec1 m\u1ea3ng JSON.');
-  return data as UpcareMktEmployeeRow[];
+  return normalizeUpcareMktResponse(data);
 }

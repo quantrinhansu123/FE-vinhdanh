@@ -3,6 +3,7 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { isVisibleTeam } from '../../../utils/managementVisibility';
 import type { CrmTeamRow, DuAnRow } from '../../../types';
 import { TeamFormModal } from './TeamFormModal';
 
@@ -69,7 +70,7 @@ export const TeamsView: React.FC = () => {
       setError(teamsRes.error.message || 'Không tải được danh sách team.');
       setRows([]);
     } else {
-      setRows((teamsRes.data || []) as CrmTeamRow[]);
+      setRows(((teamsRes.data || []) as CrmTeamRow[]).filter(isVisibleTeam));
     }
 
     if (!duRes.error && duRes.data) {

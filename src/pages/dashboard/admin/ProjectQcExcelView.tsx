@@ -3,6 +3,7 @@ import { ChevronDown, Download, FileSpreadsheet, Loader2, RefreshCw, Trash2, Upl
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { MetaQcImportModal } from './MetaQcImportModal';
 import type { DuAnQcExcelRow } from '../../../types';
 import { REPORTS_TABLE, formatFullVnd, formatReportDateVi, extractMaNvFromBracketPage } from '../mkt/mktDetailReportShared';
 import {
@@ -102,6 +103,7 @@ export const ProjectQcExcelView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [excelBusy, setExcelBusy] = useState(false);
+  const [metaImportOpen, setMetaImportOpen] = useState(false);
   const [excelMsg, setExcelMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pushing, setPushing] = useState(false);
@@ -564,10 +566,13 @@ export const ProjectQcExcelView: React.FC = () => {
 
   return (
     <div className="dash-fade-up">
+      {metaImportOpen && <MetaQcImportModal since={applied.from} until={applied.to}
+        onClose={() => setMetaImportOpen(false)}
+        onImported={async message => { setExcelMsg(message); await load(); }} />}
       <div className="mb-3 flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--bg2)] px-4 py-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#6d9fe5] to-[#3e659a] text-[11px] font-extrabold tracking-[-0.5px] text-white shadow-sm">MAP</div>
         <div className="min-w-0">
-          <div className="text-[12px] font-extrabold text-[var(--text)]">MAP - Marketing Analytic Platform</div>
+          <div className="text-[12px] font-extrabold text-[var(--text)]">MAP - Marketing Analytics System</div>
           <div className="text-[10px] text-[var(--text3)]">{'Chi ti\u1ebft MKT theo ng\u00e0y'}</div>
         </div>
       </div>
@@ -577,6 +582,11 @@ export const ProjectQcExcelView: React.FC = () => {
         bodyPadding={false}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => { setApplied({ from: draftFrom, to: draftTo }); setMetaImportOpen(true); }}
+              disabled={excelBusy || pushing || deleting || metaImportOpen}
+              className="flex items-center gap-1.5 rounded-[6px] bg-[#1877f2] px-3 py-1.5 text-[11px] font-bold text-white hover:bg-[#1464ce] disabled:opacity-50">
+              <Download size={13} /> Lấy từ API Meta
+            </button>
             <button
               type="button"
               onClick={() => void handleDeleteAllFiltered()}

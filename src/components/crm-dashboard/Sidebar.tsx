@@ -38,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <aside className="stitch-sidebar" aria-label="Điều hướng chính">
         <div className="stitch-sidebar-brand">
           <div className="stitch-sidebar-logo">MAP</div>
-          <div className="stitch-sidebar-brand-copy"><strong>MAP - Marketing</strong><span>Analytics Platform</span></div>
+          <div className="stitch-sidebar-brand-copy"><strong>MAP - Marketing</strong><span>Analytics System</span></div>
         </div>
         <nav className="stitch-sidebar-nav">
           {navGroups.map((group, groupIndex) => (
@@ -81,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-[16px_14px_14px] border-b border-white/[0.07] shrink-0">
         <div className="flex items-center gap-[10px]">
           <div className="w-[38px] h-[38px] rounded-[8px] bg-gradient-to-br from-[#6d9fe5] to-[#3e659a] flex items-center justify-center text-[12px] font-extrabold tracking-[-0.5px] text-white shrink-0">MAP</div>
-          <div className="min-w-0 text-[16px] font-bold leading-[1.25] text-slate-100">MAP - Marketing Analytic Platform</div>
+          <div className="min-w-0 text-[16px] font-bold leading-[1.25] text-slate-100">MAP - Marketing Analytics System</div>
         </div>
       </div>
       <nav className="flex-1 overflow-y-auto p-[10px_8px] custom-scrollbar dash-scrollbar">

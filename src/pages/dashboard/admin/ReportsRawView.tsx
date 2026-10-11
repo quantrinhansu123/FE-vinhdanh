@@ -3,6 +3,7 @@ import { Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { Employee, ReportRow } from '../../../types';
+import { extractMaNvFromBracketPage } from '../mkt/mktDetailReportShared';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
@@ -132,14 +133,24 @@ export const ReportsRawView: React.FC = () => {
     let mess = 0;
     let ads = 0;
     let vnd = 0;
-    let usd = 0;
+    const rawUsdByEmployeeDay = new Map<string, { id: string; amount: number }>();
     for (const r of rows) {
       mess += Number(r.mess_comment_count || 0);
       ads += Number(r.ad_cost || 0);
       vnd += Number(r.tien_viet || 0);
-      if (reportCurrencyUnit(r) === 'USD') usd += Number(r.revenue || 0);
+      const rawRevenue = Number(r.revenue);
+      if (!Number.isFinite(rawRevenue)) continue;
+      const reportDate = r.report_date?.slice(0, 10) || '';
+      const code = staffCodeKey((r as { code?: string | null }).code) || staffCodeKey(extractMaNvFromBracketPage(r.page));
+      // Fabico returns one total per employee/day. Imported reports can have
+      // several rows for that employee/day, so count that source total once.
+      const key = reportDate && code ? `${reportDate}\0${code}` : `row\0${r.id || rawUsdByEmployeeDay.size}`;
+      const id = r.id || key;
+      const previous = rawUsdByEmployeeDay.get(key);
+      if (!previous || id.localeCompare(previous.id) < 0) rawUsdByEmployeeDay.set(key, { id, amount: rawRevenue });
     }
-    return { mess, ads, vnd, usd };
+    const revenue = Array.from(rawUsdByEmployeeDay.values()).reduce((sum, row) => sum + row.amount, 0);
+    return { mess, ads, vnd, revenue };
   }, [rows]);
 
   const staffCoverage = useMemo(() => {
@@ -576,8 +587,8 @@ export const ReportsRawView: React.FC = () => {
           <p className="text-xl font-extrabold text-[var(--ld-on-surface)] tabular-nums">{formatVndDots(totals.vnd)} <span className="text-xs font-medium text-[var(--ld-on-surface-variant)]">VNĐ</span></p>
         </div>
         <div className="bg-[var(--ld-surface-container-low)] border border-[var(--ld-outline-variant)]/15 rounded-lg p-3">
-          <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-on-surface-variant)]">Tổng giá gốc</p>
-          <p className="text-xl font-extrabold text-[var(--ld-on-surface)] tabular-nums">{formatUsdMoney(totals.usd)}</p>
+          <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--ld-on-surface-variant)]">Tổng doanh số (giá gốc)</p>
+          <p className="text-xl font-extrabold text-[var(--ld-on-surface)] tabular-nums">{formatUsdMoney(totals.revenue)}</p>
         </div>
       </div>
 
@@ -652,7 +663,7 @@ export const ReportsRawView: React.FC = () => {
                 </th>
                 <th className="p-2">Ngày</th>
                 <th className="p-2">Code</th>
-                <th className="p-2 text-right" title="Giá gốc từ revenue, trước khi quy đổi/đồng bộ sang VNĐ">Giá gốc (chưa đồng bộ tiếng Việt)</th>
+                <th className="p-2 text-right" title="Giá trị revenue gốc, không quy đổi sang VNĐ">Doanh số (giá gốc)</th>
                 <th className="p-2">Đơn vị</th>
                 <th className="p-2 text-right">Tỉ giá</th>
                 <th className="p-2 text-right">Ads chi</th>
@@ -676,7 +687,7 @@ export const ReportsRawView: React.FC = () => {
                   </td>
                   <td className="p-2">{r.report_date?.slice(0, 10)}</td>
                   <td className="p-2">{(r as { code?: string | null }).code || '—'}</td>
-                  <td className="p-2 text-right">{formatUsdMoney(r.revenue)}</td>
+                  <td className="p-2 text-right">{formatRawMoney(r.revenue)}</td>
                   <td className="p-2">{reportCurrencyUnit(r)}</td>
                   <td className="p-2 text-right">{formatRawMoney(reportExchangeRate(r))}</td>
                   <td className="p-2 text-right">{Number(r.ad_cost || 0).toLocaleString('vi-VN')}</td>

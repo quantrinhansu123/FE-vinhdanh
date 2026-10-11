@@ -51,10 +51,12 @@ export function LeaderboardPage({
     'px-3 py-2 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-xl transition-all border border-white/10 backdrop-blur-md text-xs font-semibold flex items-center gap-1';
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center p-0 font-sans antialiased overflow-hidden relative">
+    <div className="min-h-screen w-full flex flex-col items-center p-0 font-sans antialiased overflow-hidden relative bg-[#006638] [--podium-offset:0px] lg:[--podium-offset:-120px]">
       <div
-        className="absolute inset-0 -z-10"
+        className="absolute top-12 -bottom-12 right-0 z-0 pointer-events-none"
         style={{
+          // Keep the title embedded in the backdrop centered above rank 1.
+          left: 'calc(var(--podium-offset) + var(--podium-offset))',
           backgroundImage: `url(${backgroundImg})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
@@ -109,12 +111,12 @@ export function LeaderboardPage({
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-b from-yellow-500/5 to-transparent pointer-events-none" />
 
               {boardSource === 'upcare' ? (
-                <p className="relative z-10 text-center text-[10px] text-cyan-200/70 uppercase tracking-widest mb-1 lg:mb-0 lg:absolute lg:top-2">
+                <p className="relative z-10 text-center text-[10px] text-cyan-200/70 uppercase tracking-widest mb-1 lg:mb-0 lg:absolute lg:top-2 translate-x-[var(--podium-offset)]">
                   Doanh số MKT — Fabico (7 ngày gần nhất)
                 </p>
               ) : null}
 
-              <div className="flex items-end justify-center gap-20 lg:gap-32 w-full h-full pb-12 lg:pb-32 relative z-10 transform translate-y-[90px] -translate-x-[120px]">
+              <div className="flex items-end justify-center gap-20 lg:gap-32 w-full h-full pb-12 lg:pb-32 relative z-10 transform translate-y-[90px] translate-x-[var(--podium-offset)]">
                 {podiumOrder.map((winner) => (
                   <div
                     key={winner.id}
