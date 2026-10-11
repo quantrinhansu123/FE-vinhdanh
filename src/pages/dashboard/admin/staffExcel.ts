@@ -115,7 +115,7 @@ export function downloadStaffExcelTemplate(): void {
     ['Hướng dẫn nhập nhân sự'],
     ['Nhập mỗi nhân sự trên một dòng trong sheet Nhan su. Có thể để trống bất kỳ ô nào.'],
     ['Dòng hoàn toàn trống sẽ được bỏ qua. Mã NS và Email nên là duy nhất.'],
-    ['Mật khẩu là tuỳ chọn; nếu nhập, hệ thống chuyển trực tiếp sang Supabase Authentication và không lưu vào bảng nhân sự.'],
+    ['Mật khẩu không bắt buộc; để trống nếu chưa tạo thông tin đăng nhập.'],
     ['File tải lên chỉ thêm nhân sự mới; dòng có Mã NS hoặc Email đã tồn tại sẽ được bỏ qua.'],
   ]);
   help['!cols'] = [{ wch: 110 }];
@@ -162,15 +162,6 @@ export async function parseStaffExcelFile(file: File): Promise<{ rows: StaffImpo
     const maNs = cellText(get('ma_ns')) || null;
     const emailText = cellText(get('email'));
     const email = emailText || null;
-    const password = cellText(get('pass'));
-    if (password && !email) {
-      errors.push({ row: rowNumber, message: 'Cần có Email nếu nhập Mật khẩu để tạo tài khoản đăng nhập.' });
-      continue;
-    }
-    if (password && password.length < 6) {
-      errors.push({ row: rowNumber, message: 'Mật khẩu Supabase Auth cần tối thiểu 6 ký tự.' });
-      continue;
-    }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       errors.push({ row: rowNumber, message: 'Email không đúng định dạng.' });
       continue;
@@ -194,6 +185,7 @@ export async function parseStaffExcelFile(file: File): Promise<{ rows: StaffImpo
     if (!status) errors.push({ row: rowNumber, message: 'Trạng thái không hợp lệ.' });
     if (errors.length !== numericErrorsBefore) continue;
 
+    const password = cellText(get('pass'));
     rows.push({
       ma_ns: maNs,
       name,
