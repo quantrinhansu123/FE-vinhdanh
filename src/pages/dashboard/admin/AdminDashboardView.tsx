@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CheckCircle2, ChevronDown, ChevronUp, CreditCard, Eye, Loader2, MessageCircleMore, RefreshCw, ShieldCheck, ShoppingBag, TrendingUp, TriangleAlert, UserRoundPlus, X, Zap } from 'lucide-react';
+import { CalendarDays, ChartNoAxesColumnIncreasing, CheckCircle2, ChevronDown, ChevronUp, CreditCard, Database, Eye, Funnel, Loader2, MessageCircleMore, Percent, RefreshCw, ShoppingCart, TriangleAlert, UserRoundPlus, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -255,23 +255,42 @@ const MetricCard: React.FC<{
   detail: string;
   icon: LucideIcon;
   color: string;
-  badge: string;
+  badge?: string;
+  badgeAccent?: boolean;
   delta?: number | null;
   deltaTone?: 'good' | 'warning' | 'danger';
   trend: number[];
   tone?: 'warning' | 'muted';
   valueTone?: PerformanceTone;
-}> = ({ title, value, detail, icon: Icon, color, badge, delta, deltaTone = 'good', trend, tone, valueTone }) => {
-  const finite = trend.filter(Number.isFinite);
-  const min = Math.min(...finite);
-  const max = Math.max(...finite);
-  const points = trend.map((v, index) => `${2 + index * (60 / Math.max(1, trend.length - 1))},${max === min ? 11 : 18 - ((v - min) / (max - min)) * 15}`).join(' ');
-  const hasTrend = finite.some((v) => v > 0);
+}> = ({ title, value, detail, icon: Icon, color, badge, badgeAccent, delta, deltaTone = 'good', trend, tone, valueTone }) => {
+  const values = trend.map((v) => Number.isFinite(v) ? v : 0);
+  if (values.length === 1) values.push(values[0]);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const points = values.map((v, index) => ({
+    x: 4 + index * (96 / Math.max(1, values.length - 1)),
+    y: max === min ? 18 : 30 - ((v - min) / (max - min)) * 24,
+  }));
+  const hasTrend = values.some((v) => v !== 0);
+  let trendPath = points.length ? `M ${points[0].x} ${points[0].y}` : '';
+  for (let i = 1; i < points.length; i += 1) {
+    const before = points[Math.max(0, i - 2)];
+    const start = points[i - 1];
+    const end = points[i];
+    const after = points[Math.min(points.length - 1, i + 1)];
+    trendPath += ` C ${start.x + (end.x - before.x) / 6} ${start.y + (end.y - before.y) / 6}, ${end.x - (after.x - start.x) / 6} ${end.y - (after.y - start.y) / 6}, ${end.x} ${end.y}`;
+  }
   return (
     <article className={`personal-kpi-card ${tone ? `is-${tone}` : ''}`} style={{ '--metric-accent': color } as React.CSSProperties}>
-      <div className="personal-kpi-top"><span className="personal-kpi-icon"><Icon size={17} strokeWidth={1.8} /></span><span className="personal-kpi-badge">{badge}</span></div>
-      <div className="personal-kpi-main"><p className="personal-kpi-title">{title}</p><div className="personal-kpi-value-row"><strong className={`personal-kpi-value ${valueTone ? performanceTextClass(valueTone) : ''}`}>{value}</strong>{delta != null && Number.isFinite(delta) ? <span className={`personal-kpi-delta is-${deltaTone}`}>{delta >= 0 ? '↑' : '↓'} {delta > 0 ? '+' : ''}{delta.toFixed(1)}%</span> : <span className="personal-kpi-delta is-muted">N/A</span>}</div></div>
-      <div className="personal-kpi-footer"><span className="personal-kpi-detail">{detail}</span><svg className={`personal-kpi-sparkline ${!hasTrend ? 'is-empty' : ''}`} viewBox="0 0 64 20" fill="none" aria-hidden="true"><polyline points={hasTrend ? points : '2,11 62,11'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
+      <div className="personal-kpi-top">
+        <div className="personal-kpi-label"><span className="personal-kpi-icon"><Icon size={20} strokeWidth={2} aria-hidden="true" /></span><p className="personal-kpi-title">{title}</p></div>
+        {badge && <span className={`personal-kpi-badge ${badgeAccent ? 'is-accent' : ''}`}>{badge}</span>}
+      </div>
+      <div className="personal-kpi-value-row">
+        <strong className={`personal-kpi-value ${valueTone ? performanceTextClass(valueTone) : ''}`} title={value}>{value}</strong>
+        {delta != null && Number.isFinite(delta) ? <span className={`personal-kpi-delta is-${deltaTone}`}>{delta >= 0 ? '↑' : '↓'} {delta > 0 ? '+' : ''}{delta.toFixed(1)}%</span> : <span className="personal-kpi-delta is-muted">N/A</span>}
+      </div>
+      <div className="personal-kpi-footer"><span className="personal-kpi-detail">{detail}</span><svg className={`personal-kpi-sparkline ${!hasTrend ? 'is-empty' : ''}`} viewBox="0 0 104 36" fill="none" aria-hidden="true"><path d={hasTrend ? trendPath : 'M 4 18 H 100'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
     </article>
   );
 };
@@ -741,14 +760,14 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
       </section>
 
       <section className="personal-kpi-grid" aria-label="Chỉ số tổng quan">
-        <MetricCard title="Doanh số" value={formatCompactVnd(totals.revenue)} detail="so với kỳ trước" icon={TrendingUp} color="#10a768" badge="Doanh thu" delta={revDelta} trend={daily.slice(-8).map((d) => d.rev)} />
-        <MetricCard title="Chi phí quảng cáo" value={formatCompactVnd(totals.adCost)} detail="so với kỳ trước" icon={CreditCard} color="#0284c7" badge="Chi phí" delta={spendDelta} deltaTone={spendDelta != null && spendDelta > 0 ? 'warning' : 'good'} trend={daily.slice(-8).map((d) => d.spend)} />
-        <MetricCard title="CP/DT" value={adsRevenuePct == null ? '—' : `${adsRevenuePct.toFixed(1)}%`} detail={`Trần Ads: ${ADS_DT_WARN}% · Theo dõi từ ${ADS_DT_MED}%`} icon={TriangleAlert} color={PERFORMANCE_COLORS[adsTone(adsRevenuePct)]} valueTone={adsTone(adsRevenuePct)} badge={adsRevenuePct == null ? 'Chưa có dữ liệu' : adsTone(adsRevenuePct) === 'red' ? 'Vượt trần' : adsTone(adsRevenuePct) === 'amber' ? 'Theo dõi' : 'Trong ngưỡng'} delta={adsRevenuePct != null && prevTotals.adsDtPct != null ? adsRevenuePct - prevTotals.adsDtPct : null} deltaTone="danger" trend={daily.slice(-8).map((d) => d.adsPct)} tone={adsTone(adsRevenuePct) === 'red' ? 'warning' : undefined} />
-        <MetricCard title="Tin nhắn" value={Math.round(totals.mess).toLocaleString('vi-VN')} detail="theo báo cáo" icon={MessageCircleMore} color="#a855f7" badge="Tương tác" delta={pctChange(totals.mess, prevTotals.mess)} trend={daily.slice(-8).map((d) => d.mess)} />
-        <MetricCard title="Lead" value={Math.round(leadCount).toLocaleString('vi-VN')} detail={leadCount ? 'so với kỳ trước' : 'chưa phát sinh'} icon={UserRoundPlus} color="#38bdf8" badge="Khách tiềm năng" delta={pctChange(leadCount, previousLeadCount)} trend={daily.slice(-8).map((d) => d.leads || d.data)} />
-        <MetricCard title="Đơn hàng" value={Math.round(totals.orders).toLocaleString('vi-VN')} detail={averageOrderValue == null ? 'Chưa có đơn hàng trong kỳ' : `Giá trị TB ${formatCompactVnd(averageOrderValue)}`} icon={ShoppingBag} color="#f59e0b" badge="Chuyển đổi" delta={pctChange(totals.orders, prevTotals.orders)} trend={daily.slice(-8).map((d) => d.orders)} />
-        <MetricCard title="Tỷ lệ chốt" value={closeRate == null ? '—' : `${closeRate.toFixed(1)}%`} detail={`${Math.round(totals.orders).toLocaleString('vi-VN')} đơn / ${Math.round(totals.tongData || totals.tongLead).toLocaleString('vi-VN')} data`} icon={Zap} color={PERFORMANCE_COLORS[closeTone(closeRate)]} valueTone={closeTone(closeRate)} badge={closeRate == null ? 'Chưa có dữ liệu' : closeTone(closeRate) === 'green' ? 'Hiệu quả' : closeTone(closeRate) === 'amber' ? 'Theo dõi' : 'Chốt thấp'} trend={daily.slice(-8).map((d) => tyLeChot(d.data, d.orders, d.leads) || 0)} />
-        <MetricCard title="CPL" value={costPerLead == null ? '—' : formatCompactVnd(costPerLead)} detail="Chi phí quảng cáo / lead" icon={ShieldCheck} color="#6366f1" badge="Chi phí / lead" trend={daily.slice(-8).map((d) => (d.leads || d.data) > 0 ? d.spend / (d.leads || d.data) : 0)} />
+        <MetricCard title="Doanh số" value={formatCompactVnd(totals.revenue)} detail="so với kỳ trước" icon={ChartNoAxesColumnIncreasing} color="#15803d" badge="Doanh thu" delta={revDelta} trend={daily.slice(-8).map((d) => d.rev)} />
+        <MetricCard title="Chi phí quảng cáo" value={formatCompactVnd(totals.adCost)} detail="so với kỳ trước" icon={CreditCard} color="#9333ea" badge="Chi phí" delta={spendDelta} deltaTone={spendDelta != null && spendDelta > 0 ? 'warning' : 'good'} trend={daily.slice(-8).map((d) => d.spend)} />
+        <MetricCard title="CP/DT" value={adsRevenuePct == null ? '—' : `${adsRevenuePct.toFixed(1)}%`} detail={`Trần Ads: ${ADS_DT_WARN}% · Theo dõi từ ${ADS_DT_MED}%`} icon={Percent} color={adsTone(adsRevenuePct) === 'red' ? PERFORMANCE_COLORS.red : '#ca8a04'} valueTone={adsTone(adsRevenuePct) === 'green' ? undefined : adsTone(adsRevenuePct)} badge={adsRevenuePct == null ? 'Chưa có dữ liệu' : adsTone(adsRevenuePct) === 'red' ? 'Vượt trần' : adsTone(adsRevenuePct) === 'amber' ? 'Theo dõi' : 'Trong ngưỡng'} badgeAccent delta={adsRevenuePct != null && prevTotals.adsDtPct != null ? adsRevenuePct - prevTotals.adsDtPct : null} deltaTone="danger" trend={daily.slice(-8).map((d) => d.adsPct)} tone={adsTone(adsRevenuePct) === 'red' ? 'warning' : undefined} />
+        <MetricCard title="Tin nhắn" value={Math.round(totals.mess).toLocaleString('vi-VN')} detail="theo báo cáo" icon={MessageCircleMore} color="#06b6d4" delta={pctChange(totals.mess, prevTotals.mess)} trend={daily.slice(-8).map((d) => d.mess)} />
+        <MetricCard title="Lead" value={Math.round(leadCount).toLocaleString('vi-VN')} detail={leadCount ? 'so với kỳ trước' : 'chưa phát sinh'} icon={UserRoundPlus} color="#9333ea" badge="Khách tiềm năng" badgeAccent delta={pctChange(leadCount, previousLeadCount)} trend={daily.slice(-8).map((d) => d.leads || d.data)} />
+        <MetricCard title="Đơn hàng" value={Math.round(totals.orders).toLocaleString('vi-VN')} detail={averageOrderValue == null ? 'Chưa có đơn hàng trong kỳ' : `Giá trị TB ${formatCompactVnd(averageOrderValue)}`} icon={ShoppingCart} color="#06b6d4" badge="Chuyển đổi" delta={pctChange(totals.orders, prevTotals.orders)} trend={daily.slice(-8).map((d) => d.orders)} />
+        <MetricCard title="Tỷ lệ chốt" value={closeRate == null ? '—' : `${closeRate.toFixed(1)}%`} detail={`${Math.round(totals.orders).toLocaleString('vi-VN')} đơn / ${Math.round(totals.tongData || totals.tongLead).toLocaleString('vi-VN')} data`} icon={Funnel} color={PERFORMANCE_COLORS[closeTone(closeRate)]} valueTone={closeTone(closeRate)} badge={closeRate == null ? 'Chưa có dữ liệu' : closeTone(closeRate) === 'green' ? 'Hiệu quả' : closeTone(closeRate) === 'amber' ? 'Theo dõi' : 'Chốt thấp'} badgeAccent trend={daily.slice(-8).map((d) => tyLeChot(d.data, d.orders, d.leads) || 0)} />
+        <MetricCard title="CPL" value={costPerLead == null ? '—' : formatCompactVnd(costPerLead)} detail="Chi phí quảng cáo / lead" icon={Database} color="#1d4ed8" badge="Chi phí / lead" trend={daily.slice(-8).map((d) => (d.leads || d.data) > 0 ? d.spend / (d.leads || d.data) : 0)} />
       </section>
 
       <section className="personal-panel">

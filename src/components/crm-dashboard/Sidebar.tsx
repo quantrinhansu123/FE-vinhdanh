@@ -1,4 +1,5 @@
 import React from 'react';
+import fabicoLogo from '../../assets/fabico-logo.png';
 import { NavGroup, UserInfo, ViewId } from './types';
 import { BriefcaseBusiness, ChartColumnIncreasing, ChartNoAxesCombined, Circle, Database, Download, Flame, Globe2, Home, IdCard, LogOut, Megaphone, Package, Scale, ShieldAlert, Target, TriangleAlert, Trophy, UserRound, UsersRound, Wallet } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -38,7 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return (
       <aside className="stitch-sidebar" aria-label="Điều hướng chính">
         <div className="stitch-sidebar-brand">
-          <div className="stitch-sidebar-logo">MAP</div>
+          <img className="stitch-sidebar-logo" src={fabicoLogo} alt="Fabico" />
           <div className="stitch-sidebar-brand-copy"><strong>MAP - Marketing</strong><span>Analytics System</span></div>
         </div>
         <nav className="stitch-sidebar-nav">
@@ -81,7 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className="w-[var(--sw)] shrink-0 bg-[#101722] border-r border-white/[0.07] flex flex-col overflow-hidden z-20">
       <div className="p-[16px_14px_14px] border-b border-white/[0.07] shrink-0">
         <div className="flex items-center gap-[10px]">
-          <div className="w-[38px] h-[38px] rounded-[8px] bg-gradient-to-br from-[#6d9fe5] to-[#3e659a] flex items-center justify-center text-[12px] font-extrabold tracking-[-0.5px] text-white shrink-0">MAP</div>
+          <img src={fabicoLogo} alt="Fabico" className="h-[38px] w-[88px] shrink-0 object-contain" />
           <div className="min-w-0 text-[16px] font-bold leading-[1.25] text-slate-100">MAP - Marketing Analytics System</div>
         </div>
       </div>

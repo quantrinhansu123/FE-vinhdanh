@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import fabicoLogo from '../../../assets/fabico-logo.png';
 import { ChevronDown, Download, FileSpreadsheet, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
@@ -566,7 +567,7 @@ const ProjectQcStoredView: React.FC = () => {
   return (
     <div className="dash-fade-up">
       <div className="mb-3 flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--bg2)] px-4 py-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#6d9fe5] to-[#3e659a] text-[11px] font-extrabold tracking-[-0.5px] text-white shadow-sm">MAP</div>
+        <img src={fabicoLogo} alt="Fabico" className="h-10 w-24 shrink-0 rounded-[9px] bg-[#14532d] p-2 object-contain" />
         <div className="min-w-0">
           <div className="text-[12px] font-extrabold text-[var(--text)]">MAP - Marketing Analytics System</div>
           <div className="text-[10px] text-[var(--text3)]">{'Chi ti\u1ebft MKT theo ng\u00e0y'}</div>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Eye, EyeOff, FileSpreadsheet, Loader2, Trash2, Upload } from 'lucide-react';
+import { Download, Eye, EyeOff, FileSpreadsheet, ImagePlus, Loader2, Trash2, Upload } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
 import { isVisibleStaff } from '../../../utils/managementVisibility';
@@ -46,11 +46,39 @@ function noDeletePermissionMessage(): string {
   return 'Không xóa được dòng nào. Kiểm tra policy RLS DELETE của employees; chạy supabase/alter_employees_crm_staff_ui.sql trong Supabase SQL Editor nếu database cũ chưa có policy này.';
 }
 
-function initialsFromName(name: string): string {
-  const p = name.trim().split(/\s+/).filter(Boolean);
-  if (!p.length) return '?';
-  if (p.length === 1) return p[0].slice(0, 2).toUpperCase();
-  return (p[0][0] + p[p.length - 1][0]).toUpperCase();
+function StaffPhoto({ row, onClick, disabled }: {
+  row: Employee;
+  onClick: React.MouseEventHandler<HTMLButtonElement>;
+  disabled: boolean;
+}) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const avatarUrl = row.avatar_url?.trim() || '';
+  const hasImage = avatarUrl && avatarUrl !== failedSrc;
+  const label = `Cập nhật ảnh của ${row.name || displayMaNs(row)}`;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className="mx-auto flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border border-[#dce5df] bg-[#f8faf9] text-[#64748b] transition-colors hover:border-[#16a34a] hover:text-[#15803d] disabled:opacity-50"
+    >
+      {hasImage ? (
+        <img
+          src={avatarUrl}
+          alt={`Ảnh của ${row.name || displayMaNs(row)}`}
+          className="h-full w-full object-cover"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailedSrc(avatarUrl)}
+        />
+      ) : (
+        <><ImagePlus size={20} aria-hidden="true" /><span className="text-[9px] font-medium">{avatarUrl ? 'Ảnh lỗi' : 'Thêm ảnh'}</span></>
+      )}
+    </button>
+  );
 }
 
 function downloadStaffCsv(rows: Employee[]) {
@@ -659,7 +687,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
                 <span className="text-sm font-medium">Đang tải nhân sự…</span>
               </div>
             ) : (
-              <table className="w-full text-left border-collapse min-w-[1120px]">
+              <table className="w-full text-left border-collapse min-w-[1200px]">
                 <thead>
                   <tr className="bg-[var(--hrm-surface-low)]">
                     <th className="w-12 px-4 py-4 text-center">
@@ -673,6 +701,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
                       />
                     </th>
                     <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Mã NS</th>
+                    <th scope="col" className="w-24 px-5 py-4 text-center text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Ảnh</th>
                     <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Họ tên</th>
                     <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Team</th>
                     <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-wider text-[var(--hrm-on-variant)]">Vị trí</th>
@@ -685,7 +714,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
                 <tbody className="divide-y divide-white/[0.05]">
                   {filtered.length === 0 && !loading ? (
                     <tr>
-                      <td colSpan={9} className="px-6 py-14 text-center text-[var(--hrm-on-variant)] space-y-4">
+                      <td colSpan={10} className="px-6 py-14 text-center text-[var(--hrm-on-variant)] space-y-4">
                         <p>
                           Chưa có nhân sự hoặc thiếu cột CRM. Chạy{' '}
                           <code className="text-[var(--hrm-on-surface)]">supabase/alter_employees_crm_staff_ui.sql</code> nếu cần.
@@ -716,13 +745,11 @@ export const StaffView: React.FC<StaffViewProps> = ({ onEmployeesRefresh }) => {
                           />
                         </td>
                         <td className="px-5 py-4 text-sm font-medium text-[var(--hrm-primary-dim)] font-mono">{displayMaNs(row)}</td>
+                        <td className="w-24 px-5 py-4 text-center">
+                          <StaffPhoto row={row} onClick={(e) => openEdit(e, row)} disabled={deletingId === row.id} />
+                        </td>
                         <td className="px-5 py-4">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="h-9 w-9 rounded-full border border-[var(--hrm-outline-variant)]/30 overflow-hidden shrink-0 bg-[var(--hrm-surface-highest)] flex items-center justify-center text-xs font-bold text-[var(--hrm-on-variant)]">
-                              {row.avatar_url ? <img src={row.avatar_url} alt="" className="h-full w-full object-cover" /> : initialsFromName(row.name || '?')}
-                            </div>
-                            <span className="text-sm font-semibold text-[var(--hrm-on-surface)] truncate" title={row.name}>{row.name}</span>
-                          </div>
+                          <span className="block truncate text-sm font-semibold text-[var(--hrm-on-surface)]" title={row.name}>{row.name}</span>
                         </td>
                         <td className="px-5 py-4 max-w-[180px]">
                           {row.team?.trim() ? (
