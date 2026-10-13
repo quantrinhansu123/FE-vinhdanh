@@ -55,6 +55,19 @@ function AppRoutes() {
   const [authChecking, setAuthChecking] = useState(true);
 
   useEffect(() => {
+    if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('preview') === '1') {
+      setAuthUser({
+        id: 'local-preview',
+        email: 'preview@local.test',
+        role: 'admin',
+        name: 'Local Preview',
+        team: '',
+        avatar_url: null,
+      });
+      setAuthChecking(false);
+      return;
+    }
+
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
     if (raw) {
       try {

@@ -6,9 +6,10 @@ interface TopbarProps {
   onToggleNotif: () => void;
   hasNewNotif: boolean;
   stitch?: boolean;
+  showGlobalFilters?: boolean;
 }
 
-export const Topbar: React.FC<TopbarProps> = ({ title, onToggleNotif, hasNewNotif, stitch = false }) => {
+export const Topbar: React.FC<TopbarProps> = ({ title, onToggleNotif, hasNewNotif, stitch = false, showGlobalFilters = true }) => {
   const [time, setTime] = useState('');
 
   useEffect(() => {
@@ -29,8 +30,10 @@ export const Topbar: React.FC<TopbarProps> = ({ title, onToggleNotif, hasNewNoti
       <header className="stitch-topbar">
         <h1>{title}</h1>
         <div className="stitch-topbar-actions">
-          <label className="stitch-topbar-select"><span className="sr-only">Dự án</span><select defaultValue="Tất cả dự án"><option>Tất cả dự án</option><option>FABICO</option></select></label>
-          <label className="stitch-topbar-select"><span className="sr-only">Kỳ báo cáo</span><select defaultValue="Tháng này"><option>Tháng này</option><option>Tuần này</option><option>Hôm nay</option><option>Tháng trước</option></select></label>
+          {showGlobalFilters && <>
+            <label className="stitch-topbar-select"><span className="sr-only">Dự án</span><select defaultValue="Tất cả dự án"><option>Tất cả dự án</option><option>FABICO</option></select></label>
+            <label className="stitch-topbar-select"><span className="sr-only">Kỳ báo cáo</span><select defaultValue="Tháng này"><option>Tháng này</option><option>Tuần này</option><option>Hôm nay</option><option>Tháng trước</option></select></label>
+          </>}
           <span className="stitch-topbar-live"><i aria-hidden="true" />LIVE</span>
           <time className="stitch-topbar-clock">{time}</time>
           <button type="button" className="stitch-topbar-notification" onClick={onToggleNotif} aria-label="Thông báo"><Bell size={18} />{hasNewNotif && <i aria-hidden="true" />}</button>
@@ -46,17 +49,19 @@ export const Topbar: React.FC<TopbarProps> = ({ title, onToggleNotif, hasNewNoti
       </div>
       
       <div className="ml-auto flex items-center gap-[8px]">
-        <select className="bg-[var(--bg2)] border border-[var(--border)] rounded-[6px] text-[var(--text2)] font-[var(--f)] text-[11px] p-[4px_8px] cursor-pointer outline-none">
-          <option>Tất cả dự án</option>
-          <option>FABICO</option>
-        </select>
-        
-        <select className="bg-[var(--bg2)] border border-[var(--border)] rounded-[6px] text-[var(--text2)] font-[var(--f)] text-[11px] p-[4px_8px] cursor-pointer outline-none">
-          <option>Tháng này</option>
-          <option>Tuần này</option>
-          <option>Hôm nay</option>
-          <option>Tháng trước</option>
-        </select>
+        {showGlobalFilters && <>
+          <select className="bg-[var(--bg2)] border border-[var(--border)] rounded-[6px] text-[var(--text2)] font-[var(--f)] text-[11px] p-[4px_8px] cursor-pointer outline-none">
+            <option>Tất cả dự án</option>
+            <option>FABICO</option>
+          </select>
+
+          <select className="bg-[var(--bg2)] border border-[var(--border)] rounded-[6px] text-[var(--text2)] font-[var(--f)] text-[11px] p-[4px_8px] cursor-pointer outline-none">
+            <option>Tháng này</option>
+            <option>Tuần này</option>
+            <option>Hôm nay</option>
+            <option>Tháng trước</option>
+          </select>
+        </>}
         
         <div className="flex items-center gap-[5px] bg-[var(--Gd)] border border-[var(--Gb)] p-[4px_10px] rounded-[20px] text-[9.5px] font-bold tracking-[0.8px] text-[var(--G)]">
           <div className="w-[5px] h-[5px] rounded-full bg-[var(--G)] animate-pulse" />

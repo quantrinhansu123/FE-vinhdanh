@@ -10,6 +10,7 @@ const stitchNavIcons: Record<string, LucideIcon> = {
   kpis: ChartColumnIncreasing, agencies: BriefcaseBusiness, products: Package,
   markets: Globe2, budget: Wallet, reconcile: Scale, 'upcare-mkt': Megaphone,
   'project-qc-excel': ChartColumnIncreasing, 'reports-raw': Database,
+  'meta-ads': Megaphone,
   'admin-ranking': Trophy, compare: ChartNoAxesCombined, 'leader-rank': Trophy,
   'leader-mkt': UserRound, 'leader-tkqc': Megaphone, 'leader-budget': Wallet,
   'kpi-target': Target, heatmap: ChartColumnIncreasing, 'mkt-history': Download,

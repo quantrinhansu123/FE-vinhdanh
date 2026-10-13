@@ -1,7 +1,7 @@
 export type Role = 'admin' | 'leader' | 'mkt';
 
 export type ViewId = 
-  | 'admin-dash' | 'burn-detect' | 'alerts' | 'projects' | 'project-qc-excel' | 'teams' | 'staff' 
+  | 'admin-dash' | 'burn-detect' | 'alerts' | 'projects' | 'project-qc-excel' | 'meta-ads' | 'teams' | 'staff'
   | 'ad-accounts' | 'kpis' | 'agencies' | 'products' | 'markets' | 'budget' | 'reconcile' | 'upcare-mkt' | 'reports-raw' | 'admin-ranking' | 'compare'
   | 'leader-dash' | 'leader-rank' | 'heatmap' | 'leader-mkt' | 'leader-tkqc' | 'leader-budget' | 'kpi-target'
   | 'mkt-dash' | 'mkt-report' | 'mkt-bill' | 'mkt-history' | 'mkt-accounts';

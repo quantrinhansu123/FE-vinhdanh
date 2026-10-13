@@ -26,6 +26,7 @@ export const ADMIN_NAV: NavGroup[] = [
     items: [
       { id: 'upcare-mkt', label: 'MKT Fabico', icon: '🌐' },
       { id: 'project-qc-excel', label: 'Dữ liệu QC Excel', icon: '📊' },
+      { id: 'meta-ads', label: 'Meta Ads', icon: '📣' },
       { id: 'reports-raw', label: 'Bảng detail_reports', icon: '🧾' },
       { id: 'admin-ranking', label: 'Bảng xếp hạng', icon: '🏆' },
       { id: 'compare', label: 'So sánh tuần/tháng', icon: '📈' },
@@ -73,6 +74,7 @@ export const VIEW_TITLES: Record<string, string> = {
   'alerts': 'Cảnh báo Hệ thống',
   'projects': 'Dự án',
   'project-qc-excel': 'Dữ liệu QC Excel',
+  'meta-ads': 'Meta Ads',
   'teams': 'Team',
   'staff': 'Nhân sự',
   'ad-accounts': 'Agency Control Center',

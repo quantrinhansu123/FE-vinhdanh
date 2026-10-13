@@ -8,6 +8,7 @@ const ADMIN_VIEWS = new Set<ViewId>([
   'alerts',
   'projects',
   'project-qc-excel',
+  'meta-ads',
   'teams',
   'staff',
   'ad-accounts',

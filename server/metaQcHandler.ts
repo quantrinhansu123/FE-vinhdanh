@@ -27,6 +27,30 @@ export function readMetaQcSession(cookie: string, secret: string, now = Date.now
   } catch { return null; }
 }
 
+export async function requireMetaQcAdminSession(
+  req: IncomingMessage,
+  env: Record<string, string | undefined>,
+  options: { fetch?: typeof fetch } = {}
+) {
+  if (req.headers['x-meta-qc-request'] !== '1' ||
+      ['cross-site', 'same-site'].includes(String(req.headers['sec-fetch-site'] || ''))) throw forbidden();
+  const secret = env.META_SYNC_SECRET?.trim();
+  const url = env.SUPABASE_URL?.trim() || env.VITE_SUPABASE_URL?.trim();
+  const key = env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!secret || secret.length < 32 || !url || !key) throw new MetaError(503, 'meta_qc_not_configured',
+    'Chưa cấu hình Meta và khóa Supabase trên server.');
+  const id = readMetaQcSession(req.headers.cookie || '', secret);
+  if (!id) throw new MetaError(401, 'session_required', 'Xác nhận tài khoản CRM để xem dữ liệu Meta.');
+  const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false },
+    global: options.fetch ? { fetch: options.fetch } : undefined });
+  const table = env.SUPABASE_EMPLOYEES_TABLE?.trim() || env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+  const { data: employee, error } = await db.from(table).select('email,vi_tri').eq('id', id)
+    .abortSignal(AbortSignal.timeout(10000)).maybeSingle();
+  if (error) throw new MetaError(502, 'crm_auth_failed', 'Không xác thực được tài khoản CRM.');
+  const isAdmin = employee && (employee.email?.trim().toLowerCase() === 'upedu2024@gmail.com' || isAdminViTriPosition(employee.vi_tri));
+  if (!isAdmin) throw forbidden();
+}
+
 async function requestBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   // Vercel may parse JSON before calling the handler; Vite leaves a stream.
   const parsed = (req as IncomingMessage & { body?: unknown }).body;
@@ -95,7 +119,7 @@ export function createMetaQcHandler(env: Record<string, string | undefined>, opt
         if (!isAdmin(employee)) throw forbidden();
         failures.delete(email);
         const secure = env.NODE_ENV === 'production' ? '; Secure' : '';
-        res.setHeader('Set-Cookie', `${cookieName}=${signMetaQcSession(employee.id, secret)}; HttpOnly; SameSite=Strict; Path=/api/meta-qc; Max-Age=${lifetime}${secure}`);
+        res.setHeader('Set-Cookie', `${cookieName}=${signMetaQcSession(employee.id, secret)}; HttpOnly; SameSite=Strict; Path=/api/; Max-Age=${lifetime}${secure}`);
         return json(200, { accounts: metaAccountIds(env) });
       }
       const id = readMetaQcSession(req.headers.cookie || '', secret);

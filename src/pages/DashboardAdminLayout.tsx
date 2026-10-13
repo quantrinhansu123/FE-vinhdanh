@@ -12,6 +12,7 @@ import { BurnDetectionView } from './dashboard/admin/BurnDetectionView';
 import { AlertsView } from './dashboard/admin/AlertsView';
 import { ProjectsView } from './dashboard/admin/ProjectsView';
 import { ProjectQcExcelView } from './dashboard/admin/ProjectQcExcelView';
+import { MetaAdsView } from './dashboard/admin/MetaAdsView';
 import { TeamsView } from './dashboard/admin/TeamsView';
 import { StaffView } from './dashboard/admin/StaffView';
 import { AdAccountsView } from './dashboard/admin/AdAccountsView';
@@ -60,6 +61,7 @@ const STITCH_DATA_VIEWS: ReadonlySet<ViewId> = new Set([
   'alerts',
   'projects',
   'project-qc-excel',
+  'meta-ads',
   'teams',
   'reports-raw',
   'staff',
@@ -172,6 +174,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
       case 'alerts': return <AlertsView />;
       case 'projects': return <ProjectsView />;
       case 'project-qc-excel': return <ProjectQcExcelView />;
+      case 'meta-ads': return <MetaAdsView />;
       case 'reports-raw': return <ReportsRawView />;
       case 'teams': return <TeamsView />;
       case 'staff':
@@ -230,6 +233,7 @@ export const DashboardAdminLayout: React.FC<DashboardAdminLayoutProps> = ({
           onToggleNotif={() => setIsNotifOpen(!isNotifOpen)}
           hasNewNotif={false}
           stitch={stitchShell}
+          showGlobalFilters={currentView !== 'meta-ads'}
         />
 
         <main className={`flex-1 overflow-y-auto dash-scrollbar custom-scrollbar ${stitchShell ? 'stitch-admin-main' : 'p-[12px] bg-[var(--bg0)]'}`}>
