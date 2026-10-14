@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { loadMetaProjectQcRows, MetaProjectQcError } from '../server/metaProjectQc';
-import { requireMetaQcAdminSession } from '../server/metaQcHandler';
+import { loadMetaProjectQcRows, MetaProjectQcError } from '../server/metaProjectQc.js';
+import { requireMetaQcAdminSession } from '../server/metaQcHandler.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const json = (status: number, body: unknown) => {

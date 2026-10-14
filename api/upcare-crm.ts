@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createUpcareClient, UpcareAuthError } from '../server/upcareClient';
+import { createUpcareClient, UpcareAuthError } from '../server/upcareClient.js';
 
 // Reuse the renewed token across requests within a running serverless instance.
 let client: ReturnType<typeof createUpcareClient> | undefined;

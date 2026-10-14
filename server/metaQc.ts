@@ -1,5 +1,5 @@
-import type { MetaReport } from './metaClient';
-import { MetaError } from './metaClient';
+import type { MetaReport } from './metaClient.js';
+import { MetaError } from './metaClient.js';
 
 export function metaReportToQcRows(report: MetaReport) {
   const grouped = new Map<string, {

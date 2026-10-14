@@ -1,4 +1,4 @@
-import { getMetaAccessToken, MetaTokenManagerError } from './metaTokenManager';
+import { getMetaAccessToken, MetaTokenManagerError } from './metaTokenManager.js';
 
 export type MetaProjectQcRow = {
   accountId: string;
