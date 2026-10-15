@@ -2,8 +2,15 @@
   "functions": {
     "api/meta-ads.ts": { "maxDuration": 60 },
     "api/meta-qc.ts": { "maxDuration": 60 },
-    "api/meta-project-qc.ts": { "maxDuration": 60 }
+    "api/meta-project-qc.ts": { "maxDuration": 60 },
+    "api/cron-marketing-sync.ts": { "maxDuration": 60 }
   },
+  "crons": [
+    {
+      "path": "/api/cron-marketing-sync",
+      "schedule": "15 18 * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/" }

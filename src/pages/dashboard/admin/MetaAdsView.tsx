@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { Download, Loader2, RefreshCw } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { getMetaQcAccounts, loginMetaQc, MetaQcError } from '../../../api/metaQc';
 import { formatFullVnd, formatReportDateVi } from '../mkt/mktDetailReportShared';
@@ -16,6 +16,16 @@ type MetaQcRow = {
 type MetaQcResponse = {
   rows?: MetaQcRow[];
   accountIds?: string[];
+  skippedCurrencies?: string[];
+  message?: string;
+};
+
+type MetaDetailSyncResponse = {
+  sourceRowsSaved?: number;
+  detailRowsSynced?: number;
+  unmatchedEmployeeCodes?: string[];
+  rowsWithoutEmployeeCode?: number;
+  datesNotReset?: string[];
   skippedCurrencies?: string[];
   message?: string;
 };
@@ -46,6 +56,9 @@ export const MetaAdsView: React.FC = () => {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [loadedRange, setLoadedRange] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const loadVersion = useRef(0);
 
@@ -53,6 +66,8 @@ export const MetaAdsView: React.FC = () => {
     const version = ++loadVersion.current;
     setLoading(true);
     setError(null);
+    setLoadedRange(null);
+    setSyncMessage(null);
     try {
       const params = new URLSearchParams({ from: applied.from, to: applied.to });
       const response = await fetch(`/api/meta-project-qc?${params.toString()}`, {
@@ -76,6 +91,7 @@ export const MetaAdsView: React.FC = () => {
       setRows(Array.isArray(payload.rows) ? payload.rows : []);
       setAccountIds(Array.isArray(payload.accountIds) ? payload.accountIds : []);
       setSkippedCurrencies(Array.isArray(payload.skippedCurrencies) ? payload.skippedCurrencies : []);
+      setLoadedRange(`${applied.from}:${applied.to}`);
       setPage(1);
     } catch (loadError) {
       if (version !== loadVersion.current) return;
@@ -83,6 +99,7 @@ export const MetaAdsView: React.FC = () => {
       setRows([]);
       setAccountIds([]);
       setSkippedCurrencies([]);
+      setLoadedRange(null);
     } finally {
       if (version === loadVersion.current) setLoading(false);
     }
@@ -126,7 +143,50 @@ export const MetaAdsView: React.FC = () => {
       void loadMetaRows();
       return;
     }
+    setLoadedRange(null);
+    setSyncMessage(null);
     setApplied({ from: draftFrom, to: draftTo });
+  };
+
+  const syncToDetailReports = async () => {
+    if (loadedRange !== `${applied.from}:${applied.to}` || draftFrom !== applied.from || draftTo !== applied.to || syncing) return;
+    setSyncing(true);
+    setSyncMessage(null);
+    setError(null);
+    try {
+      const response = await fetch('/api/meta-project-qc?action=sync-detail-reports', {
+        method: 'POST',
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {
+          'X-Meta-QC-Request': '1',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ from: applied.from, to: applied.to }),
+        signal: AbortSignal.timeout(65000),
+      });
+      const payload = await response.json() as MetaDetailSyncResponse;
+      if (response.status === 401) {
+        setNeedsLogin(true);
+        throw new Error('Phiên xác nhận Meta đã hết hạn. Hãy xác nhận tài khoản quản trị rồi đồng bộ lại.');
+      }
+      if (!response.ok) throw new Error(payload.message || 'Không đồng bộ được Meta vào detail_reports.');
+
+      const notes = [
+        `Đã lưu ${Number(payload.sourceRowsSaved) || 0} dòng Meta vào Supabase`,
+        `đã cập nhật ${Number(payload.detailRowsSynced) || 0} dòng nhân viên/ngày trong detail_reports.`,
+      ];
+      const unmatched = payload.unmatchedEmployeeCodes || [];
+      if (unmatched.length) notes.push(`Chưa khớp mã nhân viên: ${unmatched.join(', ')}.`);
+      if (payload.rowsWithoutEmployeeCode) notes.push(`Bỏ qua ${payload.rowsWithoutEmployeeCode} dòng Meta không có mã nhân viên.`);
+      if (payload.datesNotReset?.length) notes.push(`Giữ số Meta cũ ở ngày chưa đối chiếu đủ: ${payload.datesNotReset.join(', ')}.`);
+      if (payload.skippedCurrencies?.length) notes.push(`Bỏ qua tiền tệ ${payload.skippedCurrencies.join(', ')}; giữ số Meta cũ trong khoảng này để tránh xóa thiếu dữ liệu.`);
+      setSyncMessage(notes.join(' '));
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : 'Không đồng bộ được Meta vào detail_reports.');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const authenticate = async (event: React.FormEvent) => {
@@ -182,10 +242,20 @@ export const MetaAdsView: React.FC = () => {
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
               {loading ? 'Đang lấy dữ liệu…' : 'Lấy từ API Meta'}
             </button>
+            <button
+              type="button"
+              onClick={() => void syncToDetailReports()}
+              disabled={loading || syncing || needsLogin || draftFrom !== applied.from || draftTo !== applied.to || loadedRange !== `${applied.from}:${applied.to}`}
+              className="flex items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+              title="Lưu snapshot Meta vào Supabase server rồi tổng hợp theo ngày + mã nhân viên vào detail_reports."
+            >
+              {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              {syncing ? 'Đang đồng bộ…' : 'Đồng bộ Meta → detail_reports'}
+            </button>
           </div>
 
           <p className="text-xs leading-relaxed text-[var(--text3)]">
-            Dữ liệu được đọc trực tiếp theo ngày và chiến dịch. Tải lại trang sẽ lấy dữ liệu mới từ Meta; trang này không lưu bản sao vào Supabase.
+            Bước 1: đồng bộ Meta sẽ lưu chi tiết chiến dịch/ngày vào Supabase server, sau đó cộng chi phí và trò chuyện theo mã nhân viên/ngày vào detail_reports. Tiếp theo, dùng trang MKT Fabico để bổ sung doanh thu, số đơn và data từ Odoo vào đúng dòng đó.
           </p>
 
           {needsLogin && (
@@ -211,6 +281,7 @@ export const MetaAdsView: React.FC = () => {
           </div>
 
           {error && <p role="alert" className="text-xs font-bold text-red-500">{error}</p>}
+          {syncMessage && <p role="status" className="text-xs font-bold text-emerald-600">{syncMessage}</p>}
           {skippedCurrencies.length > 0 && (
             <p className="text-xs font-bold text-amber-600">
               Bỏ qua tài khoản dùng tiền tệ {skippedCurrencies.join(', ')}; bảng này chỉ hiển thị số tiền VND.
