@@ -39,7 +39,7 @@ Environment variables used by the app:
 
 ## Automatic Meta + Odoo detail report sync
 
-The production cron calls `/api/cron-marketing-sync` once per day at 01:15 Vietnam time. It refreshes the previous three complete days by default, writes Meta first, then merges Odoo sales/data into the Odoo-specific columns. Both steps use an idempotent `(report_date, code)` key and preserve the other source's columns. The job is disabled on local and Vercel preview deployments by default.
+The production cron calls `/api/cron-marketing-sync` every hour at minute 15 UTC (minute 15 of each hour in Vietnam time). It refreshes today plus the previous three days by default, writes Meta first, then merges Odoo sales/data into the Odoo-specific columns. Both steps use an idempotent `(report_date, code)` key and preserve the other source's columns. The job is disabled on local and Vercel preview deployments by default.
 
 To apply the required database schema automatically when a migration is pushed to `main`, add these GitHub Actions repository secrets:
 

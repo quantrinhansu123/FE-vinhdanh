@@ -26,9 +26,9 @@ function dateRange(req: IncomingMessage, env: CronEnv): { from: string; to: stri
   if (from && to) return { from, to };
 
   const parsedLookback = Number(env.MARKETING_SYNC_LOOKBACK_DAYS || 3);
-  const lookback = Number.isInteger(parsedLookback) ? Math.min(7, Math.max(1, parsedLookback)) : 3;
-  const end = localDate(-1); // Chỉ đồng bộ đến hết ngày hôm qua theo giờ Việt Nam.
-  return { from: localDate(-lookback), to: end };
+  const lookback = Number.isInteger(parsedLookback) ? Math.min(6, Math.max(1, parsedLookback)) : 3;
+  // Refresh today plus the configured number of prior days, using Vietnam local dates.
+  return { from: localDate(-lookback), to: localDate(0) };
 }
 
 function validateRange(from: string, to: string): void {
