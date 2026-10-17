@@ -14,6 +14,11 @@ export type UpcareMktEmployeeRow = {
 };
 
 type RawUpcareMktRow = Record<string, unknown>;
+type PublicEnv = Record<string, string | undefined>;
+
+function viteEnv(): PublicEnv {
+  return (import.meta as ImportMeta & { env?: PublicEnv }).env ?? {};
+}
 
 function toUpcareMktRow(raw: RawUpcareMktRow): UpcareMktEmployeeRow | null {
   const id = Number(raw.id);
@@ -103,7 +108,7 @@ function upcareApiRoot(): string {
 }
 
 function upcareProxyEnabled(): boolean {
-  return import.meta.env.VITE_UPCARE_CRM_ENABLED !== 'false';
+  return viteEnv().VITE_UPCARE_CRM_ENABLED !== 'false';
 }
 
 export function isUpcareLeaderboardEnabled(): boolean {
@@ -111,13 +116,14 @@ export function isUpcareLeaderboardEnabled(): boolean {
 }
 
 export function isUpcareOauthRefreshConfigured(): boolean {
-  return import.meta.env.VITE_UPCARE_CRM_OAUTH_ENABLED === 'true';
+  return viteEnv().VITE_UPCARE_CRM_OAUTH_ENABLED === 'true';
 }
 
 export const UPCARE_DEFAULT_PROJECT_UUID = '';
 
 function appendProjectScope(qs: URLSearchParams): void {
-  const raw = import.meta.env.VITE_UPCARE_CRM_PROJECT_UUID?.trim();
+  const env = viteEnv();
+  const raw = env.VITE_UPCARE_CRM_PROJECT_UUID?.trim();
   const id =
     raw === undefined || raw === ''
       ? UPCARE_DEFAULT_PROJECT_UUID
@@ -125,12 +131,13 @@ function appendProjectScope(qs: URLSearchParams): void {
         ? null
         : raw;
   if (!id) return;
-  const param = import.meta.env.VITE_UPCARE_CRM_PROJECT_PARAM?.trim() || 'project_id';
+  const param = env.VITE_UPCARE_CRM_PROJECT_PARAM?.trim() || 'project_id';
   qs.set(param, id);
 }
 
 export function getUpcareProjectScopeForUi(): { param: string; uuid: string | null } {
-  const raw = import.meta.env.VITE_UPCARE_CRM_PROJECT_UUID?.trim();
+  const env = viteEnv();
+  const raw = env.VITE_UPCARE_CRM_PROJECT_UUID?.trim();
   let uuid: string | null;
   if (raw === undefined || raw === '') {
     uuid = UPCARE_DEFAULT_PROJECT_UUID || null;
@@ -139,7 +146,7 @@ export function getUpcareProjectScopeForUi(): { param: string; uuid: string | nu
   } else {
     uuid = raw;
   }
-  const param = import.meta.env.VITE_UPCARE_CRM_PROJECT_PARAM?.trim() || 'project_id';
+  const param = env.VITE_UPCARE_CRM_PROJECT_PARAM?.trim() || 'project_id';
   return { param, uuid };
 }
 
@@ -147,45 +154,103 @@ export function isUpcareMktConfigured(): boolean {
   return upcareProxyEnabled();
 }
 
+function inclusiveUtcDates(dateFrom: string, dateTo: string): string[] {
+  const validDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    return new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+  };
+  if (!validDate(dateFrom) || !validDate(dateTo) || dateFrom > dateTo) {
+    throw new Error('Khoảng ngày Upcare không hợp lệ.');
+  }
+
+  const dates: string[] = [];
+  const cursor = new Date(`${dateFrom}T00:00:00.000Z`);
+  const end = new Date(`${dateTo}T00:00:00.000Z`).getTime();
+  while (cursor.getTime() <= end && dates.length < 370) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  if (cursor.getTime() <= end) throw new Error('Khoảng ngày Upcare không được vượt quá 370 ngày.');
+  return dates;
+}
+
+function employeeKey(row: UpcareMktEmployeeRow): string {
+  const code = String(row.code ?? '')
+    .normalize('NFKC')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .replace(/\u00a0/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+  return code || `id:${row.id}`;
+}
+
 export async function fetchUpcareMktEmployees(params: {
   dateFrom: string;
   dateTo: string;
-}): Promise<UpcareMktEmployeeRow[]> {
+}, request: typeof fetch = fetch): Promise<UpcareMktEmployeeRow[]> {
   if (!isUpcareMktConfigured()) {
-    throw new Error('Upcare API proxy \u0111ang t\u1eaft trong c\u1ea5u h\u00ecnh.');
+    throw new Error('Upcare API proxy đang tắt trong cấu hình.');
   }
 
-  const qs = new URLSearchParams({
-    date_from: params.dateFrom,
-    date_to: params.dateTo,
-  });
-  appendProjectScope(qs);
-  const url = `${upcareApiRoot()}?${qs.toString()}`;
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
-  const contentType = res.headers.get('content-type') || '';
-  const rawText = await res.text().catch(() => '');
-  if (!res.ok) {
-    let proxyError: { error?: string; message?: string } = {};
-    try { proxyError = JSON.parse(rawText); } catch { /* Upstream errors may be plain text. */ }
-    if (proxyError?.error === 'upcare_auth_failed' && typeof proxyError.message === 'string') {
-      throw new Error(proxyError.message);
+  const dates = inclusiveUtcDates(params.dateFrom, params.dateTo);
+  const byEmployee = new Map<string, UpcareMktEmployeeRow>();
+  const fetchDay = async (date: string) => {
+    const qs = new URLSearchParams({ date_from: date, date_to: date });
+    appendProjectScope(qs);
+    const url = `${upcareApiRoot()}?${qs.toString()}`;
+    const res = await request(url, { headers: { Accept: 'application/json' } });
+    const contentType = res.headers.get('content-type') || '';
+    const rawText = await res.text().catch(() => '');
+    if (!res.ok) {
+      let proxyError: { error?: string; message?: string } = {};
+      try { proxyError = JSON.parse(rawText); } catch { /* Non-JSON failures may be plain text. */ }
+      if (proxyError?.error === 'upcare_auth_failed' && typeof proxyError.message === 'string') {
+        throw new Error(proxyError.message);
+      }
+      const snippet = rawText.replace(/\s+/g, ' ').slice(0, 280);
+      if (res.status === 401) {
+        throw new Error('Upcare từ chối xác thực. Vui lòng kiểm tra cấu hình đăng nhập và quyền truy cập của tài khoản.');
+      }
+      throw new Error(`Upcare API ${res.status}: ${snippet || res.statusText}`);
     }
-    const snippet = rawText.replace(/\s+/g, ' ').slice(0, 280);
-    if (res.status === 401) {
-      throw new Error(
-        'Upcare từ chối xác thực. Vui lòng kiểm tra cấu hình đăng nhập và quyền truy cập của tài khoản.'
-      );
+    if (!contentType.includes('application/json')) {
+      throw new Error(`Upcare API không trả JSON: ${rawText.replace(/\s+/g, ' ').slice(0, 160)}`);
     }
-    throw new Error(`Upcare API ${res.status}: ${snippet || res.statusText}`);
+    let data: unknown;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      throw new Error('Không parse được JSON từ Upcare API.');
+    }
+    return normalizeUpcareMktResponse(data);
+  };
+
+  // Odoo's multi-day endpoint undercounts order_count. Match detail_reports
+  // and the hourly sync by querying each day before summing the period.
+  for (let index = 0; index < dates.length; index += 4) {
+    const batch = await Promise.all(dates.slice(index, index + 4).map(async (date) => {
+      try {
+        return await fetchDay(date);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'Không tải được dữ liệu.';
+        throw new Error(`Không tải được dữ liệu Upcare ngày ${date}: ${reason}`);
+      }
+    }));
+    for (const row of batch.flat()) {
+      const key = employeeKey(row);
+      const previous = byEmployee.get(key);
+      if (previous) {
+        previous.amount += row.amount;
+        previous.dataCount = (previous.dataCount || 0) + (row.dataCount || 0);
+        previous.count = (previous.count || 0) + (row.count || 0);
+        if (!previous.code && row.code) previous.code = row.code;
+        if (!previous.name && row.name) previous.name = row.name;
+        if (!previous.avatar && row.avatar) previous.avatar = row.avatar;
+      } else {
+        byEmployee.set(key, { ...row });
+      }
+    }
   }
-  if (!contentType.includes('application/json')) {
-    throw new Error(`Upcare API kh\u00f4ng tr\u1ea3 JSON: ${rawText.replace(/\s+/g, ' ').slice(0, 160)}`);
-  }
-  let data: unknown;
-  try {
-    data = JSON.parse(rawText);
-  } catch {
-    throw new Error('Kh\u00f4ng parse \u0111\u01b0\u1ee3c JSON t\u1eeb Upcare API.');
-  }
-  return normalizeUpcareMktResponse(data);
+  return Array.from(byEmployee.values());
 }

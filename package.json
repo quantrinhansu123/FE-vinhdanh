@@ -10,7 +10,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "meta:sync": "tsx server/syncMetaAds.ts",
-    "test:meta": "tsx --test server/metaClient.test.ts server/metaHandler.test.ts server/metaSync.test.ts server/metaQc.test.ts"
+    "test:meta": "tsx --test server/metaClient.test.ts server/metaHandler.test.ts server/metaSync.test.ts server/metaQc.test.ts",
+    "test:upcare": "tsx --test src/api/upcareCrm.test.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

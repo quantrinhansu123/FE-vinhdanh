@@ -331,7 +331,11 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
     setLoading(true);
     setError(null);
     const previous = previousRange(range);
-    const identityFilter = [`email.ilike.${email}`, ...(selectedPerson.ma_ns ? [`code.eq.${selectedPerson.ma_ns}`] : [])].join(',');
+    // Employee code is the stable join key. Filtering by both email and code
+    // can pull duplicate rows created with a different code casing.
+    const identityFilter = selectedPerson.ma_ns?.trim()
+      ? `code.eq.${selectedPerson.ma_ns.trim()}`
+      : `email.ilike.${email}`;
     const fetchRows = (period: DateRange) => fetchAllRows<any>(supabase
       .from(REPORTS_TABLE)
       .select('id, report_date, revenue, tien_viet, ad_cost, mess_comment_count, tong_data_nhan, tong_lead, order_count, email, code')
