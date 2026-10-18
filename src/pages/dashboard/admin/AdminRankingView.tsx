@@ -4,11 +4,11 @@ import { Flame, Loader2, RefreshCw, TrendingUp } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { fetchUpcareMktEmployeesForRange, normalizeUpcareMktEmployeeCode } from '../../../api/upcareCrm';
 import type { Employee } from '../../../types';
-import { REPORTS_TABLE } from '../mkt/mktDetailReportShared';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
-const REPORTS_FROM = 'report_date, code, tien_viet';
+const ODOO_VND_RATE = 25_000;
 
 const AVATAR_BGS = [
   'linear-gradient(135deg, #f59e0b, #ef4444)',
@@ -45,7 +45,7 @@ function teamSubtitle(emp: Employee): string {
 }
 
 function normalizedCode(value: unknown): string {
-  return String(value ?? '').replace(/\u00a0/g, ' ').trim().replace(/\s+/g, ' ').toLowerCase();
+  return normalizeUpcareMktEmployeeCode(value);
 }
 
 type RankedEmployee = Employee & { rank: number };
@@ -67,40 +67,43 @@ export const AdminRankingView: React.FC = () => {
     const now = new Date();
     const dateFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
     const dateTo = `${dateFrom.slice(0, 7)}-${String(now.getDate()).padStart(2, '0')}`;
-    const { data: reportData, error: reportErr } = await fetchAllRows<any>(supabase
-      .from(REPORTS_TABLE)
-      .select(REPORTS_FROM)
-      .gte('report_date', dateFrom)
-      .lte('report_date', dateTo));
-    if (reportErr) {
-      console.error('admin-ranking detail_reports:', reportErr);
-      setError(reportErr.message || 'KhÃ´ng táº£i Ä‘Æ°á»£c detail_reports.');
+
+    const [odooResult, employeeResult] = await Promise.allSettled([
+      fetchUpcareMktEmployeesForRange({ dateFrom, dateTo }),
+      fetchAllRows<Employee>(supabase
+        .from(EMPLOYEES_TABLE)
+        .select('id, name, team, avatar_url, du_an_ten, trang_thai, ma_ns, ngay_bat_dau')),
+    ]);
+
+    if (odooResult.status === 'rejected') {
+      const reason = odooResult.reason instanceof Error ? odooResult.reason.message : 'Không tải được doanh số Odoo.';
+      console.error('admin-ranking Odoo range:', reason);
+      setError(`Không tải được doanh số Odoo tháng này: ${reason}`);
       setRows([]);
       setLoading(false);
       return;
     }
 
-    const { data, error: qErr } = await fetchAllRows<Employee>(supabase
-      .from(EMPLOYEES_TABLE)
-      .select('id, name, team, avatar_url, du_an_ten, trang_thai, ma_ns, ngay_bat_dau'));
-
-    if (qErr) {
-      console.error('admin-ranking employees:', qErr);
-      setError(qErr.message || 'Không tải được bảng vinh danh.');
+    if (employeeResult.status === 'rejected' || employeeResult.value.error) {
+      const reason = employeeResult.status === 'rejected'
+        ? employeeResult.reason
+        : employeeResult.value.error;
+      console.error('admin-ranking employees:', reason);
+      setError(reason?.message || 'Không tải được danh sách nhân sự.');
       setRows([]);
     } else {
       const revenueByCode = new Map<string, number>();
       const displayCodeByKey = new Map<string, string>();
-      for (const report of reportData || []) {
-        const code = String(report.code || '').replace(/\u00a0/g, ' ').trim().replace(/\s+/g, ' ');
+      for (const report of odooResult.value.employees) {
+        const code = String(report.code || '').trim();
         const key = normalizedCode(code);
         if (!key) continue;
-        const revenue = Number(report.tien_viet);
-        if (Number.isFinite(revenue)) revenueByCode.set(key, (revenueByCode.get(key) || 0) + revenue);
+        const revenueVnd = Math.round((Number(report.amount) || 0) * ODOO_VND_RATE);
+        revenueByCode.set(key, revenueVnd);
         if (!displayCodeByKey.has(key)) displayCodeByKey.set(key, code);
       }
 
-      const employees = (data || []) as Employee[];
+      const employees = (employeeResult.value.data || []) as Employee[];
       const employeeCodeKeys = new Set<string>();
       const ranked: Employee[] = employees.map((emp) => {
         const key = normalizedCode(emp.ma_ns);
@@ -114,6 +117,7 @@ export const AdminRankingView: React.FC = () => {
       }
       ranked.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'vi'));
       setRows(ranked.map((emp, index) => ({ ...emp, rank: index + 1 })));
+      setError(null);
     }
     setLoading(false);
   }, []);
@@ -142,7 +146,7 @@ export const AdminRankingView: React.FC = () => {
 
       <SectionCard
         title="Bảng xếp hạng nhân sự"
-        subtitle={`${rows.length.toLocaleString('vi-VN')} nhân sự · Doanh số báo cáo tháng ${monthBadge}`}
+        subtitle={`${rows.length.toLocaleString('vi-VN')} nhân sự · Tổng doanh số Odoo từ ngày 1 đến hôm nay trong tháng ${monthBadge}`}
         bodyPadding={false}
         actions={
           <button type="button" onClick={() => void load()} disabled={loading}

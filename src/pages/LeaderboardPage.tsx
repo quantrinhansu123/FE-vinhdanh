@@ -23,7 +23,8 @@ import type { Employee } from '../types';
 interface LeaderboardPageProps {
   employees: Employee[];
   /** Nguồn dữ liệu BXH: Fabico /api/employee/mkt hoặc Supabase employees */
-  boardSource?: 'upcare' | 'supabase';
+  boardSource?: 'upcare' | 'supabase' | 'unavailable';
+  boardError?: string | null;
   loading: boolean;
   showMenuBar: boolean;
   setShowMenuBar: (v: boolean) => void;
@@ -33,6 +34,7 @@ interface LeaderboardPageProps {
 export function LeaderboardPage({
   employees,
   boardSource = 'supabase',
+  boardError = null,
   loading,
   showMenuBar,
   setShowMenuBar,
@@ -110,6 +112,12 @@ export function LeaderboardPage({
             <div className="w-full flex flex-col items-center justify-center bg-transparent p-4 relative overflow-hidden flex-1">
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-b from-yellow-500/5 to-transparent pointer-events-none" />
 
+              {boardSource === 'unavailable' ? (
+                <div className="relative z-20 max-w-xl rounded-xl border border-red-300/30 bg-black/50 px-5 py-4 text-center text-sm font-semibold text-red-100">
+                  Chưa thể xếp hạng vì không tải được doanh số Odoo{boardError ? `: ${boardError}` : '.'}
+                </div>
+              ) : null}
+
               {boardSource === 'upcare' ? (
                 <p className="relative z-10 text-center text-[10px] text-cyan-200/70 uppercase tracking-widest mb-1 lg:mb-0 lg:absolute lg:top-2 translate-x-[var(--podium-offset)]">
                   Doanh số MKT — Fabico (7 ngày gần nhất)
@@ -117,7 +125,7 @@ export function LeaderboardPage({
               ) : null}
 
               <div className="flex items-end justify-center gap-20 lg:gap-32 w-full h-full pb-12 lg:pb-32 relative z-10 transform translate-y-[90px] translate-x-[var(--podium-offset)]">
-                {podiumOrder.map((winner) => (
+                {boardSource !== 'unavailable' && podiumOrder.map((winner) => (
                   <div
                     key={winner.id}
                     className={`${

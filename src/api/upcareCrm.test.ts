@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fetchUpcareMktEmployees, fetchUpcareMktEmployeesForRange } from './upcareCrm';
+import {
+  fetchUpcareMktEmployees,
+  fetchUpcareMktEmployeesForRange,
+  normalizeUpcareMktEmployeeCode,
+} from './upcareCrm';
+
+test('employee code matching ignores casing and surrounding whitespace differences', () => {
+  assert.equal(normalizeUpcareMktEmployeeCode(' FBC.DIEULN '), 'fbc.dieuln');
+  assert.equal(normalizeUpcareMktEmployeeCode('\u00a0FBC.DIEULN '), 'fbc.dieuln');
+});
 
 test('personal dashboard makes one range call and keeps Odoo day buckets', async () => {
   const requests: URL[] = [];
@@ -21,6 +30,21 @@ test('personal dashboard makes one range call and keeps Odoo day buckets', async
   assert.deepEqual(
     result.employees.map(({ amount, dataCount, count }) => ({ amount, dataCount, count })),
     [{ amount: 1184, dataCount: 41, count: 16 }],
+  );
+});
+
+test('Odoo period totals merge case-variant employee codes', async () => {
+  const result = await fetchUpcareMktEmployeesForRange({ dateFrom: '2026-10-17', dateTo: '2026-10-18' }, async () =>
+    Response.json({
+      '2026-10-17': [{ id: 1, f99_uid: 'FBC.DieuLN', name: 'Diệu', amount: 10, data_count: 2, sale_count: 1 }],
+      '2026-10-18': [{ id: 2, f99_uid: 'FBC.DIEULN', name: 'Diệu', amount: 20, data_count: 3, sale_count: 2 }],
+    }),
+  );
+
+  assert.equal(result.employees.length, 1);
+  assert.deepEqual(
+    { code: result.employees[0].code, amount: result.employees[0].amount, data: result.employees[0].dataCount, orders: result.employees[0].count },
+    { code: 'FBC.DieuLN', amount: 30, data: 5, orders: 3 },
   );
 });
 

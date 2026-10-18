@@ -4,6 +4,7 @@ import { SectionCard, RankItem, ProgressRow, Badge } from '../../../components/c
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
 import { ADS_LIMIT_PERCENT, ADS_WARNING_PERCENT } from '../../../utils/performanceThresholds';
+import { fetchUpcareMktEmployeesForRange, normalizeUpcareMktEmployeeCode } from '../../../api/upcareCrm';
 import type { AuthUser, Employee } from '../../../types';
 import { REPORTS_TABLE, formatCompactVnd, formatKpiMoney } from '../mkt/mktDetailReportShared';
 
@@ -12,6 +13,7 @@ const KPI_TEAM_TABLE =
   import.meta.env.VITE_SUPABASE_KPI_TEAM_MONTHLY_TARGETS_TABLE?.trim() || 'kpi_team_monthly_targets';
 const KPI_STAFF_TABLE =
   import.meta.env.VITE_SUPABASE_KPI_STAFF_MONTHLY_TARGETS_TABLE?.trim() || 'kpi_staff_monthly_targets';
+const ODOO_VND_RATE = 25_000;
 
 const STAFF_SELECT = 'id, name, email, team, ma_ns, vi_tri, trang_thai';
 
@@ -25,8 +27,9 @@ function monthRangeLocal(ym: string): { start: string; end: string } {
   const y = Number(ys);
   const m = Number(ms);
   const mm = String(m).padStart(2, '0');
-  const last = new Date(y, m, 0).getDate();
-  return { start: `${y}-${mm}-01`, end: `${y}-${mm}-${String(last).padStart(2, '0')}` };
+  const today = new Date();
+  const end = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  return { start: `${y}-${mm}-01`, end };
 }
 
 function isActiveStaff(tt: string | null | undefined): boolean {
@@ -143,7 +146,7 @@ export const LeaderRankingView: React.FC<LeaderRankingViewProps> = ({ viewer = n
 
     const ids = teamMembers.map((m) => m.id);
 
-    const [teamKpiRes, staffKpiRes, repRes] = await Promise.all([
+    const [teamKpiRes, staffKpiRes, repRes, odooRes] = await Promise.all([
       viewerTeam
         ? supabase
             .from(KPI_TEAM_TABLE)
@@ -164,10 +167,16 @@ export const LeaderRankingView: React.FC<LeaderRankingViewProps> = ({ viewer = n
       emailSet.size
         ? fetchAllRows<Record<string, unknown>>(supabase
             .from(REPORTS_TABLE)
-            .select('email, name, ad_account, ma_tkqc, ad_cost, revenue, tong_lead, tong_data_nhan, mess_comment_count, order_count')
+            .select('email, name, ad_account, ma_tkqc, ad_cost, tong_lead, mess_comment_count')
             .gte('report_date', start)
             .lte('report_date', end))
         : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
+
+      teamMembers.length
+        ? fetchUpcareMktEmployeesForRange({ dateFrom: start, dateTo: end })
+            .then((result) => ({ employees: result.employees, error: null as unknown }))
+            .catch((error: unknown) => ({ employees: [], error }))
+        : Promise.resolve({ employees: [], error: null as unknown }),
     ]);
 
     if (teamKpiRes.error) console.warn('leader-rank team kpi:', teamKpiRes.error);
@@ -190,6 +199,12 @@ export const LeaderRankingView: React.FC<LeaderRankingViewProps> = ({ viewer = n
       return;
     }
 
+    if (odooRes.error) {
+      const reason = odooRes.error instanceof Error ? odooRes.error.message : 'Không tải được doanh số Odoo.';
+      console.error('leader-rank Odoo range:', reason);
+      setError(`Không tải được doanh số Odoo trong kỳ: ${reason}`);
+    }
+
     const next = new Map<string, Agg>();
     for (const row of repRes.data || []) {
       const email = String(row.email || '')
@@ -199,17 +214,33 @@ export const LeaderRankingView: React.FC<LeaderRankingViewProps> = ({ viewer = n
       const name = String(row.name || '').trim();
 
       const a = next.get(email) || makeEmptyAgg(email, name || email);
-      a.rev += Number(row.revenue) || 0;
       a.ads += Number(row.ad_cost) || 0;
       a.tongLead += Number(row.tong_lead) || 0;
-      a.tongData += Number(row.tong_data_nhan) || 0;
       a.mess += Number(row.mess_comment_count) || 0;
-      a.orders += Number(row.order_count) || 0;
       const acc1 = String(row.ad_account || '').trim();
       const acc2 = String(row.ma_tkqc || '').trim();
       if (acc1) a.accounts.add(acc1);
       if (acc2) a.accounts.add(acc2);
       next.set(email, a);
+    }
+
+    if (!odooRes.error) {
+      const odooByCode = new Map(
+        odooRes.employees
+          .map((row) => [normalizeUpcareMktEmployeeCode(row.code), row] as const)
+          .filter(([code]) => Boolean(code)),
+      );
+      for (const member of teamMembers) {
+        const email = String(member.email || '').trim().toLowerCase();
+        const code = normalizeUpcareMktEmployeeCode(member.ma_ns);
+        const odooRow = code ? odooByCode.get(code) : undefined;
+        if (!odooRow || !email) continue;
+        const agg = next.get(email) || makeEmptyAgg(email, member.name || email);
+        agg.rev = Math.round((Number(odooRow.amount) || 0) * ODOO_VND_RATE);
+        agg.tongData = Number(odooRow.dataCount) || 0;
+        agg.orders = Number(odooRow.count) || 0;
+        next.set(email, agg);
+      }
     }
 
     setAggByEmail(next);

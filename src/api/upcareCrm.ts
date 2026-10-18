@@ -119,7 +119,8 @@ export function defaultUpcareMktDateRange(): { dateFrom: string; dateTo: string 
   const to = new Date();
   const from = new Date(to);
   from.setDate(from.getDate() - 6);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   return { dateFrom: iso(from), dateTo: iso(to) };
 }
 
@@ -208,14 +209,16 @@ function inclusiveUtcDates(dateFrom: string, dateTo: string): string[] {
   return dates;
 }
 
-function employeeKey(row: UpcareMktEmployeeRow): string {
-  const code = String(row.code ?? '')
-    .normalize('NFKC')
-    .replace(/[\u200b-\u200d\ufeff]/g, '')
+export function normalizeUpcareMktEmployeeCode(value: unknown): string {
+  return String(value ?? '')
     .replace(/\u00a0/g, ' ')
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase();
+}
+
+function employeeKey(row: UpcareMktEmployeeRow): string {
+  const code = normalizeUpcareMktEmployeeCode(row.code);
   return code || `id:${row.id}`;
 }
 
