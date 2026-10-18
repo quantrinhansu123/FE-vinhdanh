@@ -21,6 +21,21 @@ export type UpcareMktEmployeeRange = {
   hasDailyBreakdown: boolean;
 };
 
+export type UpcareMktPeriodEmployeeMetrics = {
+  code: string;
+  name: string;
+  revenueVnd: number;
+  dataCount: number;
+  orderCount: number;
+};
+
+export type UpcareMktPeriodMetrics = {
+  byCode: Map<string, UpcareMktPeriodEmployeeMetrics>;
+  totals: { revenueVnd: number; dataCount: number; orderCount: number };
+};
+
+const ODOO_VND_RATE = 25_000;
+
 type RawUpcareMktRow = Record<string, unknown>;
 type PublicEnv = Record<string, string | undefined>;
 
@@ -215,6 +230,39 @@ export function normalizeUpcareMktEmployeeCode(value: unknown): string {
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase();
+}
+
+/** Summarize Odoo's selected-period employee rows without recomputing from daily detail rows. */
+export function aggregateUpcareMktPeriodEmployees(rows: UpcareMktEmployeeRow[]): UpcareMktPeriodMetrics {
+  const byCode = new Map<string, UpcareMktPeriodEmployeeMetrics>();
+  const totals = { revenueVnd: 0, dataCount: 0, orderCount: 0 };
+
+  for (const row of rows) {
+    const amount = Number(row.amount);
+    const revenueVnd = Math.round((Number.isFinite(amount) ? amount : 0) * ODOO_VND_RATE);
+    const rawDataCount = Number(row.dataCount);
+    const rawOrderCount = Number(row.count);
+    const dataCount = Number.isFinite(rawDataCount) ? rawDataCount : 0;
+    const orderCount = Number.isFinite(rawOrderCount) ? rawOrderCount : 0;
+    totals.revenueVnd += revenueVnd;
+    totals.dataCount += dataCount;
+    totals.orderCount += orderCount;
+
+    const code = String(row.code ?? '').trim();
+    const key = normalizeUpcareMktEmployeeCode(code);
+    if (!key) continue;
+    const current = byCode.get(key);
+    if (current) {
+      current.revenueVnd += revenueVnd;
+      current.dataCount += dataCount;
+      current.orderCount += orderCount;
+      if (!current.name && row.name) current.name = row.name;
+    } else {
+      byCode.set(key, { code, name: row.name || '', revenueVnd, dataCount, orderCount });
+    }
+  }
+
+  return { byCode, totals };
 }
 
 function employeeKey(row: UpcareMktEmployeeRow): string {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  aggregateUpcareMktPeriodEmployees,
   fetchUpcareMktEmployees,
   fetchUpcareMktEmployeesForRange,
   normalizeUpcareMktEmployeeCode,
@@ -9,6 +10,27 @@ import {
 test('employee code matching ignores casing and surrounding whitespace differences', () => {
   assert.equal(normalizeUpcareMktEmployeeCode(' FBC.DIEULN '), 'fbc.dieuln');
   assert.equal(normalizeUpcareMktEmployeeCode('\u00a0FBC.DIEULN '), 'fbc.dieuln');
+});
+
+test('common dashboard period totals use Odoo aggregate data instead of daily detail sums', () => {
+  const result = aggregateUpcareMktPeriodEmployees([{
+    id: 248,
+    code: 'FBC.KienHT',
+    name: 'Hà Trung Kiên',
+    avatar: null,
+    amount: 3505.5,
+    dataCount: 194,
+    count: 57,
+  }]);
+
+  assert.deepEqual(result.totals, { revenueVnd: 87_637_500, dataCount: 194, orderCount: 57 });
+  assert.deepEqual(result.byCode.get('fbc.kienht'), {
+    code: 'FBC.KienHT',
+    name: 'Hà Trung Kiên',
+    revenueVnd: 87_637_500,
+    dataCount: 194,
+    orderCount: 57,
+  });
 });
 
 test('personal dashboard makes one range call and keeps Odoo day buckets', async () => {
