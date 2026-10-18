@@ -13,6 +13,14 @@ export type UpcareMktEmployeeRow = {
   count?: number;
 };
 
+export type UpcareMktEmployeeDayRow = UpcareMktEmployeeRow & { date: string };
+
+export type UpcareMktEmployeeRange = {
+  employees: UpcareMktEmployeeRow[];
+  dailyRows: UpcareMktEmployeeDayRow[];
+  hasDailyBreakdown: boolean;
+};
+
 type RawUpcareMktRow = Record<string, unknown>;
 type PublicEnv = Record<string, string | undefined>;
 
@@ -78,6 +86,32 @@ function normalizeUpcareMktResponse(data: unknown): UpcareMktEmployeeRow[] {
     }
   }
   return Array.from(byId.values());
+}
+
+async function requestUpcareMktPayload(url: string, request: typeof fetch): Promise<unknown> {
+  const res = await request(url, { headers: { Accept: 'application/json' } });
+  const contentType = res.headers.get('content-type') || '';
+  const rawText = await res.text().catch(() => '');
+  if (!res.ok) {
+    let proxyError: { error?: string; message?: string } = {};
+    try { proxyError = JSON.parse(rawText); } catch { /* Non-JSON failures may be plain text. */ }
+    if (proxyError?.error === 'upcare_auth_failed' && typeof proxyError.message === 'string') {
+      throw new Error(proxyError.message);
+    }
+    const snippet = rawText.replace(/\s+/g, ' ').slice(0, 280);
+    if (res.status === 401) {
+      throw new Error('Upcare từ chối xác thực. Vui lòng kiểm tra cấu hình đăng nhập và quyền truy cập của tài khoản.');
+    }
+    throw new Error(`Upcare API ${res.status}: ${snippet || res.statusText}`);
+  }
+  if (!contentType.includes('application/json')) {
+    throw new Error(`Upcare API không trả JSON: ${rawText.replace(/\s+/g, ' ').slice(0, 160)}`);
+  }
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    throw new Error('Không parse được JSON từ Upcare API.');
+  }
 }
 
 /** Khoảng ngày mặc định cho BXH / employee mkt (7 ngày gần nhất, local date). */
@@ -185,6 +219,83 @@ function employeeKey(row: UpcareMktEmployeeRow): string {
   return code || `id:${row.id}`;
 }
 
+function addEmployeeMetrics(map: Map<string, UpcareMktEmployeeRow>, row: UpcareMktEmployeeRow): void {
+  const key = employeeKey(row);
+  const previous = map.get(key);
+  if (!previous) {
+    map.set(key, { ...row });
+    return;
+  }
+  previous.amount += row.amount;
+  previous.dataCount = (previous.dataCount || 0) + (row.dataCount || 0);
+  previous.count = (previous.count || 0) + (row.count || 0);
+  if (!previous.code && row.code) previous.code = row.code;
+  if (!previous.name && row.name) previous.name = row.name;
+  if (!previous.avatar && row.avatar) previous.avatar = row.avatar;
+}
+
+/** Fetch one Odoo range response, retaining its date buckets for the personal dashboard. */
+export async function fetchUpcareMktEmployeesForRange(params: {
+  dateFrom: string;
+  dateTo: string;
+}, request: typeof fetch = fetch): Promise<UpcareMktEmployeeRange> {
+  if (!isUpcareMktConfigured()) {
+    throw new Error('Upcare API proxy đang tắt trong cấu hình.');
+  }
+
+  const dates = inclusiveUtcDates(params.dateFrom, params.dateTo);
+  const qs = new URLSearchParams({ date_from: params.dateFrom, date_to: params.dateTo });
+  appendProjectScope(qs);
+  const payload = await requestUpcareMktPayload(`${upcareApiRoot()}?${qs.toString()}`, request);
+
+  if (Array.isArray(payload)) {
+    const rows = normalizeUpcareMktResponse(payload);
+    const employees = new Map<string, UpcareMktEmployeeRow>();
+    rows.forEach((row) => addEmployeeMetrics(employees, row));
+    return {
+      employees: Array.from(employees.values()),
+      dailyRows: params.dateFrom === params.dateTo
+        ? rows.map((row) => ({ ...row, date: params.dateFrom }))
+        : [],
+      hasDailyBreakdown: params.dateFrom === params.dateTo,
+    };
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('API Fabico không trả về dữ liệu theo ngày hoặc danh sách nhân viên.');
+  }
+
+  const buckets = payload as Record<string, unknown>;
+  const dateKeys = Object.keys(buckets).filter((key) => /^\d{4}-\d{2}-\d{2}$/.test(key));
+  if (!dateKeys.length || dateKeys.some((date) => !dates.includes(date) || !Array.isArray(buckets[date]))) {
+    throw new Error('Cấu trúc API Fabico không hợp lệ: mong đợi object ngày → mảng nhân viên trong khoảng đã chọn.');
+  }
+
+  const daily = new Map<string, UpcareMktEmployeeDayRow>();
+  for (const date of dateKeys.sort()) {
+    for (const row of normalizeUpcareMktResponse(buckets[date])) {
+      const key = `${date}\0${employeeKey(row)}`;
+      const previous = daily.get(key);
+      if (previous) {
+        previous.amount += row.amount;
+        previous.dataCount = (previous.dataCount || 0) + (row.dataCount || 0);
+        previous.count = (previous.count || 0) + (row.count || 0);
+      } else {
+        daily.set(key, { ...row, date });
+      }
+    }
+  }
+
+  const employees = new Map<string, UpcareMktEmployeeRow>();
+  const dailyRows = Array.from(daily.values());
+  dailyRows.forEach((row) => addEmployeeMetrics(employees, row));
+  return {
+    employees: Array.from(employees.values()),
+    dailyRows,
+    hasDailyBreakdown: dates.every((date) => dateKeys.includes(date)),
+  };
+}
+
 export async function fetchUpcareMktEmployees(params: {
   dateFrom: string;
   dateTo: string;
@@ -199,31 +310,7 @@ export async function fetchUpcareMktEmployees(params: {
     const qs = new URLSearchParams({ date_from: date, date_to: date });
     appendProjectScope(qs);
     const url = `${upcareApiRoot()}?${qs.toString()}`;
-    const res = await request(url, { headers: { Accept: 'application/json' } });
-    const contentType = res.headers.get('content-type') || '';
-    const rawText = await res.text().catch(() => '');
-    if (!res.ok) {
-      let proxyError: { error?: string; message?: string } = {};
-      try { proxyError = JSON.parse(rawText); } catch { /* Non-JSON failures may be plain text. */ }
-      if (proxyError?.error === 'upcare_auth_failed' && typeof proxyError.message === 'string') {
-        throw new Error(proxyError.message);
-      }
-      const snippet = rawText.replace(/\s+/g, ' ').slice(0, 280);
-      if (res.status === 401) {
-        throw new Error('Upcare từ chối xác thực. Vui lòng kiểm tra cấu hình đăng nhập và quyền truy cập của tài khoản.');
-      }
-      throw new Error(`Upcare API ${res.status}: ${snippet || res.statusText}`);
-    }
-    if (!contentType.includes('application/json')) {
-      throw new Error(`Upcare API không trả JSON: ${rawText.replace(/\s+/g, ' ').slice(0, 160)}`);
-    }
-    let data: unknown;
-    try {
-      data = JSON.parse(rawText);
-    } catch {
-      throw new Error('Không parse được JSON từ Upcare API.');
-    }
-    return normalizeUpcareMktResponse(data);
+    return normalizeUpcareMktResponse(await requestUpcareMktPayload(url, request));
   };
 
   // Odoo's multi-day endpoint undercounts order_count. Match detail_reports

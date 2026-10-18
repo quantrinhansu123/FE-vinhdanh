@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '../../../styles/stitchSystem.css';
 import {
   BarChart3,
@@ -32,6 +32,10 @@ import {
 } from 'recharts';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import {
+  fetchUpcareMktEmployeesForRange,
+  type UpcareMktEmployeeRange,
+} from '../../../api/upcareCrm';
 import { ADS_LIMIT_PERCENT, CLOSE_WARNING_PERCENT, CLOSE_GOOD_PERCENT, adsTone, closeTone, performancePillClass, performanceTextClass } from '../../../utils/performanceThresholds';
 import type { AuthUser } from '../../../types';
 import { crmNavTierFromUser } from '../../../utils/crmNavAccess';
@@ -82,6 +86,8 @@ type Metrics = Omit<DailyMetrics, 'date'> & {
   cpo: number;
 };
 
+type OdooPeriodMetrics = Pick<DailyMetrics, 'leads' | 'orders' | 'revenue'>;
+
 type DateRange = { from: string; to: string };
 type Preset = 'today' | 'yesterday' | '3d' | '7d' | 'month' | 'custom';
 
@@ -116,7 +122,7 @@ function previousRange(range: DateRange): DateRange {
   return { from: toLocalYyyyMmDd(start), to: toLocalYyyyMmDd(end) };
 }
 
-function makeMetrics(rows: DailyMetrics[]): Metrics {
+function makeMetrics(rows: DailyMetrics[], odooTotals: OdooPeriodMetrics | null = null): Metrics {
   const totals = rows.reduce(
     (acc, row) => ({
       mess: acc.mess + row.mess,
@@ -127,6 +133,11 @@ function makeMetrics(rows: DailyMetrics[]): Metrics {
     }),
     { mess: 0, leads: 0, orders: 0, revenue: 0, adCost: 0 },
   );
+  if (odooTotals) {
+    totals.leads = odooTotals.leads;
+    totals.orders = odooTotals.orders;
+    totals.revenue = odooTotals.revenue;
+  }
   return {
     ...totals,
     adsPct: totals.revenue > 0 ? (totals.adCost / totals.revenue) * 100 : 0,
@@ -137,6 +148,54 @@ function makeMetrics(rows: DailyMetrics[]): Metrics {
     cpa: totals.mess > 0 ? totals.adCost / totals.mess : 0,
     cpo: totals.orders > 0 ? totals.adCost / totals.orders : 0,
   };
+}
+
+function employeeCodeKey(value: unknown): string {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .replace(/\u00a0/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function odooMetricsForPerson(
+  result: UpcareMktEmployeeRange | null,
+  person: PersonOption | null,
+): OdooPeriodMetrics | null {
+  const code = employeeCodeKey(person?.ma_ns);
+  if (!result || !code) return null;
+  const employee = result.employees.find((row) => employeeCodeKey(row.code) === code);
+  if (!employee) return null;
+  return {
+    leads: safeNumber(employee.dataCount),
+    orders: safeNumber(employee.count),
+    revenue: Math.round(safeNumber(employee.amount) * 25000),
+  };
+}
+
+function applyOdooDailyMetrics(
+  rows: DailyMetrics[],
+  result: UpcareMktEmployeeRange | null,
+  person: PersonOption | null,
+): DailyMetrics[] {
+  const code = employeeCodeKey(person?.ma_ns);
+  if (!result?.hasDailyBreakdown || !code) return rows;
+  const byDate = new Map<string, OdooPeriodMetrics>();
+  for (const row of result.dailyRows) {
+    if (employeeCodeKey(row.code) !== code) continue;
+    const current = byDate.get(row.date) || { leads: 0, orders: 0, revenue: 0 };
+    current.leads += safeNumber(row.dataCount);
+    current.orders += safeNumber(row.count);
+    current.revenue += Math.round(safeNumber(row.amount) * 25000);
+    byDate.set(row.date, current);
+  }
+  if (!byDate.size) return rows;
+  return rows.map((row) => {
+    const odoo = byDate.get(row.date) || { leads: 0, orders: 0, revenue: 0 };
+    return { ...row, leads: odoo.leads, orders: odoo.orders, revenue: odoo.revenue };
+  });
 }
 
 function aggregateDays(rows: ReportRow[], range: DateRange): DailyMetrics[] {
@@ -259,7 +318,11 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [priorRows, setPriorRows] = useState<ReportRow[]>([]);
+  const [odooRange, setOdooRange] = useState<UpcareMktEmployeeRange | null>(null);
+  const [priorOdooRange, setPriorOdooRange] = useState<UpcareMktEmployeeRange | null>(null);
+  const [odooWarning, setOdooWarning] = useState<string | null>(null);
   const [targetVnd, setTargetVnd] = useState<number | null>(null);
+  const loadRequestId = useRef(0);
 
   useEffect(() => {
     if (!viewerIsAdmin) {
@@ -319,10 +382,14 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
   }, [people, reportUser, selectedPersonId, viewerIsAdmin]);
 
   const load = useCallback(async () => {
+    const requestId = ++loadRequestId.current;
     const email = selectedPerson?.email.trim().toLowerCase();
     if (!email) {
       setRows([]);
       setPriorRows([]);
+      setOdooRange(null);
+      setPriorOdooRange(null);
+      setOdooWarning(null);
       setTargetVnd(null);
       setLoading(false);
       setError(viewerIsAdmin ? null : 'Đăng nhập CRM để xem dashboard cá nhân.');
@@ -330,7 +397,21 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
     }
     setLoading(true);
     setError(null);
+    setOdooWarning(null);
     const previous = previousRange(range);
+    const employeeCode = selectedPerson.ma_ns?.trim();
+    type SafeOdooResult = { data: UpcareMktEmployeeRange | null; error: Error | null };
+    const emptyOdooResult: SafeOdooResult = { data: null, error: null };
+    const fetchOdooSafely = async (period: DateRange): Promise<SafeOdooResult> => {
+      try {
+        return { data: await fetchUpcareMktEmployeesForRange({ dateFrom: period.from, dateTo: period.to }), error: null };
+      } catch (error) {
+        return {
+          data: null,
+          error: error instanceof Error ? error : new Error('Không tải được số liệu Odoo theo khoảng.'),
+        };
+      }
+    };
     // Employee code is the stable join key. Filtering by both email and code
     // can pull duplicate rows created with a different code casing.
     const identityFilter = selectedPerson.ma_ns?.trim()
@@ -344,7 +425,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
       .or(identityFilter)
       .order('report_date', { ascending: true }));
 
-    const [currentRes, previousRes, targetRes] = await Promise.all([
+    const [currentRes, previousRes, targetRes, currentOdooRes, previousOdooRes] = await Promise.all([
       fetchRows(range),
       compare ? fetchRows(previous) : Promise.resolve({ data: [], error: null }),
       selectedPerson.id
@@ -355,18 +436,42 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
             .eq('employee_id', selectedPerson.id)
             .maybeSingle()
         : Promise.resolve({ data: null, error: null }),
+      employeeCode ? fetchOdooSafely(range) : Promise.resolve(emptyOdooResult),
+      compare && employeeCode ? fetchOdooSafely(previous) : Promise.resolve(emptyOdooResult),
     ]);
 
+    if (requestId !== loadRequestId.current) return;
     if (currentRes.error) {
       setRows([]);
       setPriorRows([]);
+      setOdooRange(null);
+      setPriorOdooRange(null);
+      setOdooWarning(null);
       setTargetVnd(null);
       setError(currentRes.error.message || 'Không tải được báo cáo cá nhân.');
       setLoading(false);
       return;
     }
-    setRows((currentRes.data || []) as ReportRow[]);
-    setPriorRows((previousRes.data || []) as ReportRow[]);
+    const nextRows = (currentRes.data || []) as ReportRow[];
+    const nextPriorRows = (previousRes.data || []) as ReportRow[];
+    setRows(nextRows);
+    setPriorRows(nextPriorRows);
+    setOdooRange(currentOdooRes.data);
+    setPriorOdooRange(previousOdooRes.data);
+    const warnings: string[] = [];
+    if (!employeeCode) {
+      warnings.push('Nhân sự chưa có mã nhân viên để đối chiếu trực tiếp với Odoo; đang dùng dữ liệu đã đồng bộ.');
+    } else if (currentOdooRes.error) {
+      warnings.push('Chưa tải được Odoo cho khoảng ngày này; các chỉ số doanh số, data và đơn đang dùng dữ liệu đã đồng bộ.');
+    } else if (!odooMetricsForPerson(currentOdooRes.data, selectedPerson)) {
+      warnings.push(`Không tìm thấy mã ${employeeCode} trong kết quả Odoo; đang dùng dữ liệu đã đồng bộ.`);
+    } else if (!currentOdooRes.data?.hasDailyBreakdown) {
+      warnings.push('Odoo chỉ trả tổng kỳ; bảng và biểu đồ theo ngày đang dùng dữ liệu đồng bộ theo giờ.');
+    }
+    if (compare && employeeCode && previousOdooRes.error) {
+      warnings.push('Chưa tải được Odoo cho kỳ trước; số đối chiếu kỳ trước đang dùng dữ liệu đã đồng bộ.');
+    }
+    setOdooWarning(warnings.join(' '));
     const target = Number((targetRes.data as { muc_tieu_vnd?: number } | null)?.muc_tieu_vnd);
     setTargetVnd(!targetRes.error && Number.isFinite(target) && target > 0 ? target : null);
     setLoading(false);
@@ -374,10 +479,14 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
 
   useEffect(() => { void load(); }, [load]);
 
-  const daily = useMemo(() => aggregateDays(rows, range), [rows, range]);
-  const priorDaily = useMemo(() => aggregateDays(priorRows, previousRange(range)), [priorRows, range]);
-  const metrics = useMemo(() => makeMetrics(daily), [daily]);
-  const priorMetrics = useMemo(() => makeMetrics(priorDaily), [priorDaily]);
+  const savedDaily = useMemo(() => aggregateDays(rows, range), [rows, range]);
+  const savedPriorDaily = useMemo(() => aggregateDays(priorRows, previousRange(range)), [priorRows, range]);
+  const odooTotals = useMemo(() => odooMetricsForPerson(odooRange, selectedPerson), [odooRange, selectedPerson]);
+  const priorOdooTotals = useMemo(() => odooMetricsForPerson(priorOdooRange, selectedPerson), [priorOdooRange, selectedPerson]);
+  const daily = useMemo(() => applyOdooDailyMetrics(savedDaily, odooRange, selectedPerson), [savedDaily, odooRange, selectedPerson]);
+  const priorDaily = useMemo(() => applyOdooDailyMetrics(savedPriorDaily, priorOdooRange, selectedPerson), [savedPriorDaily, priorOdooRange, selectedPerson]);
+  const metrics = useMemo(() => makeMetrics(daily, odooTotals), [daily, odooTotals]);
+  const priorMetrics = useMemo(() => makeMetrics(priorDaily, priorOdooTotals), [priorDaily, priorOdooTotals]);
   const days = Math.max(1, daily.length);
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
   const forecastRevenue = (metrics.revenue / days) * daysInMonth * 0.95;
@@ -402,7 +511,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
     }
     return true;
   });
-  const priorCaption = compare && priorRows.length ? `Kỳ trước: ${formatMoney(priorMetrics.revenue)}` : 'Theo dữ liệu đã nhập';
+  const priorCaption = compare && (priorRows.length || priorOdooTotals) ? `Kỳ trước: ${formatMoney(priorMetrics.revenue)}` : 'Theo dữ liệu đã nhập';
 
   const choosePreset = (value: Exclude<Preset, 'custom'>) => {
     const next = presetRange(value);
@@ -507,7 +616,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800">{error}</div>
       ) : loading ? (
         <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-800"><RefreshCw size={14} className="animate-spin" /> Đang tổng hợp dữ liệu cá nhân…</div>
-      ) : rows.length === 0 ? (
+      ) : rows.length === 0 && !odooTotals ? (
         <div className="rounded-xl border border-[var(--stitch-border)] bg-white p-4 text-xs font-semibold text-[#64748b]">Chưa có báo cáo trong khoảng thời gian đã chọn.</div>
       ) : alerts.length ? (
         <div className="flex gap-3 rounded-xl border border-rose-200 border-l-4 border-l-rose-500 bg-rose-50 p-4">
@@ -524,7 +633,9 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
       {(!viewerIsAdmin || selectedPerson) && <>
       <div className="flex items-end justify-between gap-3">
         <div><h2 className="text-sm font-extrabold text-[#1f2937]">Chỉ số trọng tâm</h2><p className="mt-0.5 text-[10px] text-[#64748b]">{daily.length} ngày · {selectedPerson?.name || 'cá nhân'} · {priorCaption}</p></div>
-        <span className="text-[10px] text-[#64748b]">Cập nhật theo khoảng thời gian đã chọn</span>
+        <span className={`max-w-[620px] text-right text-[10px] ${odooWarning ? 'text-amber-700' : 'text-[#64748b]'}`} role={odooWarning ? 'status' : undefined}>
+          {odooWarning || 'Doanh số, data và đơn lấy từ Odoo gộp cả khoảng · chi phí và tin nhắn lấy từ dữ liệu đồng bộ theo giờ'}
+        </span>
       </div>
       <section className="grid grid-cols-2 gap-2.5 xl:grid-cols-4" aria-label="Các chỉ số cá nhân">
         <Card label="Doanh số" value={formatMoney(metrics.revenue)} sub={targetVnd ? `Mục tiêu tháng ${formatKpiMoney(targetVnd)}` : 'Tổng doanh thu trong kỳ'} status={targetVnd && metrics.revenue >= targetVnd ? 'Đạt KPI' : 'Theo dõi'} tone="green" icon={<Target size={12} />} progress={revenueProgress} />
