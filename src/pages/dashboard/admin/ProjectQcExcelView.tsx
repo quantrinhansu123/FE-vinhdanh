@@ -569,7 +569,7 @@ const ProjectQcStoredView: React.FC = () => {
       <div className="mb-3 flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--bg2)] px-4 py-3">
         <img src={fabicoLogo} alt="Fabico" className="h-10 w-24 shrink-0 rounded-[9px] bg-[#14532d] p-2 object-contain" />
         <div className="min-w-0">
-          <div className="text-[12px] font-extrabold text-[var(--text)]">MAP - Marketing Analytics System</div>
+          <div className="text-[12px] font-extrabold text-[var(--text)]">MAS - Manager Analytics Systems</div>
           <div className="text-[10px] text-[var(--text3)]">{'Chi ti\u1ebft MKT theo ng\u00e0y'}</div>
         </div>
       </div>
