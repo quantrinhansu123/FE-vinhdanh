@@ -706,11 +706,11 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
         </section>
 
         <section className="rounded-xl border border-[var(--stitch-border)] bg-white p-3.5 shadow-[var(--stitch-shadow)] sm:p-4">
-          <div><h2 className="text-xs font-extrabold text-[#1f2937]">Điều chỉnh %ADS hiện tại</h2><p className="mt-0.5 text-[10px] text-[#64748b]">Số thực tế trong kỳ đã chọn · doanh thu × 0,95 · chi phí Ads × 1,06</p></div>
+          <div><h2 className="text-xs font-extrabold text-[#1f2937]">Điều chỉnh %ADS hiện tại</h2><p className="mt-0.5 text-[10px] text-[#64748b]">Số liệu trong kỳ đã chọn sau điều chỉnh</p></div>
           <div className="mt-3 space-y-2">
             {[
-              { label: 'Doanh thu sau hoàn hủy 5%', value: adjustedRevenue, rate: targetVnd ? Math.min(100, adjustedRevenue / targetVnd * 100) : 100, color: 'bg-purple-600', note: `Đã đạt ${formatMoney(adjustedRevenue)} · ${formatMoney(metrics.revenue)} × 0,95` },
-              { label: 'Chi phí Ads gồm phí agency 6%', value: adjustedAdCost, rate: adjustedRevenue ? adjustedAdCost / adjustedRevenue * 100 : 0, color: 'bg-sky-600', note: `Đã chi ${formatMoney(adjustedAdCost)} · ${formatMoney(metrics.adCost)} × 1,06` },
+              { label: 'Doanh thu sau hoàn hủy 5%', value: adjustedRevenue, rate: targetVnd ? Math.min(100, adjustedRevenue / targetVnd * 100) : 100, color: 'bg-purple-600', note: `Đã đạt ${formatMoney(adjustedRevenue)}` },
+              { label: 'Chi phí Ads gồm phí agency 6%', value: adjustedAdCost, rate: adjustedRevenue ? adjustedAdCost / adjustedRevenue * 100 : 0, color: 'bg-sky-600', note: `Đã chi ${formatMoney(adjustedAdCost)}` },
               { label: '%ADS sau điều chỉnh', value: adjustedAdsPct, rate: adjustedAdsPct, color: adsTone(adjustedAdsPct) === 'red' ? 'bg-rose-600' : adsTone(adjustedAdsPct) === 'amber' ? 'bg-amber-500' : 'bg-emerald-600', note: 'Chi phí Ads sau điều chỉnh / doanh thu sau hoàn hủy' },
             ].map((stage) => (
               <div key={stage.label} className="rounded-lg border border-[var(--stitch-border)] bg-[#f8faf9] p-2.5">
