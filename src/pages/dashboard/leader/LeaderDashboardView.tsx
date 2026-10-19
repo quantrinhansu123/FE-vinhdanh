@@ -1163,14 +1163,14 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
           </section>
 
           <section className="team-dashboard-card team-dashboard-progress">
-            <div className="team-dashboard-panel-title"><div><h2>Tiến độ theo nhân sự</h2><p>DS mục tiêu lấy từ KPI tháng · Vạch dọc là nhịp mục tiêu theo khoảng ngày đã chọn: {monthlyTargetPacePct.toFixed(0)}% · Dự báo theo doanh số bình quân mỗi ngày</p></div></div>
+            <div className="team-dashboard-panel-title"><div><h2>Tiến độ theo nhân sự</h2><p>DS mục tiêu lấy từ KPI tháng · Vạch dọc là nhịp kỳ vọng đã qua: {periodPacePct.toFixed(0)}% · Dự báo theo doanh số bình quân mỗi ngày</p></div></div>
             <div className="team-dashboard-table-wrap"><table className="team-dashboard-table team-dashboard-progress-table"><thead><tr><th>Nhân sự</th><th>DS hiện tại</th><th>DS mục tiêu</th><th>Tiến độ</th><th>%</th><th>DS/ngày</th><th>Dự báo</th><th>Trạng thái</th></tr></thead><tbody>
               {progressRows.map((row) => {
                 const dailyRevenue = elapsedDays > 0 ? row.a.rev / elapsedDays : 0;
                 const barColor = row.state === 'on' ? 'green' : row.state === 'slow' ? 'orange' : row.state === 'risk' ? 'red' : 'orange';
                 const stateText = row.state === 'on' ? 'Đúng nhịp' : row.state === 'slow' ? 'Chậm nhịp' : row.state === 'risk' ? 'Nguy cơ hụt' : 'Chưa gán KPI';
                 return <tr key={row.m.id}><td className="person">{mktNameWithCode(row.m, mktNameByCode)}</td><td>{formatVndDots(row.a.rev)}</td><td>{row.monthlyTarget > 0 ? formatVndDots(row.monthlyTarget) : 'Chưa gán KPI'}</td>
-                  <td><div className="team-dashboard-track"><i className="team-dashboard-marker" style={{ left: `${monthlyTargetPacePct}%` }} /><i className={`team-dashboard-fill ${barColor}`} style={{ width: `${Math.min(100, Math.max(0, row.pct || 0))}%` }} /></div></td>
+                  <td><div className="team-dashboard-track"><i className="team-dashboard-marker" style={{ left: `${periodPacePct}%` }} /><i className={`team-dashboard-fill ${barColor}`} style={{ width: `${Math.min(100, Math.max(0, row.pct || 0))}%` }} /></div></td>
                   <td className={`td-progress-pct ${row.state === 'on' ? 'td-good' : row.state === 'slow' ? 'td-warn' : row.state === 'risk' ? 'td-bad' : ''}`}>{row.pct == null ? '—' : `${row.pct.toFixed(1)}%`}</td><td>{formatVndDots(dailyRevenue)}</td><td className={row.forecastPct != null && row.forecastPct >= 100 ? 'td-good' : row.forecastPct != null && row.forecastPct < 80 ? 'td-bad' : 'td-warn'}>{row.forecastPct == null ? '—' : `${row.forecastPct.toFixed(0)}%`}</td><td><span className={`team-dashboard-status ${row.state}`}>{stateText}</span></td></tr>;
               })}
               {!progressRows.length ? <tr><td colSpan={8} className="td-empty">Chưa có thành viên có báo cáo trong khoảng ngày này.</td></tr> : null}
