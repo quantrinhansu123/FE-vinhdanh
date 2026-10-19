@@ -1,3 +1,3 @@
-import { createMetaQcHandler } from '../server/metaQcHandler';
+import { createMetaQcHandler } from '../server/metaQcHandler.js';
 
 export default createMetaQcHandler(process.env);

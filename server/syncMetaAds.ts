@@ -1,6 +1,6 @@
 import { config } from 'dotenv';
-import { createMetaClient, MetaError, metaDateRange } from './metaClient';
-import { createMetaStore } from './metaSync';
+import { createMetaClient, MetaError, metaDateRange } from './metaClient.js';
+import { createMetaStore } from './metaSync.js';
 
 // Shell/server values take precedence, then .env.local, then .env.
 config({ path: ['.env.local', '.env'], quiet: true });

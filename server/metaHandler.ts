@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createMetaClient, MetaError, metaDateRange } from './metaClient';
-import { createMetaStore } from './metaSync';
+import { createMetaClient, MetaError, metaDateRange } from './metaClient.js';
+import { createMetaStore } from './metaSync.js';
 
 export function createMetaHandler(env: Record<string, string | undefined>) {
   return async (req: IncomingMessage, res: ServerResponse) => {

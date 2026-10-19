@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { MetaError, type MetaReport } from './metaClient';
+import { MetaError, type MetaReport } from './metaClient.js';
 
 /** Service credentials stay in the server module; browser roles have no table access. */
 export function createMetaStore(env: Record<string, string | undefined>, options: { fetch?: typeof fetch } = {}) {

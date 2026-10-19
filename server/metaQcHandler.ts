@@ -1,9 +1,9 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createClient } from '@supabase/supabase-js';
-import { isAdminViTriPosition } from '../src/utils/crmNavAccess';
-import { createMetaClient, metaAccountIds, metaDateRange, MetaError } from './metaClient';
-import { metaReportToQcRows } from './metaQc';
+import { isAdminViTriPosition } from '../src/utils/crmNavAccess.js';
+import { createMetaClient, metaAccountIds, metaDateRange, MetaError } from './metaClient.js';
+import { metaReportToQcRows } from './metaQc.js';
 
 const cookieName = 'meta_qc_session';
 const lifetime = 3600;
