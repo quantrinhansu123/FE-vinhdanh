@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit",
     "meta:sync": "tsx server/syncMetaAds.ts",
     "test:meta": "tsx --test server/metaClient.test.ts server/metaHandler.test.ts server/metaSync.test.ts server/metaQc.test.ts",
-    "test:upcare": "tsx --test src/api/upcareCrm.test.ts"
+    "test:upcare": "tsx --test src/api/upcareCrm.test.ts",
+    "sync:mkt:backfill": "node --import tsx scripts/resyncUpcareMkt.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

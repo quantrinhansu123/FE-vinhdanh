@@ -3,7 +3,7 @@ import { Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
 import type { Employee, ReportRow } from '../../../types';
-import { extractMaNvFromBracketPage } from '../mkt/mktDetailReportShared';
+import { aggregateReportsRawMetrics } from './reportsRawMetrics';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
@@ -129,29 +129,7 @@ export const ReportsRawView: React.FC = () => {
   const [backfilling, setBackfilling] = useState(false);
   const [fillingMaDuAn, setFillingMaDuAn] = useState(false);
 
-  const totals = useMemo(() => {
-    let mess = 0;
-    let ads = 0;
-    let vnd = 0;
-    const rawUsdByEmployeeDay = new Map<string, { id: string; amount: number }>();
-    for (const r of rows) {
-      mess += Number(r.mess_comment_count || 0);
-      ads += Number(r.ad_cost || 0);
-      vnd += Number(r.tien_viet || 0);
-      const rawRevenue = Number(r.revenue);
-      if (!Number.isFinite(rawRevenue)) continue;
-      const reportDate = r.report_date?.slice(0, 10) || '';
-      const code = staffCodeKey((r as { code?: string | null }).code) || staffCodeKey(extractMaNvFromBracketPage(r.page));
-      // Fabico returns one total per employee/day. Imported reports can have
-      // several rows for that employee/day, so count that source total once.
-      const key = reportDate && code ? `${reportDate}\0${code}` : `row\0${r.id || rawUsdByEmployeeDay.size}`;
-      const id = r.id || key;
-      const previous = rawUsdByEmployeeDay.get(key);
-      if (!previous || id.localeCompare(previous.id) < 0) rawUsdByEmployeeDay.set(key, { id, amount: rawRevenue });
-    }
-    const revenue = Array.from(rawUsdByEmployeeDay.values()).reduce((sum, row) => sum + row.amount, 0);
-    return { mess, ads, vnd, revenue };
-  }, [rows]);
+  const totals = useMemo(() => aggregateReportsRawMetrics(rows), [rows]);
 
   const staffCoverage = useMemo(() => {
     const reported = new Set(periodReports.map((row) => staffCodeKey(row.code)).filter(Boolean));

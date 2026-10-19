@@ -39,7 +39,7 @@ Environment variables used by the app:
 
 ## Automatic Meta + Odoo detail report sync
 
-The production cron calls `/api/cron-marketing-sync` every hour at minute 15 UTC (minute 15 of each hour in Vietnam time). It refreshes today plus the previous three days by default, writes Meta first, then merges Odoo sales/data into the Odoo-specific columns. Both steps use an idempotent `(report_date, code)` key and preserve the other source's columns. The job is disabled on local and Vercel preview deployments by default.
+The production cron calls `/api/cron-marketing-sync` every hour at minute 15 UTC (minute 15 of each hour in Vietnam time). It refreshes today plus the previous three days by default, writes Meta first, then merges Odoo sales/data into the Odoo-specific columns. Both steps use an idempotent `(report_date, normalized employee code)` key and preserve the other source's columns. Revenue totals in the raw report also count one Odoo sales total per employee/day, so duplicate rows with code-case differences cannot inflate the VND total. The job is disabled on local and Vercel preview deployments by default.
 
 To apply the required database schema automatically when a migration is pushed to `main`, add these GitHub Actions repository secrets:
 
@@ -49,4 +49,4 @@ To apply the required database schema automatically when a migration is pushed t
 
 The workflow previews pending SQL migrations, then runs `supabase db push`. Vercel still deploys the application separately. Add `CRON_SECRET`, `META_ACCESS_TOKEN`, `META_AD_ACCOUNT_IDS`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the existing server-only `UPCARE_CRM_*` credentials to the Vercel Production environment. Never commit these values or expose them with a `VITE_` prefix.
 
-The migration intentionally stops if `detail_reports` already has duplicate non-empty `(report_date, code)` pairs; it will not merge or discard existing report rows automatically. Resolve those duplicates before the workflow can apply the unique key and enable safe upserts.
+The employee-code migration removes the one audited duplicate from October 17, then stops if other normalized employee/day duplicates remain. Review those rows before retrying the migration. The `npm run sync:mkt:backfill -- <from> <to> --apply` repair command backs up the selected rows, fetches Odoo separately for each date, and verifies the saved employee/day metrics before it succeeds.

@@ -28,23 +28,27 @@ alter table public.detail_reports add column if not exists revenue numeric;
 alter table public.detail_reports add column if not exists tien_viet numeric;
 alter table public.detail_reports add column if not exists order_count integer;
 alter table public.detail_reports add column if not exists tong_data_nhan integer;
+alter table public.detail_reports
+  add column if not exists code_normalized text
+  generated always as (nullif(lower(regexp_replace(btrim(replace(code, chr(160), ' ')), '[[:space:]]+', ' ', 'g')), '')) stored;
 
 do $$
 begin
   if exists (
     select 1 from public.detail_reports
-    where code is not null
-    group by report_date, code
+    where code_normalized is not null
+    group by report_date, code_normalized
     having count(*) > 1
   ) then
-    raise exception 'Migration stopped: detail_reports contains duplicate (report_date, code) rows. Resolve duplicates before enabling the automatic Meta/Odoo sync.';
+    raise exception 'Migration stopped: detail_reports contains duplicate normalized (report_date, code) rows. Reconcile the employee/day rows before enabling the automatic Meta/Odoo sync.';
   end if;
 end;
 $$;
 
-create unique index if not exists detail_reports_report_date_code_uidx
-  on public.detail_reports (report_date, code)
-  where code is not null;
+drop index if exists public.detail_reports_report_date_code_uidx;
+create unique index if not exists detail_reports_report_date_code_normalized_uidx
+  on public.detail_reports (report_date, code_normalized)
+  where code_normalized is not null;
 grant select, insert, update, delete on public.detail_reports to service_role;
 
 comment on table public.meta_project_qc_insights is
@@ -179,7 +183,7 @@ begin
     report_date date, code text, name text, email text, team text,
     ad_account text, ad_cost numeric, mess_comment_count integer
   )
-  on conflict (report_date, code) where code is not null
+  on conflict (report_date, code_normalized) where code_normalized is not null
   do update set
     name = excluded.name,
     email = excluded.email,
@@ -242,7 +246,7 @@ begin
     report_date date, code text, name text, email text, team text,
     revenue numeric, tien_viet numeric, order_count integer, tong_data_nhan integer
   )
-  on conflict (report_date, code) where code is not null
+  on conflict (report_date, code_normalized) where code_normalized is not null
   do update set
     name = excluded.name,
     email = excluded.email,
