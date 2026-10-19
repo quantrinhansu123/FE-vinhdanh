@@ -52,6 +52,8 @@ import {
 const KPI_STAFF_TARGETS_TABLE =
   import.meta.env.VITE_SUPABASE_KPI_STAFF_MONTHLY_TARGETS_TABLE?.trim() || 'kpi_staff_monthly_targets';
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+const REVENUE_AFTER_CANCEL_RATE = 0.95;
+const AD_COST_WITH_AGENCY_RATE = 1.06;
 
 type PersonOption = { id: string; name: string; email: string; ma_ns: string | null };
 
@@ -493,13 +495,10 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
   const metrics = useMemo(() => makeMetrics(daily, odooTotals), [daily, odooTotals]);
   const priorMetrics = useMemo(() => makeMetrics(priorDaily, priorOdooTotals), [priorDaily, priorOdooTotals]);
   const activeDays = Math.max(1, daily.filter(dayHasActivity).length);
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  const dayOfMonth = today.getDate();
-  const remainingDays = Math.max(0, daysInMonth - dayOfMonth);
-  // Dự kiến cả tháng = thực tế kỳ hiện tại + nhịp ngày × số ngày còn lại (cùng công thức cho DT & chi phí).
-  const forecastRevenue = metrics.revenue + (metrics.revenue / activeDays) * remainingDays;
-  const forecastAdCost = metrics.adCost + (metrics.adCost / activeDays) * remainingDays;
-  const forecastAdsPct = forecastRevenue > 0 ? (forecastAdCost / forecastRevenue) * 100 : 0;
+  // Điều chỉnh số thực tế trong kỳ đang chọn; không ngoại suy tới cuối tháng.
+  const adjustedRevenue = metrics.revenue * REVENUE_AFTER_CANCEL_RATE;
+  const adjustedAdCost = metrics.adCost * AD_COST_WITH_AGENCY_RATE;
+  const adjustedAdsPct = adjustedRevenue > 0 ? (adjustedAdCost / adjustedRevenue) * 100 : 0;
   const showPriorDelta = compare && priorRows.length > 0;
   const revenueProgress = targetVnd ? Math.min(100, (metrics.revenue / targetVnd) * 100) : undefined;
   const adsStatus = adsTone(metrics.revenue > 0 ? metrics.adsPct : metrics.adCost > 0 ? 100 : null);
@@ -707,12 +706,12 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
         </section>
 
         <section className="rounded-xl border border-[var(--stitch-border)] bg-white p-3.5 shadow-[var(--stitch-shadow)] sm:p-4">
-          <div><h2 className="text-xs font-extrabold text-[#1f2937]">Dự đoán %ADS</h2><p className="mt-0.5 text-[10px] text-[#64748b]">Thực tế kỳ + nhịp {activeDays} ngày có dữ liệu × {remainingDays} ngày còn lại trong tháng</p></div>
+          <div><h2 className="text-xs font-extrabold text-[#1f2937]">Điều chỉnh %ADS hiện tại</h2><p className="mt-0.5 text-[10px] text-[#64748b]">Số thực tế trong kỳ đã chọn · doanh thu × 0,95 · chi phí Ads × 1,06</p></div>
           <div className="mt-3 space-y-2">
             {[
-              { label: 'Doanh thu dự kiến cả tháng', value: forecastRevenue, rate: targetVnd ? Math.min(100, forecastRevenue / targetVnd * 100) : 100, color: 'bg-purple-600', note: `Đã đạt ${formatMoney(metrics.revenue)} · còn dự kiến thêm ${formatMoney(Math.max(0, forecastRevenue - metrics.revenue))}` },
-              { label: 'Chi phí quảng cáo dự kiến', value: forecastAdCost, rate: forecastRevenue ? forecastAdCost / forecastRevenue * 100 : 0, color: 'bg-sky-600', note: `Đã chi ${formatMoney(metrics.adCost)} · cùng nhịp với doanh thu` },
-              { label: '%ADS dự kiến', value: forecastAdsPct, rate: forecastAdsPct, color: adsTone(forecastAdsPct) === 'red' ? 'bg-rose-600' : adsTone(forecastAdsPct) === 'amber' ? 'bg-amber-500' : 'bg-emerald-600', note: `Thực tế kỳ ${metrics.revenue > 0 ? formatPercent(metrics.adsPct) : '—'} · chi phí / doanh thu dự kiến` },
+              { label: 'Doanh thu sau hoàn hủy 5%', value: adjustedRevenue, rate: targetVnd ? Math.min(100, adjustedRevenue / targetVnd * 100) : 100, color: 'bg-purple-600', note: `Đã đạt ${formatMoney(adjustedRevenue)} · ${formatMoney(metrics.revenue)} × 0,95` },
+              { label: 'Chi phí Ads gồm phí agency 6%', value: adjustedAdCost, rate: adjustedRevenue ? adjustedAdCost / adjustedRevenue * 100 : 0, color: 'bg-sky-600', note: `Đã chi ${formatMoney(adjustedAdCost)} · ${formatMoney(metrics.adCost)} × 1,06` },
+              { label: '%ADS sau điều chỉnh', value: adjustedAdsPct, rate: adjustedAdsPct, color: adsTone(adjustedAdsPct) === 'red' ? 'bg-rose-600' : adsTone(adjustedAdsPct) === 'amber' ? 'bg-amber-500' : 'bg-emerald-600', note: 'Chi phí Ads sau điều chỉnh / doanh thu sau hoàn hủy' },
             ].map((stage) => (
               <div key={stage.label} className="rounded-lg border border-[var(--stitch-border)] bg-[#f8faf9] p-2.5">
                 <div className="flex items-baseline justify-between gap-2"><span className="text-[10px] font-bold text-[#64748b]">{stage.label}</span><strong className="text-base font-extrabold font-mono text-[#1f2937]">{stage.label.includes('%ADS') ? formatPercent(stage.value) : formatMoney(stage.value)}</strong></div>
