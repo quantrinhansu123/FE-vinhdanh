@@ -944,6 +944,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     ? Math.round((targetRangeEnd - targetRangeStart) / 86400000) + 1
     : 0;
   const targetRangeFactor = Math.min(1, targetDaysInRange / Math.max(1, monthDayCount));
+  const monthlyTargetPacePct = targetRangeFactor * 100;
   const teamRangeTarget = teamTargetVnd != null ? teamTargetVnd * targetRangeFactor : null;
   const kpiPctForRange = teamRangeTarget != null && teamRangeTarget > 0 ? (teamTotals.rev / teamRangeTarget) * 100 : null;
   const todayYmd = toLocalYyyyMmDd(new Date());
@@ -1005,16 +1006,17 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     .sort((a, b) => (a.pct ?? 0) - (b.pct ?? 0))[0] ?? null;
   const progressRows = tableRows.map((row) => {
     const monthlyTarget = staffTargets.get(row.m.id) || 0;
-    const target = monthlyTarget * targetRangeFactor;
-    const pct = target > 0 ? (row.a.rev / target) * 100 : null;
+    const selectedPeriodTarget = monthlyTarget * targetRangeFactor;
+    // The visible target is the full monthly KPI, so actual progress must use that same denominator.
+    const pct = monthlyTarget > 0 ? (row.a.rev / monthlyTarget) * 100 : null;
     const forecast = elapsedDays > 0 ? (row.a.rev / elapsedDays) * rangeDays : 0;
-    const forecastPct = target > 0 ? (forecast / target) * 100 : null;
+    const forecastPct = selectedPeriodTarget > 0 ? (forecast / selectedPeriodTarget) * 100 : null;
     const state = forecastPct == null ? 'unassigned' : forecastPct >= 100 ? 'on' : forecastPct >= 80 ? 'slow' : 'risk';
-    return { ...row, monthlyTarget, target, pct, forecast, forecastPct, state };
+    return { ...row, monthlyTarget, pct, forecast, forecastPct, state };
   });
   const supportMember = [...progressRows].sort((a, b) => {
-    const aGap = a.target > 0 ? (a.pct ?? 0) - periodPacePct : Infinity;
-    const bGap = b.target > 0 ? (b.pct ?? 0) - periodPacePct : Infinity;
+    const aGap = a.monthlyTarget > 0 ? (a.pct ?? 0) - monthlyTargetPacePct : Infinity;
+    const bGap = b.monthlyTarget > 0 ? (b.pct ?? 0) - monthlyTargetPacePct : Infinity;
     return aGap - bGap;
   })[0] ?? null;
 
@@ -1161,14 +1163,14 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
           </section>
 
           <section className="team-dashboard-card team-dashboard-progress">
-            <div className="team-dashboard-panel-title"><div><h2>Tiến độ theo nhân sự</h2><p>DS mục tiêu lấy từ KPI tháng · Vạch dọc là nhịp kỳ vọng đã qua: {periodPacePct.toFixed(0)}% · Dự báo theo doanh số bình quân mỗi ngày</p></div></div>
+            <div className="team-dashboard-panel-title"><div><h2>Tiến độ theo nhân sự</h2><p>DS mục tiêu lấy từ KPI tháng · Vạch dọc là nhịp mục tiêu theo khoảng ngày đã chọn: {monthlyTargetPacePct.toFixed(0)}% · Dự báo theo doanh số bình quân mỗi ngày</p></div></div>
             <div className="team-dashboard-table-wrap"><table className="team-dashboard-table team-dashboard-progress-table"><thead><tr><th>Nhân sự</th><th>DS hiện tại</th><th>DS mục tiêu</th><th>Tiến độ</th><th>%</th><th>DS/ngày</th><th>Dự báo</th><th>Trạng thái</th></tr></thead><tbody>
               {progressRows.map((row) => {
                 const dailyRevenue = elapsedDays > 0 ? row.a.rev / elapsedDays : 0;
                 const barColor = row.state === 'on' ? 'green' : row.state === 'slow' ? 'orange' : row.state === 'risk' ? 'red' : 'orange';
                 const stateText = row.state === 'on' ? 'Đúng nhịp' : row.state === 'slow' ? 'Chậm nhịp' : row.state === 'risk' ? 'Nguy cơ hụt' : 'Chưa gán KPI';
                 return <tr key={row.m.id}><td className="person">{mktNameWithCode(row.m, mktNameByCode)}</td><td>{formatVndDots(row.a.rev)}</td><td>{row.monthlyTarget > 0 ? formatVndDots(row.monthlyTarget) : 'Chưa gán KPI'}</td>
-                  <td><div className="team-dashboard-track"><i className="team-dashboard-marker" style={{ left: `${periodPacePct}%` }} /><i className={`team-dashboard-fill ${barColor}`} style={{ width: `${Math.min(100, Math.max(0, row.pct || 0))}%` }} /></div></td>
+                  <td><div className="team-dashboard-track"><i className="team-dashboard-marker" style={{ left: `${monthlyTargetPacePct}%` }} /><i className={`team-dashboard-fill ${barColor}`} style={{ width: `${Math.min(100, Math.max(0, row.pct || 0))}%` }} /></div></td>
                   <td className={`td-progress-pct ${row.state === 'on' ? 'td-good' : row.state === 'slow' ? 'td-warn' : row.state === 'risk' ? 'td-bad' : ''}`}>{row.pct == null ? '—' : `${row.pct.toFixed(1)}%`}</td><td>{formatVndDots(dailyRevenue)}</td><td className={row.forecastPct != null && row.forecastPct >= 100 ? 'td-good' : row.forecastPct != null && row.forecastPct < 80 ? 'td-bad' : 'td-warn'}>{row.forecastPct == null ? '—' : `${row.forecastPct.toFixed(0)}%`}</td><td><span className={`team-dashboard-status ${row.state}`}>{stateText}</span></td></tr>;
               })}
               {!progressRows.length ? <tr><td colSpan={8} className="td-empty">Chưa có thành viên có báo cáo trong khoảng ngày này.</td></tr> : null}
@@ -1178,7 +1180,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
           <section className="team-dashboard-mini-grid">
             <article className="team-dashboard-card team-dashboard-mini"><h3>Top doanh số</h3><strong>{leaderMember ? `${mktNameWithCode(leaderMember.m, mktNameByCode)} · ${formatVndDots(leaderMember.a.rev)}` : 'Chưa có dữ liệu'}</strong><p>{leaderMember && teamTotals.rev > 0 ? `Đóng góp ${((leaderMember.a.rev / teamTotals.rev) * 100).toFixed(1)}% doanh số team` : 'Số liệu sẽ hiện khi có báo cáo.'}</p></article>
             <article className="team-dashboard-card team-dashboard-mini"><h3>Hiệu suất quảng cáo tốt nhất</h3><strong>{bestEfficiency ? `${mktNameWithCode(bestEfficiency.m, mktNameByCode)} · ${bestEfficiency.cpdt?.toFixed(1)}%` : 'Chưa có dữ liệu'}</strong><p>{bestEfficiency ? 'CP/DT thấp nhất trong các thành viên có doanh thu.' : 'Chưa thể tính CP/DT trong kỳ này.'}</p></article>
-            <article className="team-dashboard-card team-dashboard-mini"><h3>Cần ưu tiên hỗ trợ</h3><strong className={supportMember && staffTargets.has(supportMember.m.id) ? 'td-bad' : ''}>{supportMember && staffTargets.has(supportMember.m.id) ? `${mktNameWithCode(supportMember.m, mktNameByCode)} · trễ ${Math.max(0, periodPacePct - (supportMember.pct ?? 0)).toFixed(0)} điểm %` : 'Chưa có KPI để so sánh'}</strong><p>{supportMember && staffTargets.has(supportMember.m.id) ? 'Dựa trên tiến độ KPI so với thời gian đã qua.' : 'Gán KPI tháng cho thành viên để theo dõi nhịp.'}</p></article>
+            <article className="team-dashboard-card team-dashboard-mini"><h3>Cần ưu tiên hỗ trợ</h3><strong className={supportMember && staffTargets.has(supportMember.m.id) ? 'td-bad' : ''}>{supportMember && staffTargets.has(supportMember.m.id) ? `${mktNameWithCode(supportMember.m, mktNameByCode)} · trễ ${Math.max(0, monthlyTargetPacePct - (supportMember.pct ?? 0)).toFixed(0)} điểm %` : 'Chưa có KPI để so sánh'}</strong><p>{supportMember && staffTargets.has(supportMember.m.id) ? 'Dựa trên tiến độ KPI so với nhịp mục tiêu trong khoảng đã chọn.' : 'Gán KPI tháng cho thành viên để theo dõi nhịp.'}</p></article>
           </section>
         </>
       )}
