@@ -34,7 +34,7 @@ export type UpcareMktPeriodMetrics = {
   totals: { revenueVnd: number; dataCount: number; orderCount: number };
 };
 
-const ODOO_VND_RATE = 25_000;
+export const UPCARE_ODOO_VND_RATE = 25_000;
 
 type RawUpcareMktRow = Record<string, unknown>;
 type PublicEnv = Record<string, string | undefined>;
@@ -226,6 +226,8 @@ function inclusiveUtcDates(dateFrom: string, dateTo: string): string[] {
 
 export function normalizeUpcareMktEmployeeCode(value: unknown): string {
   return String(value ?? '')
+    .normalize('NFKC')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
     .replace(/\u00a0/g, ' ')
     .trim()
     .replace(/\s+/g, ' ')
@@ -239,7 +241,7 @@ export function aggregateUpcareMktPeriodEmployees(rows: UpcareMktEmployeeRow[]):
 
   for (const row of rows) {
     const amount = Number(row.amount);
-    const revenueVnd = Math.round((Number.isFinite(amount) ? amount : 0) * ODOO_VND_RATE);
+    const revenueVnd = Math.round((Number.isFinite(amount) ? amount : 0) * UPCARE_ODOO_VND_RATE);
     const rawDataCount = Number(row.dataCount);
     const rawOrderCount = Number(row.count);
     const dataCount = Number.isFinite(rawDataCount) ? rawDataCount : 0;

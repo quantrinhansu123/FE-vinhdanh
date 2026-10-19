@@ -3,6 +3,11 @@ import { CalendarDays, Eye, Loader2, RefreshCw, Users, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import {
+  aggregateUpcareMktPeriodEmployees,
+  fetchUpcareMktEmployeesForRange,
+  normalizeUpcareMktEmployeeCode,
+} from '../../../api/upcareCrm';
 import { ADS_LIMIT_PERCENT, ADS_WARNING_PERCENT, adsTone, closeTone, performanceTextClass } from '../../../utils/performanceThresholds';
 import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 import type { AuthUser, Employee } from '../../../types';
@@ -144,30 +149,6 @@ function normalizeTeamLookupKey(raw: string | null | undefined): string {
  * (khoảng trắng / gạch / hậu tố thừa) — trả về khóa chuẩn của KPI đó; nhiều kết quả → bỏ qua.
  */
 /** Bỏ tiền tố kiểu "Team …" / "Nhóm …" trên detail_reports.team để khớp team_key KPI. */
-function detailReportsTeamPrefixStrip(raw: string | null | undefined): string {
-  const full = safeTrim(raw);
-  if (!full) return '';
-  const stripped = full.replace(/^(team|nh[oô]m)\s*[:.\-_/\\]*\s*/i, '').trim();
-  return stripped || full;
-}
-
-function remapDrTeamToKpiNorm(drRaw: string, teamKpiRows: { teamKey: string }[]): string {
-  const t = safeTrim(drRaw).toLowerCase().replace(/\s+/g, ' ');
-  if (!t) return '';
-  const hits: string[] = [];
-  for (const r of teamKpiRows) {
-    const k = safeTrim(r.teamKey).toLowerCase().replace(/\s+/g, ' ');
-    if (!k) continue;
-    const nk = normalizeTeamLookupKey(r.teamKey);
-    if (!nk) continue;
-    if (t === k) hits.push(nk);
-    else if (t.startsWith(`${k} `) || t.startsWith(`${k}-`) || t.startsWith(`${k}/`)) hits.push(nk);
-    else if (k.startsWith(`${t} `) || k.startsWith(`${t}-`) || k.startsWith(`${t}/`)) hits.push(nk);
-  }
-  const uniq = [...new Set(hits)];
-  return uniq.length === 1 ? uniq[0] : '';
-}
-
 /** Chỉ hiển thị tên: ưu tiên tên CRM theo `ma_ns`/`code` (map từ roster), sau đó `m.name`. */
 function mktNameWithCode(m: Employee, nameByCode?: Map<string, string>): string {
   const code = safeTrim(m.ma_ns) || safeTrim(m.code);
@@ -228,10 +209,7 @@ function emptyAgg(): Agg {
 }
 
 function leadCount(a: Agg): number {
-  const tl = a.tongLead;
-  if (tl > 0) return tl;
-  if (a.mess > 0) return a.mess;
-  return 0;
+  return a.tongData > 0 ? a.tongData : a.tongLead;
 }
 
 function cpdtPillClass(pct: number): string {
@@ -336,6 +314,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [odooWarning, setOdooWarning] = useState<string | null>(null);
   const [teamName, setTeamName] = useState('');
   const [members, setMembers] = useState<Employee[]>([]);
   const [byCodeKey, setByCodeKey] = useState<Map<string, Agg>>(() => new Map());
@@ -357,6 +336,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     if (!viewer?.email) {
       setTeamName('');
       setError(null);
+      setOdooWarning(null);
       setMembers([]);
       setByCodeKey(new Map());
       setDetailRowsByCodeKey(new Map());
@@ -371,6 +351,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
 
     setLoading(true);
     setError(null);
+    setOdooWarning(null);
     setMembers([]);
     setByCodeKey(new Map());
     setDetailRowsByCodeKey(new Map());
@@ -453,7 +434,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
             .eq('nam_thang', selectedYm)
         : Promise.resolve({ data: [] as { muc_tieu_doanh_thu_team?: number; team_key?: string }[], error: null });
 
-    const [teamKpiRes, staffKpiRes, repRes] = await Promise.all([
+    const [teamKpiRes, staffKpiRes, repRes, odooResult] = await Promise.all([
       teamKpiPromise,
       idList.length
         ? supabase
@@ -463,6 +444,14 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
             .in('employee_id', idList)
         : Promise.resolve({ data: [] as { employee_id: string; muc_tieu_vnd: number }[], error: null }),
       allowedCodeKeys.size > 0 ? fetchAllLeaderDetailReportsForRange(start, end) : Promise.resolve({ data: [], error: null }),
+      allowedCodeKeys.size > 0
+        ? fetchUpcareMktEmployeesForRange({ dateFrom: start, dateTo: end })
+            .then((data) => ({ data, error: null as Error | null }))
+            .catch((cause: unknown) => ({
+              data: null,
+              error: cause instanceof Error ? cause : new Error('Không tải được Odoo theo kỳ.'),
+            }))
+        : Promise.resolve({ data: null, error: null as Error | null }),
     ]);
 
     if (teamKpiRes.error) {
@@ -541,13 +530,44 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       next.set(ck, a);
     }
 
-    const membersFromDetail = teamList.filter((e) => {
-      const k = codeKey(e.ma_ns);
-      return Boolean(k && codesWithDetailRows.has(k));
+    const odooByCode = odooResult.data
+      ? aggregateUpcareMktPeriodEmployees(odooResult.data.employees).byCode
+      : null;
+    const codesWithOdooRows = new Set<string>();
+    const usedCodes = new Set<string>();
+    const membersWithMetrics = teamList.filter((e) => {
+      const key = codeKey(e.ma_ns);
+      if (!key || usedCodes.has(key)) return false;
+      usedCodes.add(key);
+      const odoo = odooByCode?.get(normalizeUpcareMktEmployeeCode(e.ma_ns));
+      if (odoo) {
+        codesWithOdooRows.add(key);
+        const a = next.get(key) || emptyAgg();
+        a.rev = odoo.revenueVnd;
+        a.tongData = odoo.dataCount;
+        // The team table's Lead column follows the personal dashboard's Odoo data count.
+        a.tongLead = odoo.dataCount;
+        a.orders = odoo.orderCount;
+        next.set(key, a);
+      }
+      return codesWithDetailRows.has(key) || Boolean(odoo);
     });
+    if (odooResult.error) {
+      setOdooWarning(`Không tải được Odoo cho khoảng ${start} – ${end}; doanh số, data và đơn đang tạm lấy từ detail_reports. ${odooResult.error.message}`);
+    } else if (odooByCode) {
+      const missingCodes = membersWithMetrics
+        .filter((e) => !codesWithOdooRows.has(codeKey(e.ma_ns) || ''))
+        .map((e) => safeTrim(e.ma_ns))
+        .filter(Boolean);
+      if (missingCodes.length) {
+        setOdooWarning(`Odoo không trả mã ${[...new Set(missingCodes)].join(', ')} trong kỳ; các mã này đang dùng số đã lưu trong detail_reports.`);
+      }
+    } else {
+      setOdooWarning('Nhân sự chưa có mã Odoo để đối chiếu; các chỉ số doanh số, data và đơn đang lấy từ detail_reports.');
+    }
     setMktNameByCode(nameByCodeMap);
     setDetailRowsByCodeKey(detailByCode);
-    setMembers(membersFromDetail);
+    setMembers(membersWithMetrics);
     setByCodeKey(next);
     setLoading(false);
   }, [viewer?.email, viewer?.team, viewer?.name, viewer?.role, start, end, selectedYm]);
@@ -595,7 +615,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       const a = aggForMember(m);
       const cpdt = adsDtPct(a.ads, a.rev);
       const mess = a.mess;
-      const lead = a.tongLead;
+      const lead = leadCount(a);
       const cpa = mess > 0 ? a.ads / mess : 0;
       const cpl = lead > 0 ? a.ads / lead : 0;
       const cpo = a.orders > 0 ? a.ads / a.orders : 0;
@@ -629,7 +649,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
   const kpiPctTeam =
     teamTargetVnd != null && teamTargetVnd > 0 ? Math.min(999, (teamTotals.rev / teamTargetVnd) * 100) : null;
 
-  /** ma_ns (code) → team roster (chuẩn hóa) — để gán dòng DR không có cột team / nhân sự chưa gán team khi leader chỉ 1 team. */
+  /** ma_ns (code) → team roster (chuẩn hóa), dùng để phân bổ Odoo theo nhân sự. */
   const codeKeyToRosterTeamNorm = useMemo(() => {
     const m = new Map<string, string>();
     const singleKn =
@@ -645,50 +665,20 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     return m;
   }, [members, leaderTeamKeys]);
 
-  /**
-   * Doanh thu cho từng thanh KPI team: mỗi dòng DR chỉ cộng **một lần**.
-   * Nhiều team: ưu tiên `detail_reports.team` nếu khớp team leader (sau normalize); không thì roster theo mã NS.
-   * Tránh lỗi cũ (cộng full theo roster + cộng theo DR) làm % sai (ví dụ 300M+150M so với mục tiêu từng team).
-   */
+  /** Doanh thu Odoo theo kỳ được phân bổ vào team qua mã nhân sự và team trong roster CRM. */
   const revByTeamAttributed = useMemo(() => {
-    const allowedKn = new Set<string>();
-    for (const t of leaderTeamKeys) {
-      const kn = normalizeTeamLookupKey(t);
-      if (kn) allowedKn.add(kn);
-    }
-    for (const r of teamKpiRows) {
-      const kn = normalizeTeamLookupKey(r.teamKey);
-      if (kn) allowedKn.add(kn);
-    }
     const singleKn =
       leaderTeamKeys.length === 1 ? normalizeTeamLookupKey(safeTrim(leaderTeamKeys[0])) : '';
     const out = new Map<string, number>();
-    for (const rows of detailRowsByCodeKey.values()) {
-      for (const row of rows) {
-        const ck = codeKey((row as { code?: string | null }).code);
-        if (!ck) continue;
-        const drRaw = safeTrim((row as { team?: string | null }).team);
-        const knDr = drRaw ? normalizeTeamLookupKey(detailReportsTeamPrefixStrip(drRaw)) : '';
-        const knRos = codeKeyToRosterTeamNorm.get(ck) ?? '';
-        let kn = '';
-        if (leaderTeamKeys.length <= 1) {
-          kn = knDr || knRos || singleKn;
-        } else {
-          /** Nhiều team: ưu tiên cột team trên DR (kể cả remap), sau đó mới roster — tránh nuốt hết DT vào một employees.team. */
-          if (knDr && allowedKn.has(knDr)) kn = knDr;
-          else if (knDr && !allowedKn.has(knDr)) {
-            const remapped = remapDrTeamToKpiNorm(detailReportsTeamPrefixStrip(drRaw), teamKpiRows);
-            if (remapped && allowedKn.has(remapped)) kn = remapped;
-          }
-          if (!kn && knRos && allowedKn.has(knRos)) kn = knRos;
-        }
-        if (!kn) continue;
-        const add = reportRevenueVnd(row as { tien_viet?: unknown; revenue?: unknown });
-        out.set(kn, (out.get(kn) ?? 0) + add);
-      }
+    for (const { m, a } of tableRows) {
+      const key = codeKey(m.ma_ns);
+      const teamNorm = key ? codeKeyToRosterTeamNorm.get(key) ?? '' : '';
+      const kn = teamNorm || singleKn;
+      if (!kn) continue;
+      out.set(kn, (out.get(kn) ?? 0) + a.rev);
     }
     return out;
-  }, [detailRowsByCodeKey, codeKeyToRosterTeamNorm, leaderTeamKeys, teamKpiRows]);
+  }, [tableRows, codeKeyToRosterTeamNorm, leaderTeamKeys]);
 
   /** Mỗi team một thanh: DT team / mục tiêu team (không gộp nhiều team vào một thanh). */
   const teamKpiBarItems = useMemo(() => {
@@ -895,7 +885,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       'CP/DT %',
       'Mess',
       'CPA',
-      'Lead',
+      'Data Odoo',
       'CPL',
       'Đơn',
       'CPO',
@@ -1035,7 +1025,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
           <div className="team-dashboard-brand-icon"><Users size={20} /></div>
           <div className="min-w-0">
             <h1>Dashboard Team {teamName || 'Kinh doanh'}</h1>
-            <p>Tổng quan hiệu suất, tiến độ và cơ cấu doanh số theo thành viên</p>
+            <p>Doanh số, data và đơn theo Odoo từng kỳ · Chi phí và mess theo detail_reports</p>
           </div>
         </div>
         <div className="team-dashboard-filters">
@@ -1059,6 +1049,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       </header>
 
       {error ? <div className="team-dashboard-error">{error}</div> : null}
+      {odooWarning ? <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900" role="status">{odooWarning}</div> : null}
       {!teamName ? <div className="team-dashboard-error">Chưa xác định team. Kiểm tra leader trong bảng crm_teams hoặc trường team ở nhân sự.</div> : null}
 
       {loading ? (
@@ -1133,7 +1124,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
           <section className="team-dashboard-summary-grid" aria-label="Tổng quan team">
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Doanh số team</p><strong>{revStr}</strong><p className="td-sub">Mục tiêu kỳ {teamRangeTarget ? formatVndDots(teamRangeTarget) : 'chưa thiết lập'} <span className={kpiPctForRange != null && kpiPctForRange >= periodPacePct ? 'td-good' : 'td-warn'}>{kpiPctForRange == null ? '—' : `${kpiPctForRange.toFixed(1)}%`}</span></p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Chi phí quảng cáo</p><strong>{adsStr}</strong><p className="td-sub">CP/DT hiện tại <span className={performanceTextClass(adsTone(adsTeamPct))}>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</span></p></article>
-            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Tổng Lead</p><strong>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</strong><p className="td-sub">CPL bình quân <span>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</span></p></article>
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Tổng Data Odoo</p><strong>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</strong><p className="td-sub">CPL bình quân <span>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</span></p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Tổng đơn</p><strong>{teamTotals.orders.toLocaleString('vi-VN')}</strong><p className="td-sub">Tỷ lệ chốt <span className={performanceTextClass(closeTone(chotTeam))}>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</span></p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">AOV bình quân</p><strong>{averageOrderValue > 0 ? formatVndDots(averageOrderValue) : '—'}</strong><p className="td-sub">CPA mess <span>{teamCpa > 0 ? formatVndDots(teamCpa) : '—'}</span></p></article>
           </section>
@@ -1143,7 +1134,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
               <div className="team-dashboard-panel-title"><div><h2>Bảng hiệu suất tổng hợp theo thành viên</h2><p>Team là tổng các nhân sự có báo cáo trong khoảng đã chọn</p></div><button type="button" onClick={exportCsv} disabled={!displayRows.length} className="team-dashboard-export">Export CSV</button></div>
               <div className="team-dashboard-table-wrap">
                 <table className="team-dashboard-table">
-                  <thead><tr><th>Nhân sự</th><th>Doanh số</th><th>Chi phí</th><th>CP/DT</th><th>Mess</th><th>CPA</th><th>Lead</th><th>CPL</th><th>Đơn</th><th>CPO</th><th>%CR</th><th>AOV</th></tr></thead>
+                  <thead><tr><th>Nhân sự</th><th>Doanh số</th><th>Chi phí</th><th>CP/DT</th><th>Mess</th><th>CPA</th><th>Data Odoo</th><th>CPL</th><th>Đơn</th><th>CPO</th><th>%CR</th><th>AOV</th></tr></thead>
                   <tbody>
                     <tr className="team-row"><td className="person team-name">TEAM · {teamName || '—'}</td><td>{formatVndDots(teamTotals.rev)}</td><td>{formatVndDots(teamTotals.ads)}</td><td className={performanceTextClass(adsTone(adsTeamPct))}>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</td><td>{Math.round(teamMess).toLocaleString('vi-VN')}</td><td>{teamCpa > 0 ? formatVndDots(teamCpa) : '—'}</td><td>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</td><td>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</td><td>{teamTotals.orders.toLocaleString('vi-VN')}</td><td>{teamCpo > 0 ? formatVndDots(teamCpo) : '—'}</td><td className={performanceTextClass(closeTone(chotTeam))}>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</td><td>{averageOrderValue > 0 ? formatVndDots(averageOrderValue) : '—'}</td></tr>
                     {tableRows.map((row, index) => <tr key={row.m.id}>
@@ -1153,7 +1144,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                       <td>{Math.round(row.mess).toLocaleString('vi-VN')}</td><td>{row.cpa > 0 ? formatVndDots(row.cpa) : '—'}</td><td>{Math.round(row.lead).toLocaleString('vi-VN')}</td><td>{row.cpl > 0 ? formatVndDots(row.cpl) : '—'}</td>
                       <td>{row.a.orders.toLocaleString('vi-VN')}</td><td>{row.cpo > 0 ? formatVndDots(row.cpo) : '—'}</td><td className={performanceTextClass(closeTone(row.crPct))}>{row.crPct == null ? '—' : `${row.crPct.toFixed(1)}%`}</td><td>{row.aov > 0 ? formatVndDots(row.aov) : '—'}</td>
                     </tr>)}
-                    {!tableRows.length ? <tr><td colSpan={12} className="td-empty">Chưa có báo cáo của thành viên trong khoảng ngày này.</td></tr> : null}
+                    {!tableRows.length ? <tr><td colSpan={12} className="td-empty">Chưa có dữ liệu Odoo hoặc báo cáo Meta của thành viên trong khoảng ngày này.</td></tr> : null}
                   </tbody>
                 </table>
               </div>

@@ -4,11 +4,10 @@ import { Flame, Loader2, RefreshCw, TrendingUp } from 'lucide-react';
 import { SectionCard } from '../../../components/crm-dashboard/atoms/SharedAtoms';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
-import { fetchUpcareMktEmployeesForRange, normalizeUpcareMktEmployeeCode } from '../../../api/upcareCrm';
+import { aggregateUpcareMktPeriodEmployees, fetchUpcareMktEmployeesForRange, normalizeUpcareMktEmployeeCode } from '../../../api/upcareCrm';
 import type { Employee } from '../../../types';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
-const ODOO_VND_RATE = 25_000;
 
 const AVATAR_BGS = [
   'linear-gradient(135deg, #f59e0b, #ef4444)',
@@ -92,28 +91,18 @@ export const AdminRankingView: React.FC = () => {
       setError(reason?.message || 'Không tải được danh sách nhân sự.');
       setRows([]);
     } else {
-      const revenueByCode = new Map<string, number>();
-      const displayCodeByKey = new Map<string, string>();
-      for (const report of odooResult.value.employees) {
-        const code = String(report.code || '').trim();
-        const key = normalizedCode(code);
-        if (!key) continue;
-        const revenueVnd = Math.round((Number(report.amount) || 0) * ODOO_VND_RATE);
-        revenueByCode.set(key, revenueVnd);
-        if (!displayCodeByKey.has(key)) displayCodeByKey.set(key, code);
-      }
+      const odooByCode = aggregateUpcareMktPeriodEmployees(odooResult.value.employees).byCode;
 
       const employees = (employeeResult.value.data || []) as Employee[];
       const employeeCodeKeys = new Set<string>();
       const ranked: Employee[] = employees.map((emp) => {
         const key = normalizedCode(emp.ma_ns);
         if (key) employeeCodeKeys.add(key);
-        return { ...emp, score: key ? revenueByCode.get(key) || 0 : 0 };
+        return { ...emp, score: key ? odooByCode.get(key)?.revenueVnd || 0 : 0 };
       });
-      for (const [key, revenue] of revenueByCode) {
+      for (const [key, metrics] of odooByCode) {
         if (employeeCodeKeys.has(key)) continue;
-        const code = displayCodeByKey.get(key) || key;
-        ranked.push({ id: `report-${key}`, name: code, team: '', score: revenue, avatar_url: null, ma_ns: code });
+        ranked.push({ id: `report-${key}`, name: metrics.name || metrics.code, team: '', score: metrics.revenueVnd, avatar_url: null, ma_ns: metrics.code });
       }
       ranked.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'vi'));
       setRows(ranked.map((emp, index) => ({ ...emp, rank: index + 1 })));

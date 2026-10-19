@@ -4,7 +4,7 @@ import { SectionCard, RankItem, ProgressRow, Badge } from '../../../components/c
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
 import { ADS_LIMIT_PERCENT, ADS_WARNING_PERCENT } from '../../../utils/performanceThresholds';
-import { fetchUpcareMktEmployeesForRange, normalizeUpcareMktEmployeeCode } from '../../../api/upcareCrm';
+import { aggregateUpcareMktPeriodEmployees, fetchUpcareMktEmployeesForRange, normalizeUpcareMktEmployeeCode } from '../../../api/upcareCrm';
 import type { AuthUser, Employee } from '../../../types';
 import { REPORTS_TABLE, formatCompactVnd, formatKpiMoney } from '../mkt/mktDetailReportShared';
 
@@ -13,7 +13,6 @@ const KPI_TEAM_TABLE =
   import.meta.env.VITE_SUPABASE_KPI_TEAM_MONTHLY_TARGETS_TABLE?.trim() || 'kpi_team_monthly_targets';
 const KPI_STAFF_TABLE =
   import.meta.env.VITE_SUPABASE_KPI_STAFF_MONTHLY_TARGETS_TABLE?.trim() || 'kpi_staff_monthly_targets';
-const ODOO_VND_RATE = 25_000;
 
 const STAFF_SELECT = 'id, name, email, team, ma_ns, vi_tri, trang_thai';
 
@@ -225,20 +224,17 @@ export const LeaderRankingView: React.FC<LeaderRankingViewProps> = ({ viewer = n
     }
 
     if (!odooRes.error) {
-      const odooByCode = new Map(
-        odooRes.employees
-          .map((row) => [normalizeUpcareMktEmployeeCode(row.code), row] as const)
-          .filter(([code]) => Boolean(code)),
-      );
+      const odooByCode = aggregateUpcareMktPeriodEmployees(odooRes.employees).byCode;
       for (const member of teamMembers) {
         const email = String(member.email || '').trim().toLowerCase();
         const code = normalizeUpcareMktEmployeeCode(member.ma_ns);
         const odooRow = code ? odooByCode.get(code) : undefined;
         if (!odooRow || !email) continue;
         const agg = next.get(email) || makeEmptyAgg(email, member.name || email);
-        agg.rev = Math.round((Number(odooRow.amount) || 0) * ODOO_VND_RATE);
-        agg.tongData = Number(odooRow.dataCount) || 0;
-        agg.orders = Number(odooRow.count) || 0;
+        agg.rev = odooRow.revenueVnd;
+        agg.tongData = odooRow.dataCount;
+        agg.tongLead = odooRow.dataCount;
+        agg.orders = odooRow.orderCount;
         next.set(email, agg);
       }
     }

@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { aggregateUpcareMktPeriodEmployees, fetchUpcareMktEmployeesForRange, normalizeUpcareMktEmployeeCode } from '../../../api/upcareCrm';
+import type { UpcareMktPeriodEmployeeMetrics } from '../../../api/upcareCrm';
 import { ADS_LIMIT_PERCENT as ADS_CRITICAL, ADS_WARNING_PERCENT as ADS_WARN, CLOSE_WARNING_PERCENT, closeTone, performanceTextClass } from '../../../utils/performanceThresholds';
 import type { ReportRow } from '../../../types';
 
@@ -119,6 +121,8 @@ export const BurnDetectionView: React.FC = () => {
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sourceWarning, setSourceWarning] = useState<string | null>(null);
+  const [odooByCode, setOdooByCode] = useState<Map<string, UpcareMktPeriodEmployeeMetrics> | null>(null);
   // Bộ lọc thời gian: from/to, mặc định là tháng hiện tại
   const today = useMemo(() => new Date(), []);
   const thisMonthStart = useMemo(() => startOfMonth(today.getFullYear(), today.getMonth()), [today]);
@@ -161,7 +165,9 @@ export const BurnDetectionView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-  let q = supabase
+    setSourceWarning(null);
+    setOdooByCode(null);
+    let q = supabase
       .from(REPORTS_TABLE)
       .select(
         'name, email, code, team, ad_cost, revenue, tien_viet, mess_comment_count, tong_lead, order_count, tong_data_nhan, report_date, ma_tkqc'
@@ -169,17 +175,34 @@ export const BurnDetectionView: React.FC = () => {
     if (!allDates) {
       q = q.gte('report_date', bounds.start).lte('report_date', bounds.end);
     }
-    const { data, error: qErr } = await fetchAllRows<ReportRow>(q);
+    const [reportResult, odooResult] = await Promise.all([
+      fetchAllRows<ReportRow>(q),
+      !allDates && !idDuAn
+        ? fetchUpcareMktEmployeesForRange({ dateFrom: bounds.start, dateTo: bounds.end })
+            .then((result) => ({ result, error: null as unknown }))
+            .catch((cause: unknown) => ({ result: null, error: cause }))
+        : Promise.resolve({ result: null, error: null as unknown }),
+    ]);
 
-    if (qErr) {
-      console.error('burn-detect:', qErr);
-      setError(qErr.message || 'Không tải được báo cáo.');
+    if (reportResult.error) {
+      console.error('burn-detect:', reportResult.error);
+      setError(reportResult.error.message || 'Không tải được báo cáo.');
       setRows([]);
     } else {
-      setRows((data || []) as ReportRow[]);
+      setRows((reportResult.data || []) as ReportRow[]);
+    }
+    if (odooResult.error) {
+      const reason = odooResult.error instanceof Error ? odooResult.error.message : 'Không tải được Odoo.';
+      setSourceWarning(`Không tải được Odoo ${bounds.start} – ${bounds.end}; doanh số, data và đơn tạm lấy từ detail_reports. ${reason}`);
+    } else if (odooResult.result) {
+      setOdooByCode(aggregateUpcareMktPeriodEmployees(odooResult.result.employees).byCode);
+    } else if (idDuAn) {
+      setSourceWarning('Đang lọc theo dự án: Odoo không có dữ liệu phân bổ theo dự án, nên doanh số, data và đơn giữ theo detail_reports đã lọc.');
+    } else if (allDates) {
+      setSourceWarning('Đang xem toàn bộ lịch sử: chế độ này dùng detail_reports; Odoo chỉ được áp dụng trong khoảng ngày đã chọn và khi không lọc dự án.');
     }
     setLoading(false);
-  }, [bounds.start, bounds.end]);
+  }, [bounds.start, bounds.end, idDuAn, allDates]);
 
   useEffect(() => {
     void loadRefs();
@@ -199,7 +222,8 @@ export const BurnDetectionView: React.FC = () => {
   );
 
   const scopedRows = useMemo(() => {
-    if (!idDuAn || maTkqcSet.size === 0) return rows;
+    if (!idDuAn) return rows;
+    if (maTkqcSet.size === 0) return [];
     return rows.filter((r) => {
       const ma = r.ma_tkqc?.trim();
       return ma && maTkqcSet.has(ma);
@@ -213,7 +237,7 @@ export const BurnDetectionView: React.FC = () => {
       const email = r.email?.trim().toLowerCase() || '';
       const nm = (r.name || '').trim();
       // Ưu tiên gom theo code; nếu thiếu thì theo email, cuối cùng mới theo name
-      const key = (code || email || nm || `anon-${map.size}`).toLowerCase();
+      const key = code ? normalizeUpcareMktEmployeeCode(code) : (email || nm || `anon-${map.size}`).toLowerCase();
       const displayName = code || nm || email || '—';
       const cur =
         map.get(key) ||
@@ -230,8 +254,8 @@ export const BurnDetectionView: React.FC = () => {
           tongData: 0,
         } satisfies Agg);
       cur.adCost += safeNum(r.ad_cost);
-      // Dùng tiền Việt: ưu tiên tien_viet, fallback revenue*25k
-      cur.revenue += r.tien_viet != null ? safeNum(r.tien_viet) : Math.round(safeNum(r.revenue) * 25000);
+      // Match personal dashboard fallback: tien_viet first, otherwise report revenue is already VND.
+      cur.revenue += r.tien_viet != null ? safeNum(r.tien_viet) : safeNum(r.revenue);
       cur.mess += safeNum(r.mess_comment_count);
       cur.tongLead += safeNum(r.tong_lead);
       cur.orders += safeNum(r.order_count);
@@ -241,9 +265,28 @@ export const BurnDetectionView: React.FC = () => {
       if (!cur.fullName && nm) cur.fullName = nm;
       map.set(key, cur);
     }
+    for (const [key, metrics] of odooByCode ?? []) {
+      const current = map.get(key) || {
+        key,
+        displayName: metrics.name || metrics.code,
+        fullName: metrics.name || null,
+        team: null,
+        adCost: 0,
+        revenue: 0,
+        mess: 0,
+        tongLead: 0,
+        orders: 0,
+        tongData: 0,
+      } satisfies Agg;
+      current.revenue = metrics.revenueVnd;
+      current.tongLead = metrics.dataCount;
+      current.tongData = metrics.dataCount;
+      current.orders = metrics.orderCount;
+      map.set(key, current);
+    }
     // Trả về toàn bộ marketer trong bảng, kể cả khi adCost/revenue = 0
     return Array.from(map.values());
-  }, [scopedRows]);
+  }, [scopedRows, odooByCode]);
 
   const scored = useMemo(() => {
     return byMarketer.map((m) => {
@@ -317,6 +360,7 @@ export const BurnDetectionView: React.FC = () => {
           </button>
         </div>
       ) : null}
+      {sourceWarning ? <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900" role="status">{sourceWarning}</div> : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(260px,0.8fr)_minmax(0,2fr)] xl:items-center">
         <div>

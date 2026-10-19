@@ -10,6 +10,7 @@ import {
 test('employee code matching ignores casing and surrounding whitespace differences', () => {
   assert.equal(normalizeUpcareMktEmployeeCode(' FBC.DIEULN '), 'fbc.dieuln');
   assert.equal(normalizeUpcareMktEmployeeCode('\u00a0FBC.DIEULN '), 'fbc.dieuln');
+  assert.equal(normalizeUpcareMktEmployeeCode('ＦＢＣ.DIEULN\u200b'), 'fbc.dieuln');
 });
 
 test('common dashboard period totals use Odoo aggregate data instead of daily detail sums', () => {

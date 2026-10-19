@@ -5,8 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
-import { aggregateUpcareMktPeriodEmployees, fetchUpcareMktEmployeesForRange } from '../../../api/upcareCrm';
-import type { UpcareMktEmployeeRow } from '../../../api/upcareCrm';
+import { aggregateUpcareMktPeriodEmployees, fetchUpcareMktEmployeesForRange, UPCARE_ODOO_VND_RATE } from '../../../api/upcareCrm';
+import type { UpcareMktEmployeeDayRow, UpcareMktEmployeeRow } from '../../../api/upcareCrm';
 import { ADS_LIMIT_PERCENT as ADS_DT_WARN, ADS_WARNING_PERCENT as ADS_DT_MED, adsTone, closeTone, performanceTextClass, PERFORMANCE_COLORS } from '../../../utils/performanceThresholds';
 import type { PerformanceTone } from '../../../utils/performanceThresholds';
 import type { Employee, ReportRow } from '../../../types';
@@ -195,15 +195,16 @@ function aggregateRows(
 ) {
   const revenue = odooTotals?.revenueVnd ?? 0;
   let adCost = 0;
-  let tongLead = 0;
+  let reportLead = 0;
   const orders = odooTotals?.orderCount ?? 0;
   const tongData = odooTotals?.dataCount ?? 0;
   let mess = 0;
   for (const r of rows) {
     adCost += safeNum(r.ad_cost);
-    tongLead += safeNum(r.tong_lead);
+    reportLead += safeNum(r.tong_lead);
     mess += safeNum(r.mess_comment_count);
   }
+  const tongLead = odooTotals?.dataCount ?? reportLead;
   const adsDtPct = revenue > 0 ? (adCost / revenue) * 100 : null;
   const chotPct = tyLeChot(tongData, orders, tongLead);
   return { revenue, adCost, tongLead, orders, tongData, mess, adsDtPct, chotPct };
@@ -220,7 +221,12 @@ type DailyPoint = {
   adsPct: number;
 };
 
-function buildDailySeries(rows: ReportRow[], from: string, to: string): DailyPoint[] {
+function buildDailySeries(
+  rows: ReportRow[],
+  from: string,
+  to: string,
+  odooDailyRows: UpcareMktEmployeeDayRow[] | null = null,
+): DailyPoint[] {
   const map = new Map<string, Omit<DailyPoint, 'date' | 'adsPct'>>();
   for (const r of rows) {
     const d = r.report_date?.slice(0, 10);
@@ -233,6 +239,34 @@ function buildDailySeries(rows: ReportRow[], from: string, to: string): DailyPoi
     cur.orders += safeNum(r.order_count);
     cur.mess += safeNum(r.mess_comment_count);
     map.set(d, cur);
+  }
+  if (odooDailyRows) {
+    const byDate = new Map<string, { revenue: number; data: number; orders: number }>();
+    for (const row of odooDailyRows) {
+      const current = byDate.get(row.date) || { revenue: 0, data: 0, orders: 0 };
+      current.revenue += Math.round(safeNum(row.amount) * UPCARE_ODOO_VND_RATE);
+      current.data += safeNum(row.dataCount);
+      current.orders += safeNum(row.count);
+      byDate.set(row.date, current);
+    }
+    for (const [date, point] of map) {
+      const odoo = byDate.get(date) || { revenue: 0, data: 0, orders: 0 };
+      point.rev = odoo.revenue;
+      point.leads = odoo.data;
+      point.data = odoo.data;
+      point.orders = odoo.orders;
+    }
+    for (const [date, odoo] of byDate) {
+      if (map.has(date)) continue;
+      map.set(date, {
+        spend: 0,
+        rev: odoo.revenue,
+        leads: odoo.data,
+        data: odoo.data,
+        orders: odoo.orders,
+        mess: 0,
+      });
+    }
   }
   const start = new Date(`${from}T00:00:00`);
   const end = new Date(`${to}T00:00:00`);
@@ -319,6 +353,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
   const [prevRows, setPrevRows] = useState<ReportRow[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [odooEmployees, setOdooEmployees] = useState<UpcareMktEmployeeRow[] | null>(null);
+  const [odooDailyRows, setOdooDailyRows] = useState<UpcareMktEmployeeDayRow[] | null>(null);
   const [previousOdooEmployees, setPreviousOdooEmployees] = useState<UpcareMktEmployeeRow[] | null>(null);
   const [odooSourceError, setOdooSourceError] = useState<string | null>(null);
   const [previousOdooError, setPreviousOdooError] = useState<string | null>(null);
@@ -361,6 +396,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
     setOdooSourceError(null);
     setPreviousOdooError(null);
     setOdooEmployees(null);
+    setOdooDailyRows(null);
     setPreviousOdooEmployees(null);
 
     const [curFull, prevFull, empRes] = await Promise.all([
@@ -375,6 +411,11 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
 
     if (currentOdooResult.status === 'fulfilled') {
       setOdooEmployees(currentOdooResult.value.employees);
+      setOdooDailyRows(
+        currentOdooResult.value.hasDailyBreakdown && currentOdooResult.value.dailyRows.length
+          ? currentOdooResult.value.dailyRows
+          : null,
+      );
     } else {
       const reason = currentOdooResult.reason instanceof Error
         ? currentOdooResult.reason.message
@@ -572,7 +613,10 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
     });
   }, [byMarketer]);
 
-  const daily = useMemo(() => buildDailySeries(rows, rangeStart, rangeEnd), [rows, rangeStart, rangeEnd]);
+  const daily = useMemo(
+    () => buildDailySeries(rows, rangeStart, rangeEnd, odooDailyRows),
+    [rows, rangeStart, rangeEnd, odooDailyRows],
+  );
 
   const chartModel = useMemo(() => {
     const W = 700;
@@ -846,7 +890,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
         <div className="personal-panel-heading">
           <div>
             <h2>Doanh thu, chi phí và tỷ lệ CP/DT theo ngày</h2>
-            <p>{monthLabel} · {dailyRows.length} ngày có dữ liệu · Biểu đồ theo ngày từ {REPORTS_TABLE}; tổng kỳ phía trên lấy từ Odoo</p>
+            <p>{monthLabel} · {dailyRows.length} ngày có dữ liệu · Doanh thu, data và đơn theo ngày lấy từ Odoo khi API trả breakdown; chi phí và tin nhắn từ {REPORTS_TABLE}</p>
           </div>
           <div className="personal-chart-legend">
             <span><i className="legend-revenue" />Doanh thu</span>

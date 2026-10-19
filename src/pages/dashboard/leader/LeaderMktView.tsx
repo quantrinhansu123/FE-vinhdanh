@@ -5,6 +5,7 @@ import { SectionCard, Badge } from '../../../components/crm-dashboard/atoms/Shar
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { aggregateUpcareMktPeriodEmployees, fetchUpcareMktEmployeesForRange, normalizeUpcareMktEmployeeCode } from '../../../api/upcareCrm';
 import type { AuthUser, Employee } from '../../../types';
 import {
   REPORTS_TABLE,
@@ -32,7 +33,11 @@ function monthBounds(ym: string): { start: string; end: string } {
   const m = Number(ms);
   const last = new Date(y, m, 0).getDate();
   const mm = String(m).padStart(2, '0');
-  return { start: `${y}-${mm}-01`, end: `${y}-${mm}-${String(last).padStart(2, '0')}` };
+  const today = new Date();
+  const end = y === today.getFullYear() && m === today.getMonth() + 1
+    ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    : `${y}-${mm}-${String(last).padStart(2, '0')}`;
+  return { start: `${y}-${mm}-01`, end };
 }
 
 function isMktEmployee(viTri: string | null | undefined): boolean {
@@ -83,6 +88,7 @@ export type LeaderMktViewProps = {
 export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sourceWarning, setSourceWarning] = useState<string | null>(null);
   const [ym, setYm] = useState(ymNow);
 
   const [rows, setRows] = useState<Row[]>([]);
@@ -94,6 +100,7 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
     const viewerEmail = viewer?.email?.trim().toLowerCase() || '';
     setLoading(true);
     setError(null);
+    setSourceWarning(null);
     setRows([]);
     setManagedTeams([]);
 
@@ -147,10 +154,6 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
     const mktEmps = allEmps.filter((e) => isMktEmployee(e.vi_tri) && isActiveStaff(e.trang_thai));
 
     const ids = mktEmps.map((e) => e.id);
-    const emailSet = new Set<string>(
-      mktEmps.map((e) => safeTrim(e.email).toLowerCase()).filter(Boolean),
-    );
-
     // Load KPI targets
     const targetMap = new Map<string, number>();
     if (ids.length) {
@@ -170,26 +173,44 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
       }
     }
 
-    // Load performance from detail_reports (revenue sum by email)
-    const revMap = new Map<string, number>();
-    if (emailSet.size) {
-      const repRes = await fetchAllRows<{ email: string; revenue: number }>(supabase
+    // Revenue uses the same Odoo period calculation as the personal dashboard.
+    // Saved report totals are retained only as the personal dashboard's fallback.
+    const reportRevenueByCode = new Map<string, number>();
+    const [reportRevenueRes, odooResult] = await Promise.all([
+      fetchAllRows<{ code: string | null; revenue: number | null; tien_viet: number | null }>(supabase
         .from(REPORTS_TABLE)
-        .select('email, revenue')
+        .select('code, revenue, tien_viet')
         .gte('report_date', start)
-        .lte('report_date', end)
-        .in('email', [...emailSet]));
+        .lte('report_date', end)),
+      fetchUpcareMktEmployeesForRange({ dateFrom: start, dateTo: end })
+        .then((result) => ({ result, error: null as unknown }))
+        .catch((cause: unknown) => ({ result: null, error: cause })),
+    ]);
 
-      if (!repRes.error) {
-        for (const r of (repRes.data || []) as { email: string; revenue: number }[]) {
-          const e = safeTrim(r.email).toLowerCase();
-          if (!e) continue;
-          const v = Number(r.revenue) || 0;
-          revMap.set(e, (revMap.get(e) || 0) + v);
-        }
-      } else {
-        console.warn('leader-mkt detail_reports revenue:', repRes.error);
+    if (reportRevenueRes.error) {
+      console.warn('leader-mkt detail_reports revenue:', reportRevenueRes.error);
+    } else {
+      const eligibleCodes = new Set(mktEmps.map((emp) => normalizeUpcareMktEmployeeCode(emp.ma_ns)).filter(Boolean));
+      for (const row of reportRevenueRes.data || []) {
+        const code = normalizeUpcareMktEmployeeCode(row.code);
+        if (!code || !eligibleCodes.has(code)) continue;
+        const raw = row.tien_viet != null ? Number(row.tien_viet) : Number(row.revenue);
+        const amount = Number.isFinite(raw) ? raw : 0;
+        reportRevenueByCode.set(code, (reportRevenueByCode.get(code) || 0) + amount);
       }
+    }
+    const odooByCode = odooResult.result
+      ? aggregateUpcareMktPeriodEmployees(odooResult.result.employees).byCode
+      : null;
+    if (odooResult.error) {
+      const reason = odooResult.error instanceof Error ? odooResult.error.message : 'Không tải được dữ liệu Odoo.';
+      setSourceWarning(`Không tải được Odoo kỳ ${start} – ${end}; doanh thu tạm dùng detail_reports. ${reason}`);
+    } else {
+      const missing = mktEmps
+        .filter((emp) => !odooByCode?.has(normalizeUpcareMktEmployeeCode(emp.ma_ns)))
+        .map((emp) => safeTrim(emp.ma_ns))
+        .filter(Boolean);
+      if (missing.length) setSourceWarning(`Odoo không trả mã ${[...new Set(missing)].join(', ')} trong kỳ; các mã này dùng detail_reports.`);
     }
 
     // Build tkqcCount: marketing_staff (employee_id) -> tkqc (id_marketing_staff)
@@ -242,8 +263,9 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
     }
 
     const next: Row[] = mktEmps.map((emp) => {
-      const email = safeTrim(emp.email).toLowerCase();
-      const rev = email ? revMap.get(email) || 0 : 0;
+      const code = normalizeUpcareMktEmployeeCode(emp.ma_ns);
+      const odoo = code ? odooByCode?.get(code) : undefined;
+      const rev = odoo?.revenueVnd ?? (code ? reportRevenueByCode.get(code) || 0 : 0);
       const target = targetMap.has(emp.id) ? targetMap.get(emp.id)! : null;
       const kpiPct = target && target > 0 ? (rev / target) * 100 : null;
       return {
@@ -295,6 +317,8 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
         .
       </p>
 
+      <p className="mb-3 text-[10px] text-[var(--text3)]">Doanh thu theo Odoo gộp cả kỳ; quảng cáo và tài khoản theo nguồn CRM.</p>
+
       <SectionCard
         title={`👥 Quản lý Marketing — ${teamLabel}`}
         subtitle={subtitle}
@@ -325,6 +349,7 @@ export const LeaderMktView: React.FC<LeaderMktViewProps> = ({ viewer = null }) =
             {error}
           </div>
         )}
+        {sourceWarning && <div className="mx-[14px] mt-[12px] rounded-[8px] border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900" role="status">{sourceWarning}</div>}
 
         <div className="overflow-x-auto mt-[10px]">
           <table className="w-full border-collapse">

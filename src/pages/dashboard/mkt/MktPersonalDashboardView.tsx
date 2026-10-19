@@ -34,6 +34,8 @@ import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
 import {
   fetchUpcareMktEmployeesForRange,
+  normalizeUpcareMktEmployeeCode,
+  UPCARE_ODOO_VND_RATE,
   type UpcareMktEmployeeRange,
 } from '../../../api/upcareCrm';
 import { ADS_LIMIT_PERCENT, CLOSE_WARNING_PERCENT, CLOSE_GOOD_PERCENT, adsTone, closeTone, performancePillClass, performanceTextClass } from '../../../utils/performanceThresholds';
@@ -157,13 +159,7 @@ function reportRevenueVnd(row: { tien_viet?: unknown; revenue?: unknown }): numb
 }
 
 function employeeCodeKey(value: unknown): string {
-  return String(value ?? '')
-    .normalize('NFKC')
-    .replace(/[\u200b-\u200d\ufeff]/g, '')
-    .replace(/\u00a0/g, ' ')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase();
+  return normalizeUpcareMktEmployeeCode(value);
 }
 
 function odooMetricsForPerson(
@@ -177,7 +173,7 @@ function odooMetricsForPerson(
   return {
     leads: safeNumber(employee.dataCount),
     orders: safeNumber(employee.count),
-    revenue: Math.round(safeNumber(employee.amount) * 25000),
+    revenue: Math.round(safeNumber(employee.amount) * UPCARE_ODOO_VND_RATE),
   };
 }
 
@@ -194,7 +190,7 @@ function applyOdooDailyMetrics(
     const current = byDate.get(row.date) || { leads: 0, orders: 0, revenue: 0 };
     current.leads += safeNumber(row.dataCount);
     current.orders += safeNumber(row.count);
-    current.revenue += Math.round(safeNumber(row.amount) * 25000);
+    current.revenue += Math.round(safeNumber(row.amount) * UPCARE_ODOO_VND_RATE);
     byDate.set(row.date, current);
   }
   if (!byDate.size) return rows;

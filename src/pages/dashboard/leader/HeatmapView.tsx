@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calendar, Loader2, RefreshCw, TrendingUp, Zap } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { fetchUpcareMktEmployeesForRange, normalizeUpcareMktEmployeeCode, UPCARE_ODOO_VND_RATE } from '../../../api/upcareCrm';
 import { ADS_LIMIT_PERCENT, ADS_WARNING_PERCENT, adsTone, performanceTextClass } from '../../../utils/performanceThresholds';
 import { REPORTS_TABLE, toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
 import '../../../styles/stitchSystem.css';
@@ -42,7 +43,7 @@ function heatType(pct: number): 'G' | 'Y' | 'R' {
 
 type RowAgg = { ad: number; rev: number };
 
-type EmpMeta = { name: string; avatar_url: string | null; vi_tri: string | null };
+type EmpMeta = { name: string; avatar_url: string | null; vi_tri: string | null; ma_ns?: string | null };
 
 function buildLast7Ymd(anchor: Date): string[] {
   return Array.from({ length: 7 }, (_, i) => toLocalYyyyMmDd(addDays(anchor, -6 + i)));
@@ -81,6 +82,7 @@ export const HeatmapView: React.FC = () => {
   const [dayKeys, setDayKeys] = useState<string[]>(() => buildLast7Ymd(new Date()));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sourceWarning, setSourceWarning] = useState<string | null>(null);
   const [byKey, setByKey] = useState<Map<string, RowAgg>>(() => new Map());
   const [displayNames, setDisplayNames] = useState<Map<string, string>>(() => new Map());
   const [empByEmail, setEmpByEmail] = useState<Map<string, EmpMeta>>(() => new Map());
@@ -89,19 +91,25 @@ export const HeatmapView: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setSourceWarning(null);
     const keys = buildLast7Ymd(new Date());
     setDayKeys(keys);
     const from = keys[0];
     const to = keys[keys.length - 1];
-    const { data, error: qErr } = await fetchAllRows<any>(supabase
-      .from(REPORTS_TABLE)
-      .select('email, name, report_date, ad_cost, revenue')
-      .gte('report_date', from)
-      .lte('report_date', to));
+    const [reportResult, odooResult] = await Promise.all([
+      fetchAllRows<any>(supabase
+        .from(REPORTS_TABLE)
+        .select('email, name, report_date, ad_cost, revenue')
+        .gte('report_date', from)
+        .lte('report_date', to)),
+      fetchUpcareMktEmployeesForRange({ dateFrom: from, dateTo: to })
+        .then((result) => ({ result, error: null as unknown }))
+        .catch((cause: unknown) => ({ result: null, error: cause })),
+    ]);
 
-    if (qErr) {
-      console.error('heatmap detail_reports:', qErr);
-      setError(qErr.message || 'Không tải được detail_reports.');
+    if (reportResult.error) {
+      console.error('heatmap detail_reports:', reportResult.error);
+      setError(reportResult.error.message || 'Không tải được detail_reports.');
       setByKey(new Map());
       setDisplayNames(new Map());
       setEmpByEmail(new Map());
@@ -113,7 +121,7 @@ export const HeatmapView: React.FC = () => {
     const next = new Map<string, RowAgg>();
     const names = new Map<string, string>();
     const emailSet = new Set<string>();
-    for (const r of data || []) {
+    for (const r of reportResult.data || []) {
       const email = String(r.email || '')
         .trim()
         .toLowerCase();
@@ -132,22 +140,72 @@ export const HeatmapView: React.FC = () => {
       if (nm && !names.has(email)) names.set(email, nm);
     }
 
-    let empMap = new Map<string, EmpMeta>();
-    if (emailSet.size > 0) {
-      const empRes = await fetchAllRows<EmpMeta & { email: string }>(supabase.from(EMPLOYEES_TABLE).select('email, name, avatar_url, vi_tri').not('email', 'is', null));
-      if (!empRes.error && empRes.data) {
-        for (const row of empRes.data as { email?: string; name?: string; avatar_url?: string | null; vi_tri?: string | null }[]) {
-          const em = String(row.email || '')
-            .trim()
-            .toLowerCase();
-          if (!em || !emailSet.has(em)) continue;
+    const empRes = await fetchAllRows<EmpMeta & { email: string }>(supabase.from(EMPLOYEES_TABLE).select('email, name, ma_ns, avatar_url, vi_tri').not('email', 'is', null));
+    const empMap = new Map<string, EmpMeta>();
+    const emailByCode = new Map<string, string>();
+    const ambiguousCodes = new Set<string>();
+    if (!empRes.error && empRes.data) {
+      for (const row of empRes.data as { email?: string; name?: string; ma_ns?: string | null; avatar_url?: string | null; vi_tri?: string | null }[]) {
+        const em = String(row.email || '').trim().toLowerCase();
+        const code = normalizeUpcareMktEmployeeCode(row.ma_ns);
+        if (em) {
           empMap.set(em, {
             name: String(row.name || '').trim() || em,
             avatar_url: row.avatar_url ?? null,
             vi_tri: row.vi_tri ?? null,
+            ma_ns: row.ma_ns ?? null,
           });
         }
+        if (!code || !em) continue;
+        const priorEmail = emailByCode.get(code);
+        if (priorEmail && priorEmail !== em) ambiguousCodes.add(code);
+        else emailByCode.set(code, em);
       }
+    } else {
+      setSourceWarning(`Không tải được danh sách mã nhân sự để ghép Odoo: ${empRes.error?.message || 'lỗi truy vấn'}.`);
+    }
+
+    if (odooResult.error) {
+      const reason = odooResult.error instanceof Error ? odooResult.error.message : 'Không tải được Odoo.';
+      setSourceWarning((current) => [current, `Không tải được Odoo cho heatmap: ${reason}`].filter(Boolean).join(' '));
+    } else if (odooResult.result?.hasDailyBreakdown) {
+      const odooRevenueByEmailDay = new Map<string, number>();
+      const matchedEmails = new Set<string>();
+      let unmapped = 0;
+      for (const row of odooResult.result.employees) {
+        const code = normalizeUpcareMktEmployeeCode(row.code);
+        const email = code && !ambiguousCodes.has(code) ? emailByCode.get(code) : undefined;
+        if (!email) continue;
+        matchedEmails.add(email);
+        emailSet.add(email);
+        if (row.name && !names.has(email)) names.set(email, row.name);
+      }
+      for (const row of odooResult.result.dailyRows) {
+        const code = normalizeUpcareMktEmployeeCode(row.code);
+        const email = code && !ambiguousCodes.has(code) ? emailByCode.get(code) : undefined;
+        if (!email) {
+          unmapped += 1;
+          continue;
+        }
+        matchedEmails.add(email);
+        emailSet.add(email);
+        const key = `${email}\0${row.date}`;
+        odooRevenueByEmailDay.set(key, (odooRevenueByEmailDay.get(key) || 0) + Math.round((Number(row.amount) || 0) * UPCARE_ODOO_VND_RATE));
+        if (row.name && !names.has(email)) names.set(email, row.name);
+      }
+      for (const email of matchedEmails) {
+        for (const date of keys) {
+          const key = `${email}\0${date}`;
+          const current = next.get(key) || { ad: 0, rev: 0 };
+          current.rev = odooRevenueByEmailDay.get(key) || 0;
+          next.set(key, current);
+        }
+      }
+      if (ambiguousCodes.size || unmapped) {
+        setSourceWarning(`Odoo trả doanh số theo nhân sự, nhưng ${ambiguousCodes.size} mã bị ghép trùng và ${unmapped} dòng chưa ghép được vào email; các dòng chưa ghép giữ doanh thu detail_reports.`);
+      }
+    } else if (!odooResult.error) {
+      setSourceWarning('Odoo không trả breakdown đủ 7 ngày; heatmap đang dùng doanh thu detail_reports cho kỳ này.');
     }
 
     setByKey(next);
@@ -274,7 +332,7 @@ export const HeatmapView: React.FC = () => {
               </span>
             </div>
             <span className="font-sans text-xs text-[#476355] font-medium tracking-wide">
-              {REPORTS_TABLE} · Ads/Doanh thu theo ngày
+              Chi phí từ {REPORTS_TABLE} · doanh thu Odoo theo ngày
             </span>
           </div>
         </div>
@@ -307,6 +365,7 @@ export const HeatmapView: React.FC = () => {
           {error}
         </div>
       )}
+      {sourceWarning && <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900" role="status">{sourceWarning}</div>}
 
       <section className="bg-white rounded-2xl overflow-hidden shadow-xs border border-[#e2e8e5] relative">
         <div className="overflow-x-auto leader-dash-no-scrollbar">

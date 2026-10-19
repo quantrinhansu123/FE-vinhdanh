@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, CalendarDays, Loader2, RefreshCw, Wallet } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { aggregateUpcareMktPeriodEmployees, fetchUpcareMktEmployeesForRange } from '../../../api/upcareCrm';
 import type { ReportRow } from '../../../types';
 
 const REPORTS_TABLE = import.meta.env.VITE_SUPABASE_REPORTS_TABLE?.trim() || 'detail_reports';
@@ -51,6 +52,30 @@ function sumInRange(
     const n = Number(v);
     return acc + (Number.isFinite(n) ? n : 0);
   }, 0);
+}
+
+type ComparePeriodKey = 'revThisW' | 'revLastW' | 'revThisM' | 'revLastM';
+type ComparePeriodRanges = Record<ComparePeriodKey, { start: Date; end: Date }>;
+
+function comparePeriodRanges(today: Date): ComparePeriodRanges {
+  const thisWeekStart = startOfWeekMonday(today);
+  const thisWeekEnd = addDays(thisWeekStart, 6);
+  const lastWeekEnd = addDays(thisWeekStart, -1);
+  const lastWeekStart = addDays(lastWeekEnd, -6);
+  const thisMonthStart = startOfMonth(today);
+  const thisMonthEnd = endOfMonth(today);
+  const prevMonthEnd = addDays(thisMonthStart, -1);
+  const prevMonthStart = startOfMonth(prevMonthEnd);
+  return {
+    revThisW: { start: thisWeekStart, end: thisWeekEnd },
+    revLastW: { start: lastWeekStart, end: lastWeekEnd },
+    revThisM: { start: thisMonthStart, end: thisMonthEnd },
+    revLastM: { start: prevMonthStart, end: prevMonthEnd },
+  };
+}
+
+function ymdRange(range: { start: Date; end: Date }): { dateFrom: string; dateTo: string } {
+  return { dateFrom: toLocalYyyyMmDd(range.start), dateTo: toLocalYyyyMmDd(range.end) };
 }
 
 function formatCompactVnd(n: number): string {
@@ -137,26 +162,53 @@ function StitchCompareSection({ title, description, icon, children }: { title: s
 
 export const CompareView: React.FC = () => {
   const [rows, setRows] = useState<ReportRow[]>([]);
+  const [odooRevenue, setOdooRevenue] = useState<Partial<Record<ComparePeriodKey, number>>>({});
+  const [odooWarning, setOdooWarning] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setOdooWarning(null);
+    const ranges = comparePeriodRanges(new Date());
     const since = addDays(new Date(), -120);
     const sinceStr = toLocalYyyyMmDd(since);
-    const { data, error: qErr } = await fetchAllRows<ReportRow>(supabase
-      .from(REPORTS_TABLE)
-      .select('report_date, revenue, ad_cost')
-      .gte('report_date', sinceStr)
-      .order('report_date', { ascending: true }));
+    const [reportResult, ...odooResults] = await Promise.all([
+      fetchAllRows<ReportRow>(supabase
+        .from(REPORTS_TABLE)
+        .select('report_date, revenue, ad_cost')
+        .gte('report_date', sinceStr)
+        .order('report_date', { ascending: true })),
+      ...Object.entries(ranges).map(([, range]) =>
+        fetchUpcareMktEmployeesForRange(ymdRange(range))
+          .then((result) => ({ result, error: null as unknown }))
+          .catch((cause: unknown) => ({ result: null, error: cause }))
+      ),
+    ]);
 
-    if (qErr) {
-      console.error('compare reports:', qErr);
-      setError(qErr.message || 'Không tải được báo cáo.');
+    if (reportResult.error) {
+      console.error('compare reports:', reportResult.error);
+      setError(reportResult.error.message || 'Không tải được báo cáo.');
       setRows([]);
     } else {
-      setRows((data || []) as ReportRow[]);
+      setRows((reportResult.data || []) as ReportRow[]);
+    }
+
+    const keys = Object.keys(ranges) as ComparePeriodKey[];
+    const nextOdooRevenue: Partial<Record<ComparePeriodKey, number>> = {};
+    const failedRanges: string[] = [];
+    odooResults.forEach((item, index) => {
+      const key = keys[index];
+      if (item.error || !item.result) {
+        failedRanges.push(key);
+        return;
+      }
+      nextOdooRevenue[key] = aggregateUpcareMktPeriodEmployees(item.result.employees).totals.revenueVnd;
+    });
+    setOdooRevenue(nextOdooRevenue);
+    if (failedRanges.length) {
+      setOdooWarning(`Không tải được Odoo cho ${failedRanges.length} kỳ; các kỳ này tạm đối chiếu bằng detail_reports.`);
     }
     setLoading(false);
   }, []);
@@ -167,30 +219,16 @@ export const CompareView: React.FC = () => {
 
   const stats = useMemo(() => {
     const today = new Date();
-    const thisWeekStart = startOfWeekMonday(today);
-    const thisWeekEnd = addDays(thisWeekStart, 6);
-    const lastWeekEnd = addDays(thisWeekStart, -1);
-    const lastWeekStart = addDays(lastWeekEnd, -6);
+    const ranges = comparePeriodRanges(today);
+    const revThisW = odooRevenue.revThisW ?? sumInRange(rows, ranges.revThisW.start, ranges.revThisW.end, 'revenue');
+    const revLastW = odooRevenue.revLastW ?? sumInRange(rows, ranges.revLastW.start, ranges.revLastW.end, 'revenue');
+    const revThisM = odooRevenue.revThisM ?? sumInRange(rows, ranges.revThisM.start, ranges.revThisM.end, 'revenue');
+    const revLastM = odooRevenue.revLastM ?? sumInRange(rows, ranges.revLastM.start, ranges.revLastM.end, 'revenue');
 
-    const thisMonthStart = startOfMonth(today);
-    const thisMonthEnd = endOfMonth(today);
-    const prevMonthEnd = addDays(thisMonthStart, -1);
-    const prevMonthStart = startOfMonth(prevMonthEnd);
-
-    const tw = { start: thisWeekStart, end: thisWeekEnd };
-    const lw = { start: lastWeekStart, end: lastWeekEnd };
-    const tm = { start: thisMonthStart, end: thisMonthEnd };
-    const lm = { start: prevMonthStart, end: prevMonthEnd };
-
-    const revThisW = sumInRange(rows, tw.start, tw.end, 'revenue');
-    const revLastW = sumInRange(rows, lw.start, lw.end, 'revenue');
-    const revThisM = sumInRange(rows, tm.start, tm.end, 'revenue');
-    const revLastM = sumInRange(rows, lm.start, lm.end, 'revenue');
-
-    const adThisW = sumInRange(rows, tw.start, tw.end, 'ad_cost');
-    const adLastW = sumInRange(rows, lw.start, lw.end, 'ad_cost');
-    const adThisM = sumInRange(rows, tm.start, tm.end, 'ad_cost');
-    const adLastM = sumInRange(rows, lm.start, lm.end, 'ad_cost');
+    const adThisW = sumInRange(rows, ranges.revThisW.start, ranges.revThisW.end, 'ad_cost');
+    const adLastW = sumInRange(rows, ranges.revLastW.start, ranges.revLastW.end, 'ad_cost');
+    const adThisM = sumInRange(rows, ranges.revThisM.start, ranges.revThisM.end, 'ad_cost');
+    const adLastM = sumInRange(rows, ranges.revLastM.start, ranges.revLastM.end, 'ad_cost');
 
     const dW = pctDelta(revThisW, revLastW);
     const dM = pctDelta(revThisM, revLastM);
@@ -211,7 +249,7 @@ export const CompareView: React.FC = () => {
       adDW,
       adDM,
     };
-  }, [rows]);
+  }, [rows, odooRevenue]);
 
   const weekTone: CmpCardProps['subTone'] =
     stats.dW == null ? 'neutral' : stats.dW >= 0 ? 'up' : 'down';
@@ -226,7 +264,7 @@ export const CompareView: React.FC = () => {
         <div className="compare-hero-copy">
           <span className="compare-eyebrow"><BarChart3 size={14} /> PHÂN TÍCH HIỆU SUẤT</span>
           <h1>So sánh hiệu suất</h1>
-          <p>Theo dõi biến động doanh thu và chi phí quảng cáo theo tuần, tháng.</p>
+          <p>Doanh thu theo tổng Odoo của từng kỳ; chi phí quảng cáo theo detail_reports.</p>
           <span className="compare-range"><CalendarDays size={14} /> Dữ liệu trong 120 ngày gần nhất</span>
         </div>
         <StitchButton
@@ -246,6 +284,7 @@ export const CompareView: React.FC = () => {
           {error}
         </div>
       )}
+      {odooWarning && <div className="compare-error" role="status">{odooWarning}</div>}
 
       {loading && !rows.length ? (
         <div className="compare-loading">
