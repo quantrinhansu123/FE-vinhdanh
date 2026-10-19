@@ -241,7 +241,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
 
       if (toUpdate.length === 0) {
         window.alert(
-          `Kh\u00f4ng c\u1eadp nh\u1eadt \u0111\u01b0\u1ee3c d\u00f2ng n\u00e0o trong kho\u1ea3ng ${dateFrom} \u0111\u1ebfn ${dateTo}. Kh\u00f4ng t\u00ecm th\u1ea5y c\u1eb7p Ng\u00e0y + M\u00e3 NV trong detail_reports: ${Array.from(new Set(unmatchedPairs)).join('; ') || 'kh\u00f4ng c\u00f3 m\u00e3 kh\u1edbp'}.`
+          `Kh\u00f4ng c\u1eadp nh\u1eadt \u0111\u01b0\u1ee3c d\u00f2ng n\u00e0o trong kho\u1ea3ng ${dateFrom} \u0111\u1ebfn ${dateTo}. H\u00e3y \u0111\u1ed3ng b\u1ed9 Meta v\u00e0o detail_reports tr\u01b0\u1edbc, sau \u0111\u00f3 ki\u1ec3m tra m\u00e3 NV trong Odoo c\u00f3 kh\u1edbp employees.ma_ns kh\u00f4ng. C\u1eb7p ch\u01b0a kh\u1edbp: ${Array.from(new Set(unmatchedPairs)).join('; ') || 'kh\u00f4ng c\u00f3 m\u00e3 kh\u1edbp'}.`
         );
         return;
       }
@@ -318,6 +318,9 @@ export const UpcareMktEmployeesView: React.FC = () => {
             </p>
             <p className="mt-1 text-xs text-[#a5aac2]">
               Mỗi ngày gọi riêng qua proxy với <code className="text-[#3bbffa]">date_from = date_to</code>, sau đó hiển thị tách theo ngày.
+            </p>
+            <p className="mt-1 text-xs text-[#a5aac2]">
+              Bước 2: sau khi đồng bộ Meta ở trang Meta Ads, tải cùng khoảng ngày rồi đẩy doanh thu, số đơn và data Odoo vào detail_reports theo ngày + mã nhân viên.
             </p>
             {projectUuid ? (
               <p className="mt-1 text-xs text-[#a5aac2]">

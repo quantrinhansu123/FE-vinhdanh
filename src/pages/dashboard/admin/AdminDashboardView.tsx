@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
+import { aggregateUpcareMktPeriodEmployees, fetchUpcareMktEmployeesForRange } from '../../../api/upcareCrm';
+import type { UpcareMktEmployeeRow } from '../../../api/upcareCrm';
 import { ADS_LIMIT_PERCENT as ADS_DT_WARN, ADS_WARNING_PERCENT as ADS_DT_MED, adsTone, closeTone, performanceTextClass, PERFORMANCE_COLORS } from '../../../utils/performanceThresholds';
 import type { PerformanceTone } from '../../../utils/performanceThresholds';
 import type { Employee, ReportRow } from '../../../types';
@@ -187,19 +189,19 @@ function groupRowsByMarketerKey(rows: ReportRow[]): Map<string, ReportRow[]> {
 
 const iconFill: React.CSSProperties = { fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" };
 
-function aggregateRows(rows: ReportRow[]) {
-  let revenue = 0;
+function aggregateRows(
+  rows: ReportRow[],
+  odooTotals: { revenueVnd: number; dataCount: number; orderCount: number } | null
+) {
+  const revenue = odooTotals?.revenueVnd ?? 0;
   let adCost = 0;
   let tongLead = 0;
-  let orders = 0;
-  let tongData = 0;
+  const orders = odooTotals?.orderCount ?? 0;
+  const tongData = odooTotals?.dataCount ?? 0;
   let mess = 0;
   for (const r of rows) {
-    revenue += adminRevenueVnd(r);
     adCost += safeNum(r.ad_cost);
     tongLead += safeNum(r.tong_lead);
-    orders += safeNum(r.order_count);
-    tongData += safeNum(r.tong_data_nhan);
     mess += safeNum(r.mess_comment_count);
   }
   const adsDtPct = revenue > 0 ? (adCost / revenue) * 100 : null;
@@ -316,6 +318,10 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [prevRows, setPrevRows] = useState<ReportRow[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [odooEmployees, setOdooEmployees] = useState<UpcareMktEmployeeRow[] | null>(null);
+  const [previousOdooEmployees, setPreviousOdooEmployees] = useState<UpcareMktEmployeeRow[] | null>(null);
+  const [odooSourceError, setOdooSourceError] = useState<string | null>(null);
+  const [previousOdooError, setPreviousOdooError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState(false);
@@ -352,12 +358,38 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setOdooSourceError(null);
+    setPreviousOdooError(null);
+    setOdooEmployees(null);
+    setPreviousOdooEmployees(null);
 
     const [curFull, prevFull, empRes] = await Promise.all([
       fetchAllAdminDetailReports(rangeStart, rangeEnd),
       fetchAllAdminDetailReports(prevBounds.start, prevBounds.end),
       fetchAllRows<Employee>(supabase.from(EMPLOYEES_TABLE).select(STAFF_FOR_DASH_SELECT)),
     ]);
+    const [currentOdooResult, previousOdooResult] = await Promise.allSettled([
+      fetchUpcareMktEmployeesForRange({ dateFrom: rangeStart, dateTo: rangeEnd }),
+      fetchUpcareMktEmployeesForRange({ dateFrom: prevBounds.start, dateTo: prevBounds.end }),
+    ]);
+
+    if (currentOdooResult.status === 'fulfilled') {
+      setOdooEmployees(currentOdooResult.value.employees);
+    } else {
+      const reason = currentOdooResult.reason instanceof Error
+        ? currentOdooResult.reason.message
+        : 'Không tải được dữ liệu Odoo.';
+      setOdooSourceError(`Không tải được doanh số, data và số đơn Odoo trong kỳ: ${reason}`);
+    }
+
+    if (previousOdooResult.status === 'fulfilled') {
+      setPreviousOdooEmployees(previousOdooResult.value.employees);
+    } else {
+      const reason = previousOdooResult.reason instanceof Error
+        ? previousOdooResult.reason.message
+        : 'Không tải được dữ liệu Odoo kỳ trước.';
+      setPreviousOdooError(`Không tải được Odoo kỳ so sánh: ${reason}`);
+    }
 
     let empList: Employee[] = [];
     if (empRes.error) {
@@ -393,11 +425,19 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
     void load();
   }, [load]);
 
-  const totals = useMemo(() => aggregateRows(rows), [rows]);
-  const prevTotals = useMemo(() => aggregateRows(prevRows), [prevRows]);
+  const odooMetrics = useMemo(
+    () => odooEmployees == null ? null : aggregateUpcareMktPeriodEmployees(odooEmployees),
+    [odooEmployees]
+  );
+  const previousOdooMetrics = useMemo(
+    () => previousOdooEmployees == null ? null : aggregateUpcareMktPeriodEmployees(previousOdooEmployees),
+    [previousOdooEmployees]
+  );
+  const totals = useMemo(() => aggregateRows(rows, odooMetrics?.totals ?? null), [rows, odooMetrics]);
+  const prevTotals = useMemo(() => aggregateRows(prevRows, previousOdooMetrics?.totals ?? null), [prevRows, previousOdooMetrics]);
 
   const spendDelta = pctChange(totals.adCost, prevTotals.adCost);
-  const revDelta = pctChange(totals.revenue, prevTotals.revenue);
+  const revDelta = previousOdooMetrics ? pctChange(totals.revenue, prevTotals.revenue) : null;
   const cpaMessNow = totals.mess > 0 ? totals.adCost / totals.mess : null;
   const cpaMessPrev = prevTotals.mess > 0 ? prevTotals.adCost / prevTotals.mess : null;
   const cpaMessDeltaPct =
@@ -457,14 +497,30 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
           orders: 0,
           tongData: 0,
         } satisfies AggBuild);
-      cur.revenue += adminRevenueVnd(r);
       cur.adCost += safeNum(r.ad_cost);
       cur.tongLead += safeNum(r.tong_lead);
-      cur.orders += safeNum(r.order_count);
-      cur.tongData += safeNum(r.tong_data_nhan);
       if (!cur.aggCode && codeDisplay) cur.aggCode = codeDisplay;
       if (!cur.team && r.team?.trim()) cur.team = r.team.trim();
       map.set(k, cur);
+    }
+
+    for (const [key, metrics] of odooMetrics?.byCode ?? []) {
+      const current = map.get(key) || ({
+        key,
+        displayName: metrics.name || metrics.code,
+        team: null,
+        aggCode: metrics.code,
+        revenue: 0,
+        adCost: 0,
+        tongLead: 0,
+        orders: 0,
+        tongData: 0,
+      } satisfies AggBuild);
+      current.revenue = metrics.revenueVnd;
+      current.orders = metrics.orderCount;
+      current.tongData = metrics.dataCount;
+      if (!current.aggCode) current.aggCode = metrics.code;
+      map.set(key, current);
     }
 
     const out: MarketerAgg[] = [];
@@ -485,7 +541,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
       });
     }
     return out.sort((a, b) => b.revenue - a.revenue);
-  }, [rows, staffMaps]);
+  }, [rows, staffMaps, odooMetrics]);
 
   const activeCampaigns = useMemo(
     () => byMarketer.filter((m) => m.revenue > 0 || m.adCost > 0).length,
@@ -615,7 +671,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
   }, [mktDetailKey]);
 
   const exportCsv = useCallback(() => {
-    const headers = ['Hạng', 'Tên', 'Team', 'Doanh thu', 'Chi phí', 'Ads/DT%', 'Trạng thái'];
+    const headers = ['Hạng', 'Tên', 'Team', 'Doanh số Odoo (VND)', 'Data Odoo', 'Đơn Odoo', 'Chi phí Ads', 'Ads/DT%', 'Trạng thái'];
     const lines = [
       headers.join(','),
       ...tableRows.map((r) =>
@@ -624,6 +680,8 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
           `"${(r.m.displayName || '').replace(/"/g, '""')}"`,
           `"${(r.m.team || '').replace(/"/g, '""')}"`,
           r.m.revenue,
+          r.m.tongData,
+          r.m.orders,
           r.m.adCost,
           r.m.revenue > 0 ? r.adsPct.toFixed(2) : '',
           r.status,
@@ -633,13 +691,12 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
     const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `admin-dash-${monthStart.slice(0, 7)}.csv`;
+    a.download = `admin-dash-${rangeStart}-${rangeEnd}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
-  }, [tableRows, monthStart]);
+  }, [tableRows, rangeStart, rangeEnd]);
 
   const leadCount = totals.tongLead || totals.tongData;
-  const previousLeadCount = prevTotals.tongLead || prevTotals.tongData;
   const closeRate = tyLeChot(totals.tongData, totals.orders, totals.tongLead);
   const costPerLead = leadCount > 0 ? totals.adCost / leadCount : null;
   const costPerOrder = totals.orders > 0 ? totals.adCost / totals.orders : null;
@@ -705,7 +762,17 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
     return (
       <div className="stitch-dashboard-loading">
         <Loader2 className="animate-spin" size={24} />
-        <span className="text-sm font-semibold">Đang tải {REPORTS_TABLE}…</span>
+        <span className="text-sm font-semibold">Đang tải Odoo và {REPORTS_TABLE}…</span>
+      </div>
+    );
+  }
+
+  if (odooSourceError) {
+    return (
+      <div className="stitch-dashboard-loading flex-col gap-3" role="alert">
+        <span className="text-sm font-semibold text-red-600">{odooSourceError}</span>
+        <span className="text-xs text-slate-500">Dashboard chưa hiển thị số ngày cộng dồn thay cho tổng Odoo của kỳ.</span>
+        <button type="button" onClick={() => void load()} className="personal-export-button"><RefreshCw size={14} /> Thử tải lại</button>
       </div>
     );
   }
@@ -719,8 +786,8 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
           </div>
           <div className="personal-dashboard-identity-copy">
             <p className="personal-dashboard-userline"><span>{displayName}</span><i aria-hidden="true" /><strong>{displayRole}</strong></p>
-            <h2>Dashboard cá nhân</h2>
-            <p className="personal-dashboard-subtitle">Tổng quan hiệu quả công việc trong kỳ</p>
+            <h2>Dashboard tổng quan</h2>
+            <p className="personal-dashboard-subtitle">Doanh số, data và đơn lấy từ Odoo theo cả kỳ; quảng cáo và tin nhắn lấy từ {REPORTS_TABLE}.</p>
           </div>
         </div>
         <div className="personal-period-toolbar">
@@ -745,6 +812,11 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
           <button type="button" onClick={() => void load()}><RefreshCw size={14} /> Thử lại</button>
         </div>
       )}
+      {previousOdooError && (
+        <div className="stitch-data-error" role="status">
+          {previousOdooError} Phần so sánh doanh số, data và đơn với kỳ trước sẽ để trống.
+        </div>
+      )}
 
       <section className={`personal-alert-banner ${burnMarketers.length ? 'is-alert' : 'is-clear'}`}>
         <div className="personal-alert-icon">
@@ -760,12 +832,12 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
       </section>
 
       <section className="personal-kpi-grid" aria-label="Chỉ số tổng quan">
-        <MetricCard title="Doanh số" value={formatCompactVnd(totals.revenue)} detail="so với kỳ trước" icon={ChartNoAxesColumnIncreasing} color="#15803d" badge="Doanh thu" delta={revDelta} trend={daily.slice(-8).map((d) => d.rev)} />
+        <MetricCard title="Doanh số" value={formatCompactVnd(totals.revenue)} detail={previousOdooMetrics ? 'Odoo theo kỳ · so với kỳ trước' : 'Odoo theo kỳ'} icon={ChartNoAxesColumnIncreasing} color="#15803d" badge="Doanh thu Odoo" delta={revDelta} trend={daily.slice(-8).map((d) => d.rev)} />
         <MetricCard title="Chi phí quảng cáo" value={formatCompactVnd(totals.adCost)} detail="so với kỳ trước" icon={CreditCard} color="#9333ea" badge="Chi phí" delta={spendDelta} deltaTone={spendDelta != null && spendDelta > 0 ? 'warning' : 'good'} trend={daily.slice(-8).map((d) => d.spend)} />
         <MetricCard title="CP/DT" value={adsRevenuePct == null ? '—' : `${adsRevenuePct.toFixed(1)}%`} detail={`Trần Ads: ${ADS_DT_WARN}% · Theo dõi từ ${ADS_DT_MED}%`} icon={Percent} color={adsTone(adsRevenuePct) === 'red' ? PERFORMANCE_COLORS.red : '#ca8a04'} valueTone={adsTone(adsRevenuePct) === 'green' ? undefined : adsTone(adsRevenuePct)} badge={adsRevenuePct == null ? 'Chưa có dữ liệu' : adsTone(adsRevenuePct) === 'red' ? 'Vượt trần' : adsTone(adsRevenuePct) === 'amber' ? 'Theo dõi' : 'Trong ngưỡng'} badgeAccent delta={adsRevenuePct != null && prevTotals.adsDtPct != null ? adsRevenuePct - prevTotals.adsDtPct : null} deltaTone="danger" trend={daily.slice(-8).map((d) => d.adsPct)} tone={adsTone(adsRevenuePct) === 'red' ? 'warning' : undefined} />
         <MetricCard title="Tin nhắn" value={Math.round(totals.mess).toLocaleString('vi-VN')} detail="theo báo cáo" icon={MessageCircleMore} color="#06b6d4" delta={pctChange(totals.mess, prevTotals.mess)} trend={daily.slice(-8).map((d) => d.mess)} />
-        <MetricCard title="Lead" value={Math.round(leadCount).toLocaleString('vi-VN')} detail={leadCount ? 'so với kỳ trước' : 'chưa phát sinh'} icon={UserRoundPlus} color="#9333ea" badge="Khách tiềm năng" badgeAccent delta={pctChange(leadCount, previousLeadCount)} trend={daily.slice(-8).map((d) => d.leads || d.data)} />
-        <MetricCard title="Đơn hàng" value={Math.round(totals.orders).toLocaleString('vi-VN')} detail={averageOrderValue == null ? 'Chưa có đơn hàng trong kỳ' : `Giá trị TB ${formatCompactVnd(averageOrderValue)}`} icon={ShoppingCart} color="#06b6d4" badge="Chuyển đổi" delta={pctChange(totals.orders, prevTotals.orders)} trend={daily.slice(-8).map((d) => d.orders)} />
+        <MetricCard title="Data nhận" value={Math.round(totals.tongData).toLocaleString('vi-VN')} detail={previousOdooMetrics ? 'Odoo theo kỳ · so với kỳ trước' : 'Odoo theo kỳ'} icon={UserRoundPlus} color="#9333ea" badge="Data Odoo" badgeAccent delta={previousOdooMetrics ? pctChange(totals.tongData, prevTotals.tongData) : null} trend={daily.slice(-8).map((d) => d.data)} />
+        <MetricCard title="Đơn hàng" value={Math.round(totals.orders).toLocaleString('vi-VN')} detail={averageOrderValue == null ? 'Chưa có đơn hàng trong kỳ' : `Odoo · Giá trị TB ${formatCompactVnd(averageOrderValue)}`} icon={ShoppingCart} color="#06b6d4" badge="Đơn Odoo" delta={previousOdooMetrics ? pctChange(totals.orders, prevTotals.orders) : null} trend={daily.slice(-8).map((d) => d.orders)} />
         <MetricCard title="Tỷ lệ chốt" value={closeRate == null ? '—' : `${closeRate.toFixed(1)}%`} detail={`${Math.round(totals.orders).toLocaleString('vi-VN')} đơn / ${Math.round(totals.tongData || totals.tongLead).toLocaleString('vi-VN')} data`} icon={Funnel} color={PERFORMANCE_COLORS[closeTone(closeRate)]} valueTone={closeTone(closeRate)} badge={closeRate == null ? 'Chưa có dữ liệu' : closeTone(closeRate) === 'green' ? 'Hiệu quả' : closeTone(closeRate) === 'amber' ? 'Theo dõi' : 'Chốt thấp'} badgeAccent trend={daily.slice(-8).map((d) => tyLeChot(d.data, d.orders, d.leads) || 0)} />
         <MetricCard title="CPL" value={costPerLead == null ? '—' : formatCompactVnd(costPerLead)} detail="Chi phí quảng cáo / lead" icon={Database} color="#1d4ed8" badge="Chi phí / lead" trend={daily.slice(-8).map((d) => (d.leads || d.data) > 0 ? d.spend / (d.leads || d.data) : 0)} />
       </section>
@@ -774,7 +846,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
         <div className="personal-panel-heading">
           <div>
             <h2>Doanh thu, chi phí và tỷ lệ CP/DT theo ngày</h2>
-            <p>{monthLabel} · {dailyRows.length} ngày có dữ liệu</p>
+            <p>{monthLabel} · {dailyRows.length} ngày có dữ liệu · Biểu đồ theo ngày từ {REPORTS_TABLE}; tổng kỳ phía trên lấy từ Odoo</p>
           </div>
           <div className="personal-chart-legend">
             <span><i className="legend-revenue" />Doanh thu</span>
@@ -810,7 +882,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
         <div className="personal-panel-heading">
           <div>
             <h2>Chi tiết theo ngày</h2>
-            <p>Dữ liệu tổng hợp từ detail_reports</p>
+            <p>Giá trị từng ngày từ {REPORTS_TABLE}; tổng các ngày có thể khác tổng Odoo theo kỳ</p>
           </div>
           <button type="button" onClick={exportDailyCsv} disabled={!dailyRows.length} className="personal-export-button">Tải CSV</button>
         </div>
@@ -849,11 +921,11 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
         <summary>Hiệu suất theo nhân sự · {rankRows.length}</summary>
         <div className="overflow-x-auto pt-4">
           <table className="personal-daily-table">
-            <thead><tr><th>{rankSortHeader('Nhân sự', 'name')}</th><th>{rankSortHeader('Team', 'team')}</th><th>{rankSortHeader('Đơn', 'orders')}</th><th>{rankSortHeader('Doanh số', 'revenue')}</th><th>{rankSortHeader('Chi phí', 'adCost')}</th><th>{rankSortHeader('CP/DT', 'adsPct')}</th><th>Tình trạng</th><th></th></tr></thead>
+            <thead><tr><th>{rankSortHeader('Nhân sự', 'name')}</th><th>{rankSortHeader('Team', 'team')}</th><th>Data Odoo</th><th>{rankSortHeader('Đơn Odoo', 'orders')}</th><th>{rankSortHeader('Doanh số Odoo', 'revenue')}</th><th>{rankSortHeader('Chi phí Ads', 'adCost')}</th><th>{rankSortHeader('CP/DT', 'adsPct')}</th><th>Tình trạng</th><th></th></tr></thead>
             <tbody>
               {tableRows.map(({ m, adsPct, status }) => (
                 <tr key={m.key}>
-                  <td style={{ textAlign: 'left' }}>{m.displayName}</td><td>{m.team || '—'}</td><td>{m.orders.toLocaleString('vi-VN')}</td>
+                  <td style={{ textAlign: 'left' }}>{m.displayName}</td><td>{m.team || '—'}</td><td>{m.tongData.toLocaleString('vi-VN')}</td><td>{m.orders.toLocaleString('vi-VN')}</td>
                   <td className="metric-positive">{formatCompactVnd(m.revenue)}</td><td>{formatCompactVnd(m.adCost)}</td>
                   <td className={performanceTextClass(adsTone(m.revenue > 0 ? adsPct : null))}>{m.revenue > 0 ? `${adsPct.toFixed(1)}%` : '—'}</td>
                   <td>{status === 'bad' ? 'Cần theo dõi' : status === 'med' ? 'Theo dõi' : 'Tốt'}</td>
@@ -875,7 +947,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
             <div className="flex items-start justify-between gap-3 border-b border-slate-700/70 px-5 py-4">
               <div className="min-w-0">
                 <h3 id="admin-mkt-detail-title" className="truncate text-base font-bold text-white">Chi tiết báo cáo — {mktDetailTitle}</h3>
-                <p className="mt-1 text-xs text-slate-400">{monthLabel} · {mktDetailRows.length} dòng trong {REPORTS_TABLE}</p>
+                <p className="mt-1 text-xs text-slate-400">{monthLabel} · {mktDetailRows.length} dòng trong {REPORTS_TABLE}; tổng kỳ ở bảng chính lấy từ Odoo</p>
               </div>
               <button type="button" onClick={() => setMktDetailKey(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white" aria-label="Đóng"><X size={18} /></button>
             </div>

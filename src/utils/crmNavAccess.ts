@@ -1,6 +1,6 @@
 import type { Role, ViewId } from '../components/crm-dashboard/types';
 import type { UserRole } from '../types';
-import { viewToRole } from './crmAdminRoutes';
+import { viewToRole } from './crmAdminRoutes.js';
 
 /** Quyền hiển thị nhóm tab CRM theo vị trí (employees.vi_tri) + super-admin đăng nhập */
 export type CrmNavTier = 'admin' | 'leader' | 'mkt';

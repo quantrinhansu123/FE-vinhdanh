@@ -6,7 +6,8 @@ import { createUpcareClient, UpcareAuthError } from './server/upcareClient';
 import { createMetaHandler } from './server/metaHandler';
 import { createMetaQcHandler } from './server/metaQcHandler';
 import { createImageLinkHandler } from './server/imageLinkHandler';
-import { loadMetaProjectQcRows, MetaProjectQcError } from './server/metaProjectQc';
+import { createMetaProjectQcHandler } from './server/metaProjectQcHandler';
+import { createMarketingDetailReportCronHandler } from './server/marketingDetailReportCron';
 
 function createLocalMetaApi(env: Record<string, string>) {
   const handler = createMetaHandler({ ...env, ...process.env });
@@ -27,42 +28,28 @@ function createLocalMetaApi(env: Record<string, string>) {
 }
 
 function createLocalMetaProjectQcApi(env: Record<string, string>) {
+  const handler = createMetaProjectQcHandler({ ...env, ...process.env }, { allowLocalReadWithoutSession: true });
   return {
     name: 'meta-project-qc-local-api',
     configureServer(server: import('vite').ViteDevServer) {
-      server.middlewares.use(async (req, res, next) => {
+      server.middlewares.use((req, res, next) => {
         const url = new URL(req.url || '/', 'http://localhost');
         if (url.pathname !== '/api/meta-project-qc') return next();
-        res.setHeader('Cache-Control', 'no-store');
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        if (req.method === 'OPTIONS') {
-          res.statusCode = 204;
-          res.end();
-          return;
-        }
-        if (req.method !== 'GET') {
-          res.statusCode = 405;
-          res.setHeader('Allow', 'GET, OPTIONS');
-          res.end(JSON.stringify({ error: 'method_not_allowed' }));
-          return;
-        }
-        try {
-          const result = await loadMetaProjectQcRows(
-            env,
-            url.searchParams.get('from') || '',
-            url.searchParams.get('to') || ''
-          );
-          res.statusCode = 200;
-          res.end(JSON.stringify(result));
-        } catch (error) {
-          if (error instanceof MetaProjectQcError) {
-            res.statusCode = error.statusCode;
-            res.end(JSON.stringify({ error: error.errorCode, message: error.message }));
-            return;
-          }
-          res.statusCode = 502;
-          res.end(JSON.stringify({ error: 'meta_project_qc_failed', message: 'Không tải được dữ liệu từ Meta. Hãy thử lại sau.' }));
-        }
+        return void handler(req, res);
+      });
+    },
+  };
+}
+
+function createLocalMarketingSyncApi(env: Record<string, string>) {
+  const handler = createMarketingDetailReportCronHandler({ ...env, ...process.env });
+  return {
+    name: 'marketing-detail-report-cron-local-api',
+    configureServer(server: import('vite').ViteDevServer) {
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url || '/', 'http://localhost');
+        if (url.pathname !== '/api/cron-marketing-sync') return next();
+        return void handler(req, res);
       });
     },
   };
@@ -111,7 +98,7 @@ function createLocalUpcareProxy(env: Record<string, string>) {
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    plugins: [react(), tailwindcss(), createLocalUpcareProxy(env), createLocalMetaApi(env), createLocalMetaProjectQcApi(env)],
+    plugins: [react(), tailwindcss(), createLocalUpcareProxy(env), createLocalMetaApi(env), createLocalMetaProjectQcApi(env), createLocalMarketingSyncApi(env)],
     cacheDir: path.resolve(__dirname, 'node_modules/.vite-3001'),
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),

@@ -10,7 +10,7 @@ import { supabase } from './api/supabase';
 import { fetchAllRows } from './api/fetchAllRows';
 import {
   defaultUpcareMktDateRange,
-  fetchUpcareMktEmployees,
+  fetchUpcareMktEmployeesForRange,
   isUpcareLeaderboardEnabled,
   mapUpcareMktRowsToLeaderboardEmployees,
 } from './api/upcareCrm';
@@ -48,7 +48,8 @@ function AppRoutes() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   /** BXH trang chủ: Fabico MKT API nếu bật, không thì cùng nguồn Supabase employees */
   const [boardEmployees, setBoardEmployees] = useState<Employee[]>([]);
-  const [boardSource, setBoardSource] = useState<'upcare' | 'supabase'>('supabase');
+  const [boardSource, setBoardSource] = useState<'upcare' | 'supabase' | 'unavailable'>('supabase');
+  const [boardError, setBoardError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMenuBar, setShowMenuBar] = useState(true);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -106,11 +107,12 @@ function AppRoutes() {
     }
 
     let board = rankedData;
-    let source: 'upcare' | 'supabase' = 'supabase';
+    let source: 'upcare' | 'supabase' | 'unavailable' = 'supabase';
+    let sourceError: string | null = null;
     if (isUpcareLeaderboardEnabled()) {
       try {
         const { dateFrom, dateTo } = defaultUpcareMktDateRange();
-        const mktRows = await fetchUpcareMktEmployees({ dateFrom, dateTo });
+        const { employees: mktRows } = await fetchUpcareMktEmployeesForRange({ dateFrom, dateTo });
         board = mapUpcareMktRowsToLeaderboardEmployees(mktRows);
         // Không dùng avatar từ API Fabico
         board = board.map((b) => ({ ...b, avatar_url: null }));
@@ -169,12 +171,14 @@ function AppRoutes() {
         source = 'upcare';
       } catch (e) {
         console.warn('[BXH] Fabico employee/mkt:', e);
-        board = rankedData;
-        source = 'supabase';
+        board = [];
+        source = 'unavailable';
+        sourceError = e instanceof Error ? e.message : 'Không tải được doanh số Odoo.';
       }
     }
     setBoardEmployees(board);
     setBoardSource(source);
+    setBoardError(sourceError);
 
     setLoading(false);
   };
@@ -248,6 +252,7 @@ function AppRoutes() {
             <LeaderboardPage
               employees={boardEmployees}
               boardSource={boardSource}
+              boardError={boardError}
               loading={loading}
               showMenuBar={showMenuBar}
               setShowMenuBar={setShowMenuBar}
