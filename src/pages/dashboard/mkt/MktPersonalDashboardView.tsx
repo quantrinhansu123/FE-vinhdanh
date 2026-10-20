@@ -714,7 +714,6 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
                 value: forecastRevenue,
                 rate: 0,
                 color: '',
-                formula: 'Doanh số × 0,95',
                 note: '',
                 valueClass: 'text-[#1f2937]',
                 showProgress: false,
@@ -725,7 +724,6 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
                 value: forecastAdCost,
                 rate: 0,
                 color: '',
-                formula: 'Chi phí Ads × 1,06',
                 note: '',
                 valueClass: 'text-[#1f2937]',
                 showProgress: false,
@@ -736,7 +734,6 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
                 value: forecastAdsPct,
                 rate: forecastAdsPct,
                 color: forecastAdsTone === 'red' ? 'bg-rose-600' : forecastAdsTone === 'amber' ? 'bg-amber-500' : forecastAdsTone === 'neutral' ? 'bg-slate-400' : 'bg-emerald-600',
-                formula: '',
                 note: 'Chi phí quảng cáo / doanh thu dự kiến',
                 valueClass: performanceTextClass(forecastAdsTone),
                 showProgress: true,
@@ -754,7 +751,6 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
                       ? forecastRevenue > 0 ? formatPercent(stage.value) : '—'
                       : formatMoney(stage.value)}
                     </strong>
-                    {stage.formula && <span className="block text-[9px] leading-3 text-[#64748b]">{stage.formula}</span>}
                   </div>
                 </div>
                 {stage.showProgress && <>
