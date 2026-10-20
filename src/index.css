@@ -1014,6 +1014,12 @@ optgroup {
 .stitch-data-page .team-dashboard-modern .team-dashboard-summary .td-sub span.td-good { color: #15803d !important; font-weight: 700; }
 .stitch-data-page .team-dashboard-modern .team-dashboard-summary .td-sub span.td-warn { color: #b45309 !important; font-weight: 700; }
 .stitch-data-page .team-dashboard-modern .team-dashboard-summary .td-sub span.td-bad { color: #be123c !important; font-weight: 700; }
+.stitch-data-page .team-dashboard-modern .team-dashboard-table td.performance-text-green,
+.stitch-data-page .team-dashboard-modern .team-dashboard-summary .td-sub span.performance-text-green { color: #15803d !important; font-weight: 700; }
+.stitch-data-page .team-dashboard-modern .team-dashboard-table td.performance-text-amber,
+.stitch-data-page .team-dashboard-modern .team-dashboard-summary .td-sub span.performance-text-amber { color: #b45309 !important; font-weight: 700; }
+.stitch-data-page .team-dashboard-modern .team-dashboard-table td.performance-text-red,
+.stitch-data-page .team-dashboard-modern .team-dashboard-summary .td-sub span.performance-text-red { color: #be123c !important; font-weight: 700; }
 .team-dashboard-modern .team-dashboard-main-grid {
   display: grid;
   grid-template-columns: minmax(0, 2.1fr) minmax(300px, 0.9fr);
