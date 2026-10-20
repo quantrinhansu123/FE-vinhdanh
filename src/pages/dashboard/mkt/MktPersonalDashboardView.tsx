@@ -495,15 +495,10 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
   const metrics = useMemo(() => makeMetrics(daily, odooTotals), [daily, odooTotals]);
   const priorMetrics = useMemo(() => makeMetrics(priorDaily, priorOdooTotals), [priorDaily, priorOdooTotals]);
   const activeDays = Math.max(1, daily.filter(dayHasActivity).length);
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  const dayOfMonth = today.getDate();
-  const remainingDays = Math.max(0, daysInMonth - dayOfMonth);
-  const forecastRevenue = metrics.revenue + (metrics.revenue / activeDays) * remainingDays;
-  const forecastAdCost = metrics.adCost + (metrics.adCost / activeDays) * remainingDays;
+  const forecastRevenue = metrics.revenue * REVENUE_AFTER_CANCEL_RATE;
+  const forecastAdCost = metrics.adCost * AD_COST_WITH_AGENCY_RATE;
   const forecastAdsPct = forecastRevenue > 0 ? (forecastAdCost / forecastRevenue) * 100 : 0;
-  // Adjustment factors apply to the achieved/spent figures shown in the notes.
-  const adjustedRevenue = metrics.revenue * REVENUE_AFTER_CANCEL_RATE;
-  const adjustedAdCost = metrics.adCost * AD_COST_WITH_AGENCY_RATE;
+  const forecastAdsTone = forecastRevenue > 0 ? adsTone(forecastAdsPct) : forecastAdCost > 0 ? 'red' : 'neutral';
   const showPriorDelta = compare && priorRows.length > 0;
   const revenueProgress = targetVnd ? Math.min(100, (metrics.revenue / targetVnd) * 100) : undefined;
   const adsStatus = adsTone(metrics.revenue > 0 ? metrics.adsPct : metrics.adCost > 0 ? 100 : null);
@@ -681,7 +676,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
         <Card label="CPA (Giá mess)" value={metrics.mess > 0 ? formatMoney(metrics.cpa) : '—'} sub="Chi phí Ads / tin nhắn" status="Theo dõi" tone="amber" icon={<MessageSquareText size={12} />} progress={metrics.cpa ? 100 - Math.min(100, metrics.cpa / 1000000 * 20) : 4} />
         <Card label="Tổng data" value={formatCount(metrics.leads)} sub="Data nhận / lead trong kỳ" status={metrics.leadPct >= 30 ? 'Đạt mục tiêu' : 'Theo dõi'} tone={metrics.leadPct >= 30 ? 'green' : 'amber'} icon={<Users size={12} />} progress={metrics.leadPct / 30 * 100} />
         <Card label="CPL (Giá số)" value={metrics.leads > 0 ? formatMoney(metrics.cpl) : '—'} sub="Chi phí Ads / data nhận" status="Theo dõi" tone="purple" icon={<Users size={12} />} progress={metrics.cpl ? 100 - Math.min(100, metrics.cpl / 1000000 * 20) : 4} />
-        <Card label="Tỉ lệ xin số" value={metrics.mess > 0 ? formatPercent(metrics.leadPct) : '—'} sub="Data nhận / Mess" status={metrics.leadPct >= 30 ? 'Đạt mục tiêu' : 'Theo dõi'} tone={metrics.leadPct >= 30 ? 'green' : 'amber'} icon={<Percent size={12} />} progress={metrics.leadPct / 30 * 100} />
+        <Card label="Tỷ lệ xin số" value={metrics.mess > 0 ? formatPercent(metrics.leadPct) : '—'} sub="Data nhận / Mess" status={metrics.leadPct >= 30 ? 'Đạt mục tiêu' : 'Theo dõi'} tone={metrics.leadPct >= 30 ? 'green' : 'amber'} icon={<Percent size={12} />} progress={metrics.leadPct / 30 * 100} />
         <Card label="Tổng đơn" value={formatCount(metrics.orders)} sub={`${formatCount(metrics.leads)} data nhận trong kỳ`} status={closeStatus === 'green' ? 'Tốt' : closeStatus === 'red' ? 'Chốt thấp' : closeStatus === 'neutral' ? 'Chưa có dữ liệu' : 'Theo dõi'} tone={closeStatus} icon={<ShoppingCart size={12} />} progress={metrics.closePct / CLOSE_GOOD_PERCENT * 100} />
         <Card label="%CR (Tỉ lệ chốt)" value={metrics.leads > 0 ? formatPercent(metrics.closePct) : '—'} sub="Đơn chốt / data nhận" status={closeStatus === 'green' ? 'Tốt' : closeStatus === 'red' ? 'Chốt thấp' : closeStatus === 'neutral' ? 'Chưa có dữ liệu' : 'Theo dõi'} tone={closeStatus} icon={<CheckCircle2 size={12} />} progress={metrics.closePct / CLOSE_GOOD_PERCENT * 100} />
         <Card label="AOV (Giá trị đơn)" value={metrics.orders > 0 ? formatMoney(metrics.aov) : '—'} sub="Doanh số / đơn chốt" status="Theo dõi" tone="green" icon={<ShoppingCart size={12} />} progress={metrics.aov ? 70 : 4} />
@@ -711,17 +706,63 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
         </section>
 
         <section className="rounded-xl border border-[var(--stitch-border)] bg-white p-3.5 shadow-[var(--stitch-shadow)] sm:p-4">
-          <div><h2 className="text-xs font-extrabold text-[#1f2937]">Dự đoán %ADS</h2><p className="mt-0.5 text-[10px] text-[#64748b]">Thực tế kỳ + nhịp {activeDays} ngày có dữ liệu × {remainingDays} ngày còn lại trong tháng</p></div>
+          <h2 className="text-xs font-extrabold text-[#1f2937]">Dự đoán %ADS</h2>
           <div className="mt-3 space-y-2">
             {[
-              { label: 'Doanh thu dự kiến cả tháng', value: forecastRevenue, rate: targetVnd ? Math.min(100, forecastRevenue / targetVnd * 100) : 100, color: 'bg-purple-600', note: `Đã đạt ${formatMoney(adjustedRevenue)}` },
-              { label: 'Chi phí quảng cáo dự kiến', value: forecastAdCost, rate: forecastRevenue ? forecastAdCost / forecastRevenue * 100 : 0, color: 'bg-sky-600', note: `Đã chi ${formatMoney(adjustedAdCost)}` },
-              { label: '%ADS dự kiến', value: forecastAdsPct, rate: forecastAdsPct, color: adsTone(forecastAdsPct) === 'red' ? 'bg-rose-600' : adsTone(forecastAdsPct) === 'amber' ? 'bg-amber-500' : 'bg-emerald-600', note: 'Chi phí quảng cáo / doanh thu dự kiến' },
+              {
+                label: 'Doanh thu dự kiến (đã tính 5% hoàn hủy)',
+                value: forecastRevenue,
+                rate: 0,
+                color: '',
+                formula: 'Doanh số × 0,95',
+                note: '',
+                valueClass: 'text-[#1f2937]',
+                showProgress: false,
+                isPercent: false,
+              },
+              {
+                label: 'Chi phí quảng cáo dự kiến (đã tính 6% phí agency)',
+                value: forecastAdCost,
+                rate: 0,
+                color: '',
+                formula: 'Chi phí Ads × 1,06',
+                note: '',
+                valueClass: 'text-[#1f2937]',
+                showProgress: false,
+                isPercent: false,
+              },
+              {
+                label: '%ADS dự kiến',
+                value: forecastAdsPct,
+                rate: forecastAdsPct,
+                color: forecastAdsTone === 'red' ? 'bg-rose-600' : forecastAdsTone === 'amber' ? 'bg-amber-500' : forecastAdsTone === 'neutral' ? 'bg-slate-400' : 'bg-emerald-600',
+                formula: '',
+                note: 'Chi phí quảng cáo / doanh thu dự kiến',
+                valueClass: performanceTextClass(forecastAdsTone),
+                showProgress: true,
+                isPercent: true,
+              },
             ].map((stage) => (
-              <div key={stage.label} className="rounded-lg border border-[var(--stitch-border)] bg-[#f8faf9] p-2.5">
-                <div className="flex items-baseline justify-between gap-2"><span className="text-[10px] font-bold text-[#64748b]">{stage.label}</span><strong className="text-base font-extrabold font-mono text-[#1f2937]">{stage.label.includes('%ADS') ? formatPercent(stage.value) : formatMoney(stage.value)}</strong></div>
-                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#e2e8e5]"><div className={`h-full rounded-full ${stage.color}`} style={{ width: `${Math.max(stage.value > 0 ? 3 : 0, Math.min(stage.rate, 100))}%` }} /></div>
-                <p className="mt-1 text-[9px] text-[#64748b]">{stage.note}</p>
+              <div key={stage.label} className="rounded-lg border border-[var(--stitch-border)] bg-[#f8faf9] px-2.5 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="block text-[10px] font-bold leading-4 text-[#475569]">{stage.label}</span>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <strong className={`block text-base font-extrabold font-mono leading-5 ${stage.valueClass}`}>
+                      {stage.isPercent
+                      ? forecastRevenue > 0 ? formatPercent(stage.value) : '—'
+                      : formatMoney(stage.value)}
+                    </strong>
+                    {stage.formula && <span className="block text-[9px] leading-3 text-[#64748b]">{stage.formula}</span>}
+                  </div>
+                </div>
+                {stage.showProgress && <>
+                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#e2e8e5]" aria-hidden="true">
+                    <div className={`h-full rounded-full transition-[width] duration-300 ${stage.color}`} style={{ width: `${Math.max(stage.value > 0 ? 3 : 0, Math.min(stage.rate, 100))}%` }} />
+                  </div>
+                  <p className="mt-1 text-[9px] leading-3 text-[#64748b]">{stage.note}</p>
+                </>}
               </div>
             ))}
           </div>
