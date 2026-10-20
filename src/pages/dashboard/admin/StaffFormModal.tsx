@@ -1,15 +1,22 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
-import { resolveImageLink } from '../../../api/imageLinks';
 import { isVisibleTeam } from '../../../utils/managementVisibility';
 import type { CrmTeamRow, Employee } from '../../../types';
 import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
 const TEAMS_TABLE = import.meta.env.VITE_SUPABASE_TEAMS_TABLE?.trim() || 'crm_teams';
+const AVATARS_BUCKET = import.meta.env.VITE_SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
+const MAX_AVATAR_BYTES = 10 * 1024 * 1024;
+const AVATAR_FILE_EXTENSIONS: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
 
 const TRANG_THAI_OPTIONS = [
   { value: 'dang_lam', label: 'Đang làm' },
@@ -69,6 +76,19 @@ function getSaveErrorMessage(err: unknown): string {
   return 'Lưu thất bại. Kiểm tra kết nối và cấu hình database rồi thử lại.';
 }
 
+function getAvatarUploadErrorMessage(err: unknown): string {
+  const message = err && typeof err === 'object' && 'message' in err && typeof err.message === 'string'
+    ? err.message
+    : '';
+  if (/bucket .*not found|bucket not found/i.test(message)) {
+    return `Chưa tìm thấy kho ảnh “${AVATARS_BUCKET}”. Quản trị viên cần tạo bucket avatars và quyền upload trong Supabase.`;
+  }
+  if (/row-level security|permission|not authorized|unauthorized/i.test(message)) {
+    return 'Supabase chưa cấp quyền tải ảnh lên. Quản trị viên cần kiểm tra policy của bucket avatars trong supabase/create_employees_table.sql.';
+  }
+  return message ? `Tải ảnh lên thất bại: ${message}` : 'Tải ảnh lên thất bại. Kiểm tra kết nối và cấu hình Supabase Storage.';
+}
+
 type Props = {
   open: boolean;
   initial: Employee | null;
@@ -93,16 +113,17 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
   const [formError, setFormError] = useState<string | null>(null);
   const [crmTeams, setCrmTeams] = useState<CrmTeamRow[]>([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
-  const [avatarLink, setAvatarLink] = useState('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
-  const [avatarResolving, setAvatarResolving] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
     setFormError(null);
     setAvatarError(null);
-    setAvatarResolving(false);
+    setAvatarFile(null);
+    if (avatarInputRef.current) avatarInputRef.current.value = '';
     if (initial) {
       setMaNs(initial.ma_ns || '');
       setName(initial.name || '');
@@ -114,7 +135,6 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
       setViTri(initial.vi_tri || '');
       setSoFanpage(String(initial.so_fanpage ?? 0));
       setTrangThai(initial.trang_thai || 'dang_lam');
-      setAvatarLink(initial.avatar_url || '');
       setAvatarPreview(initial.avatar_url || null);
     } else {
       setMaNs('');
@@ -127,33 +147,16 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
       setViTri('');
       setSoFanpage('0');
       setTrangThai('dang_lam');
-      setAvatarLink('');
       setAvatarPreview(null);
     }
   }, [open, initial]);
 
   useEffect(() => {
-    if (!open) return;
-    const value = avatarLink.trim();
-    setAvatarError(null);
-    if (!value || value === initial?.avatar_url?.trim()) {
-      setAvatarPreview(initial?.avatar_url || null);
-      setAvatarResolving(false);
-      return;
-    }
-    const controller = new AbortController();
-    setAvatarResolving(true);
-    setAvatarPreview(null);
-    const timer = window.setTimeout(() => {
-      void resolveImageLink(value, controller.signal)
-        .then((url) => { if (!controller.signal.aborted) setAvatarPreview(url); })
-        .catch((error) => {
-          if (!controller.signal.aborted) setAvatarError(error instanceof Error ? error.message : 'Chưa tải được ảnh.');
-        })
-        .finally(() => { if (!controller.signal.aborted) setAvatarResolving(false); });
-    }, 400);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [avatarLink, open, initial?.avatar_url]);
+    if (!open || !avatarFile) return;
+    const objectUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [avatarFile, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -213,8 +216,8 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
       setFormError('Chọn team từ danh sách.');
       return;
     }
-    if (avatarResolving || avatarError) {
-      setFormError(avatarError || 'Đang tải ảnh, vui lòng chờ một chút.');
+    if (avatarFile && avatarError) {
+      setFormError(avatarError);
       return;
     }
 
@@ -241,9 +244,26 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
     }
 
     setSaving(true);
+    let uploadedAvatarPath: string | null = null;
     try {
-      if (avatarLink.trim()) {
-        basePayload.avatar_url = avatarPreview || await resolveImageLink(avatarLink.trim());
+      const employeeId = isEdit && initial?.id ? initial.id : crypto.randomUUID();
+      if (avatarFile) {
+        const extension = AVATAR_FILE_EXTENSIONS[avatarFile.type];
+        if (!extension) {
+          throw new Error('Chỉ hỗ trợ ảnh JPG, PNG, WEBP hoặc GIF.');
+        }
+        const path = `employees/${employeeId}/${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage.from(AVATARS_BUCKET).upload(path, avatarFile, {
+          cacheControl: '3600',
+          contentType: avatarFile.type,
+          upsert: false,
+        });
+        if (uploadError) throw new Error(getAvatarUploadErrorMessage(uploadError));
+        uploadedAvatarPath = path;
+
+        const { data } = supabase.storage.from(AVATARS_BUCKET).getPublicUrl(path);
+        if (!data?.publicUrl) throw new Error('Đã tải ảnh lên nhưng chưa lấy được URL ảnh công khai.');
+        basePayload.avatar_url = data.publicUrl;
       }
 
       if (isEdit && initial?.id) {
@@ -254,17 +274,22 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
         const { error: uErr } = await supabase.from(EMPLOYEES_TABLE).update(payload).eq('id', initial.id);
         if (uErr) throw uErr;
       } else {
-        const { error: iErr } = await supabase.from(EMPLOYEES_TABLE).insert(basePayload);
+        const { error: iErr } = await supabase.from(EMPLOYEES_TABLE).insert({ ...basePayload, id: employeeId });
         if (iErr) throw iErr;
       }
-      onSaved();
-      onClose();
     } catch (err: unknown) {
+      if (uploadedAvatarPath) {
+        const { error: cleanupError } = await supabase.storage.from(AVATARS_BUCKET).remove([uploadedAvatarPath]);
+        if (cleanupError) console.warn('avatar upload cleanup:', cleanupError);
+      }
       setFormError(getSaveErrorMessage(err));
       console.error('employees save:', err);
+      return;
     } finally {
       setSaving(false);
     }
+    onSaved();
+    onClose();
   };
 
   if (!open) return null;
@@ -392,36 +417,71 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
             <div className="flex items-start gap-[12px] sm:gap-[14px]">
               <div className="w-[64px] h-[64px] shrink-0 rounded-full overflow-hidden border border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.05)] flex items-center justify-center">
                 {avatarPreview ? (
-                  <img src={avatarPreview} alt="Ảnh đại diện xem trước" className="w-full h-full object-cover" onError={() => {
-                    if (avatarLink.trim() && avatarLink.trim() !== initial?.avatar_url?.trim()) setAvatarError('Không tải được ảnh từ link này. Hãy kiểm tra link ảnh.');
-                  }} />
-                ) : avatarResolving ? (
-                  <Loader2 size={20} className="animate-spin text-[var(--text3)]" />
+                  <img
+                    src={avatarPreview}
+                    alt="Ảnh đại diện xem trước"
+                    className="w-full h-full object-cover"
+                    onError={() => {
+                      if (avatarFile) setAvatarError('Không thể xem trước tệp ảnh này. Hãy chọn một ảnh khác.');
+                    }}
+                  />
                 ) : (
                   <span className="text-[10px] text-[var(--text3)]">Chưa có ảnh</span>
                 )}
               </div>
 
               <div className="flex-1 space-y-[6px]">
-                <label htmlFor="staff-avatar-link" className={LABEL_CLASS}>Link ảnh đại diện</label>
+                <label htmlFor="staff-avatar-file" className={LABEL_CLASS}>Ảnh đại diện</label>
                 <input
-                  id="staff-avatar-link"
-                  type="url"
-                  value={avatarLink}
-                  placeholder="https://prnt.sc/... hoặc link ảnh trực tiếp"
+                  ref={avatarInputRef}
+                  id="staff-avatar-file"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
                   disabled={saving}
                   onChange={(e) => {
-                    setAvatarLink(e.target.value);
-                    setAvatarPreview(null);
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (!AVATAR_FILE_EXTENSIONS[file.type]) {
+                      setAvatarFile(null);
+                      setAvatarPreview(initial?.avatar_url || null);
+                      setAvatarError('Chỉ hỗ trợ ảnh JPG, PNG, WEBP hoặc GIF.');
+                      e.target.value = '';
+                      return;
+                    }
+                    if (file.size > MAX_AVATAR_BYTES) {
+                      setAvatarFile(null);
+                      setAvatarPreview(initial?.avatar_url || null);
+                      setAvatarError('Ảnh vượt quá 10 MB. Hãy chọn tệp nhỏ hơn.');
+                      e.target.value = '';
+                      return;
+                    }
+                    setAvatarFile(file);
                     setAvatarError(null);
-                    setAvatarResolving(Boolean(e.target.value.trim()));
+                    setFormError(null);
                   }}
                   className={FIELD_CLASS}
                 />
                 <p className="text-[10px] text-[var(--text3)]">
-                  Nhận link ảnh trực tiếp hoặc Lightshot (prnt.sc). Để trống thì giữ ảnh cũ.
+                  Chọn ảnh từ thiết bị (JPG, PNG, WEBP hoặc GIF; tối đa 10 MB). Ảnh sẽ được tải trực tiếp lên hệ thống; không chọn ảnh thì giữ ảnh hiện tại nếu có.
                 </p>
-                {avatarResolving ? <p className="text-[10px] text-[var(--text3)]" role="status">Đang tải ảnh xem trước…</p> : null}
+                {avatarFile ? (
+                  <div className="flex items-center gap-2 text-[10px] text-[var(--text2)]">
+                    <span className="min-w-0 truncate">Đã chọn: {avatarFile.name}</span>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => {
+                        setAvatarFile(null);
+                        setAvatarPreview(initial?.avatar_url || null);
+                        setAvatarError(null);
+                        if (avatarInputRef.current) avatarInputRef.current.value = '';
+                      }}
+                      className="shrink-0 text-[var(--accent)] hover:underline disabled:opacity-50"
+                    >
+                      Bỏ chọn
+                    </button>
+                  </div>
+                ) : null}
                 {avatarError ? <p className="text-[10px] text-[var(--R)]" role="alert">{avatarError}</p> : null}
               </div>
             </div>
@@ -459,7 +519,7 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
               </button>
               <button
                 type="submit"
-                disabled={saving || avatarResolving || Boolean(avatarError)}
+                disabled={saving || (Boolean(avatarFile) && Boolean(avatarError))}
                 className="flex items-center gap-2 py-[8px] px-[14px] rounded-[6px] text-[11px] font-bold bg-[#3d8ef0] hover:bg-[#2e7dd1] text-white transition-colors disabled:opacity-60"
               >
                 {saving ? <Loader2 className="animate-spin" size={14} /> : null}
