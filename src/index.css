@@ -1008,6 +1008,9 @@ optgroup {
 .team-dashboard-modern .td-warn { color: #b45309 !important; font-weight: 700; }
 .team-dashboard-modern .team-dashboard-summary .td-sub span.td-bad,
 .team-dashboard-modern .td-bad { color: #be123c !important; font-weight: 700; }
+.stitch-data-page .team-dashboard-modern .team-dashboard-table td.td-good { color: #15803d !important; font-weight: 700; }
+.stitch-data-page .team-dashboard-modern .team-dashboard-table td.td-warn { color: #b45309 !important; font-weight: 700; }
+.stitch-data-page .team-dashboard-modern .team-dashboard-table td.td-bad { color: #be123c !important; font-weight: 700; }
 .team-dashboard-modern .team-dashboard-main-grid {
   display: grid;
   grid-template-columns: minmax(0, 2.1fr) minmax(300px, 0.9fr);
