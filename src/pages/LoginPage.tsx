@@ -38,7 +38,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         <section className="stitch-login-story">
           <img src={backgroundImg} alt="" aria-hidden="true" />
           <div className="stitch-login-story-overlay" />
-          <div className="stitch-login-brand"><img src={fabicoLogo} alt="Fabico" /><div><strong>MAS - Manager Analytics Systems</strong><small>Performance management workspace</small></div></div>
+          <div className="stitch-login-brand"><img src={fabicoLogo} alt="Fabico" /><div><strong>MAS - Marketing Analytics Systems</strong><small>Performance management workspace</small></div></div>
           <div className="stitch-login-partner-logo"><img src={fabicoLogo} alt="Fabico" /></div>
           <div className="stitch-login-story-copy">
             <span className="stitch-login-eyebrow">Dữ liệu tập trung · Quyết định rõ ràng</span>
@@ -49,7 +49,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         </section>
 
         <form onSubmit={handleSubmit} className="stitch-login-form">
-          <div className="stitch-login-mobile-brand"><img src={fabicoLogo} alt="Fabico" /><strong>MAS - Manager Analytics Systems</strong></div>
+          <div className="stitch-login-mobile-brand"><img src={fabicoLogo} alt="Fabico" /><strong>MAS - Marketing Analytics Systems</strong></div>
           <div className="stitch-login-heading">
             <span>Chào mừng trở lại</span>
             <h1>Đăng nhập hệ thống</h1>
