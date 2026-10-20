@@ -112,7 +112,7 @@ function findHeaderRow(aoa: unknown[][]): { index: number; columns: ReturnType<t
 
 export function downloadQcExcelTemplate(): void {
   const aoa = [
-    ['MAS - Manager Analytics Systems'],
+    ['MAS - Marketing Analytics Systems'],
     ['QC Meta - Daily Marketing Detail'],
     [],
     Array.from(QC_EXCEL_HEADERS),
@@ -127,7 +127,7 @@ export function downloadQcExcelTemplate(): void {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Du lieu QC');
   const help = [
-    ['MAS - Manager Analytics Systems'],
+    ['MAS - Marketing Analytics Systems'],
     ['H\u01b0\u1edbng d\u1eabn m\u1eabu QC Meta'],
     [''],
     ['M\u1eabu g\u1ed3m 5 c\u1ed9t: Ng\u00e0y, M\u00e3 NV, T\u00ean chi\u1ebfn d\u1ecbch, chi ti\u00eau v\u00e0 s\u1ed1 tr\u00f2 chuy\u1ec7n.'],

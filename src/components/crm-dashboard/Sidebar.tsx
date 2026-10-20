@@ -40,7 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <aside className="stitch-sidebar" aria-label="Điều hướng chính">
         <div className="stitch-sidebar-brand">
           <img className="stitch-sidebar-logo" src={fabicoLogo} alt="Fabico" />
-          <div className="stitch-sidebar-brand-copy"><strong>MAS - Manager</strong><span>Analytics Systems</span></div>
+          <div className="stitch-sidebar-brand-copy"><strong>MAS - Marketing</strong><span>Analytics Systems</span></div>
         </div>
         <nav className="stitch-sidebar-nav">
           {navGroups.map((group, groupIndex) => (
@@ -83,7 +83,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-[16px_14px_14px] border-b border-white/[0.07] shrink-0">
         <div className="flex items-center gap-[10px]">
           <img src={fabicoLogo} alt="Fabico" className="h-[38px] w-[88px] shrink-0 object-contain" />
-          <div className="min-w-0 text-[16px] font-bold leading-[1.25] text-slate-100">MAS - Manager Analytics Systems</div>
+          <div className="min-w-0 text-[16px] font-bold leading-[1.25] text-slate-100">MAS - Marketing Analytics Systems</div>
         </div>
       </div>
       <nav className="flex-1 overflow-y-auto p-[10px_8px] custom-scrollbar dash-scrollbar">
