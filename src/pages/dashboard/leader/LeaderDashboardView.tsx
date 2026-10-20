@@ -179,6 +179,13 @@ function formatVndDots(n: number): string {
   return n.toLocaleString('vi-VN', { maximumFractionDigits: 2 });
 }
 
+function cplValueClass(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '';
+  if (value < 150_000) return 'td-good';
+  if (value <= 180_000) return 'td-warn';
+  return 'td-bad';
+}
+
 /** Doanh thu VND từ detail_reports: ưu tiên tien_viet; không có thì dùng revenue (đã là VND trên bảng, không nhân 25000). */
 function reportRevenueVnd(row: { tien_viet?: unknown; revenue?: unknown }): number {
   if (row.tien_viet != null) return safeNum(row.tien_viet);
@@ -1138,12 +1145,12 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                 <table className="team-dashboard-table">
                   <thead><tr><th>Nhân sự</th><th>Doanh số</th><th>Chi phí</th><th>CP/DT</th><th>Mess</th><th>CPA</th><th>Data Odoo</th><th>CPL</th><th>Đơn</th><th>CPO</th><th>%CR</th><th>AOV</th></tr></thead>
                   <tbody>
-                    <tr className="team-row"><td className="person team-name">TEAM · {teamName || '—'}</td><td>{formatVndDots(teamTotals.rev)}</td><td>{formatVndDots(teamTotals.ads)}</td><td className={performanceTextClass(adsTone(adsTeamPct))}>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</td><td>{Math.round(teamMess).toLocaleString('vi-VN')}</td><td>{teamCpa > 0 ? formatVndDots(teamCpa) : '—'}</td><td>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</td><td>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</td><td>{teamTotals.orders.toLocaleString('vi-VN')}</td><td>{teamCpo > 0 ? formatVndDots(teamCpo) : '—'}</td><td className={performanceTextClass(closeTone(chotTeam))}>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</td><td>{averageOrderValue > 0 ? formatVndDots(averageOrderValue) : '—'}</td></tr>
+                    <tr className="team-row"><td className="person team-name">TEAM · {teamName || '—'}</td><td>{formatVndDots(teamTotals.rev)}</td><td>{formatVndDots(teamTotals.ads)}</td><td className={performanceTextClass(adsTone(adsTeamPct))}>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</td><td>{Math.round(teamMess).toLocaleString('vi-VN')}</td><td>{teamCpa > 0 ? formatVndDots(teamCpa) : '—'}</td><td>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</td><td className={cplValueClass(cplTeam)}>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</td><td>{teamTotals.orders.toLocaleString('vi-VN')}</td><td>{teamCpo > 0 ? formatVndDots(teamCpo) : '—'}</td><td className={performanceTextClass(closeTone(chotTeam))}>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</td><td>{averageOrderValue > 0 ? formatVndDots(averageOrderValue) : '—'}</td></tr>
                     {tableRows.map((row, index) => <tr key={row.m.id}>
                       <td className="person"><span className={`td-rank ${index === 0 ? 'top' : ''}`}>{index + 1}</span>{mktNameWithCode(row.m, mktNameByCode)}</td>
                       <td className={index === 0 ? 'td-good' : ''}>{formatVndDots(row.a.rev)}</td><td>{formatVndDots(row.a.ads)}</td>
                       <td className={performanceTextClass(adsTone(row.cpdt))}>{row.cpdt == null ? '—' : `${row.cpdt.toFixed(1)}%`}</td>
-                      <td>{Math.round(row.mess).toLocaleString('vi-VN')}</td><td>{row.cpa > 0 ? formatVndDots(row.cpa) : '—'}</td><td>{Math.round(row.lead).toLocaleString('vi-VN')}</td><td>{row.cpl > 0 ? formatVndDots(row.cpl) : '—'}</td>
+                      <td>{Math.round(row.mess).toLocaleString('vi-VN')}</td><td>{row.cpa > 0 ? formatVndDots(row.cpa) : '—'}</td><td>{Math.round(row.lead).toLocaleString('vi-VN')}</td><td className={cplValueClass(row.cpl)}>{row.cpl > 0 ? formatVndDots(row.cpl) : '—'}</td>
                       <td>{row.a.orders.toLocaleString('vi-VN')}</td><td>{row.cpo > 0 ? formatVndDots(row.cpo) : '—'}</td><td className={performanceTextClass(closeTone(row.crPct))}>{row.crPct == null ? '—' : `${row.crPct.toFixed(1)}%`}</td><td>{row.aov > 0 ? formatVndDots(row.aov) : '—'}</td>
                     </tr>)}
                     {!tableRows.length ? <tr><td colSpan={12} className="td-empty">Chưa có dữ liệu Odoo hoặc báo cáo Meta của thành viên trong khoảng ngày này.</td></tr> : null}
