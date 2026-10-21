@@ -157,6 +157,10 @@ function upcareApiRoot(): string {
   return '/api/upcare-crm';
 }
 
+function upcareSaleApiRoot(): string {
+  return '/api/upcare-crm-sale';
+}
+
 function upcareProxyEnabled(): boolean {
   return viteEnv().VITE_UPCARE_CRM_ENABLED !== 'false';
 }
@@ -287,8 +291,8 @@ function addEmployeeMetrics(map: Map<string, UpcareMktEmployeeRow>, row: UpcareM
   if (!previous.avatar && row.avatar) previous.avatar = row.avatar;
 }
 
-/** Fetch one Odoo range response, retaining its date buckets for the personal dashboard. */
-export async function fetchUpcareMktEmployeesForRange(params: {
+/** Fetch one Odoo range response, retaining its date buckets for the dashboards. */
+async function fetchUpcareEmployeesForRangeAt(apiRoot: string, params: {
   dateFrom: string;
   dateTo: string;
 }, request: typeof fetch = fetch): Promise<UpcareMktEmployeeRange> {
@@ -299,7 +303,7 @@ export async function fetchUpcareMktEmployeesForRange(params: {
   const dates = inclusiveUtcDates(params.dateFrom, params.dateTo);
   const qs = new URLSearchParams({ date_from: params.dateFrom, date_to: params.dateTo });
   appendProjectScope(qs);
-  const payload = await requestUpcareMktPayload(`${upcareApiRoot()}?${qs.toString()}`, request);
+  const payload = await requestUpcareMktPayload(`${apiRoot}?${qs.toString()}`, request);
 
   if (Array.isArray(payload)) {
     const rows = normalizeUpcareMktResponse(payload);
@@ -347,6 +351,22 @@ export async function fetchUpcareMktEmployeesForRange(params: {
     dailyRows,
     hasDailyBreakdown: dates.every((date) => dateKeys.includes(date)),
   };
+}
+
+/** Fetch Odoo Marketing totals for existing marketing employees. */
+export function fetchUpcareMktEmployeesForRange(params: {
+  dateFrom: string;
+  dateTo: string;
+}, request: typeof fetch = fetch): Promise<UpcareMktEmployeeRange> {
+  return fetchUpcareEmployeesForRangeAt(upcareApiRoot(), params, request);
+}
+
+/** Fetch Odoo Sales totals for the two revenue-only employees. The server proxy filters all other staff. */
+export function fetchUpcareSaleEmployeesForRange(params: {
+  dateFrom: string;
+  dateTo: string;
+}, request: typeof fetch = fetch): Promise<UpcareMktEmployeeRange> {
+  return fetchUpcareEmployeesForRangeAt(upcareSaleApiRoot(), params, request);
 }
 
 export async function fetchUpcareMktEmployees(params: {

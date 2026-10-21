@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 import { createUpcareClient, UpcareAuthError } from './server/upcareClient';
+import { createUpcareSaleHandler } from './api/upcare-crm-sale';
 import { createMetaHandler } from './server/metaHandler';
 import { createMetaQcHandler } from './server/metaQcHandler';
 import { createImageLinkHandler } from './server/imageLinkHandler';
@@ -57,11 +58,13 @@ function createLocalMarketingSyncApi(env: Record<string, string>) {
 
 function createLocalUpcareProxy(env: Record<string, string>) {
   const client = createUpcareClient(env);
+  const saleHandler = createUpcareSaleHandler({ ...env, ...process.env });
   return {
     name: 'upcare-server-side-proxy',
     configureServer(server: import('vite').ViteDevServer) {
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url || '/', 'http://localhost');
+        if (url.pathname === '/api/upcare-crm-sale') return void saleHandler(req, res);
         const routePrefix = '/api/upcare-crm';
         if (url.pathname !== routePrefix && !url.pathname.startsWith(`${routePrefix}/`)) return next();
         res.setHeader('Cache-Control', 'no-store');

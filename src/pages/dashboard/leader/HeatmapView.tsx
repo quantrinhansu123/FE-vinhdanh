@@ -2,12 +2,18 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calendar, Loader2, RefreshCw, TrendingUp, Zap } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
-import { fetchUpcareMktEmployeesForRange, normalizeUpcareMktEmployeeCode, UPCARE_ODOO_VND_RATE } from '../../../api/upcareCrm';
+import {
+  fetchUpcareMktEmployeesForRange,
+  fetchUpcareSaleEmployeesForRange,
+  normalizeUpcareMktEmployeeCode,
+  UPCARE_ODOO_VND_RATE,
+} from '../../../api/upcareCrm';
 import { ADS_LIMIT_PERCENT, ADS_WARNING_PERCENT, adsTone, performanceTextClass } from '../../../utils/performanceThresholds';
 import { REPORTS_TABLE, toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
 import '../../../styles/stitchSystem.css';
 
 const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+const ODOO_SALE_ONLY_CODE_KEYS = new Set(['fbc.oldcustomer', 'fbc.hotline']);
 
 function addDays(d: Date, n: number): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -96,13 +102,19 @@ export const HeatmapView: React.FC = () => {
     setDayKeys(keys);
     const from = keys[0];
     const to = keys[keys.length - 1];
-    const [reportResult, odooResult] = await Promise.all([
+    const addSourceWarning = (message: string) => {
+      setSourceWarning((current) => [current, message].filter(Boolean).join(' '));
+    };
+    const [reportResult, odooResult, odooSaleResult] = await Promise.all([
       fetchAllRows<any>(supabase
         .from(REPORTS_TABLE)
         .select('email, name, report_date, ad_cost, revenue')
         .gte('report_date', from)
         .lte('report_date', to)),
       fetchUpcareMktEmployeesForRange({ dateFrom: from, dateTo: to })
+        .then((result) => ({ result, error: null as unknown }))
+        .catch((cause: unknown) => ({ result: null, error: cause })),
+      fetchUpcareSaleEmployeesForRange({ dateFrom: from, dateTo: to })
         .then((result) => ({ result, error: null as unknown }))
         .catch((cause: unknown) => ({ result: null, error: cause })),
     ]);
@@ -167,21 +179,55 @@ export const HeatmapView: React.FC = () => {
 
     if (odooResult.error) {
       const reason = odooResult.error instanceof Error ? odooResult.error.message : 'Không tải được Odoo.';
-      setSourceWarning((current) => [current, `Không tải được Odoo cho heatmap: ${reason}`].filter(Boolean).join(' '));
-    } else if (odooResult.result?.hasDailyBreakdown) {
-      const odooRevenueByEmailDay = new Map<string, number>();
-      const matchedEmails = new Set<string>();
-      let unmapped = 0;
-      for (const row of odooResult.result.employees) {
+      addSourceWarning(`Không tải được Odoo MKT cho heatmap: ${reason}`);
+    } else if (odooResult.result && !odooResult.result.hasDailyBreakdown) {
+      addSourceWarning('Odoo MKT không trả breakdown đủ 7 ngày; heatmap dùng doanh thu detail_reports cho các mã này.');
+    }
+    if (odooSaleResult.error) {
+      const reason = odooSaleResult.error instanceof Error ? odooSaleResult.error.message : 'Không tải được Odoo Sales.';
+      addSourceWarning(`Không tải được Odoo Sales cho heatmap: ${reason}`);
+    } else if (odooSaleResult.result && !odooSaleResult.result.hasDailyBreakdown) {
+      addSourceWarning('Odoo Sales không trả breakdown đủ 7 ngày cho FBC.OldCustomer và FBC.Hotline.');
+    }
+
+    const mktData = odooResult.result?.hasDailyBreakdown ? odooResult.result : null;
+    const saleData = odooSaleResult.result?.hasDailyBreakdown ? odooSaleResult.result : null;
+    if (mktData || saleData) {
+      const odooRevenueByCodeDay = new Map<string, number>();
+      const combinedEmployees = [
+        ...(mktData?.employees || []).filter((row) => !ODOO_SALE_ONLY_CODE_KEYS.has(normalizeUpcareMktEmployeeCode(row.code))),
+        ...(saleData?.employees || []),
+      ];
+      const employeesByCode = new Map<string, typeof combinedEmployees[number]>();
+      for (const row of combinedEmployees) {
         const code = normalizeUpcareMktEmployeeCode(row.code);
-        const email = code && !ambiguousCodes.has(code) ? emailByCode.get(code) : undefined;
+        if (code) employeesByCode.set(code, row);
+      }
+
+      const addDailyRows = (dailyRows: Array<{ code?: string | number; date: string; amount: number }>, saleSource = false) => {
+        for (const row of dailyRows) {
+          const code = normalizeUpcareMktEmployeeCode(row.code);
+          if (!code || (!saleSource && ODOO_SALE_ONLY_CODE_KEYS.has(code))) continue;
+          const key = `${code}\0${row.date}`;
+          odooRevenueByCodeDay.set(key, Math.round((Number(row.amount) || 0) * UPCARE_ODOO_VND_RATE));
+        }
+      };
+      if (mktData) addDailyRows(mktData.dailyRows);
+      if (saleData) addDailyRows(saleData.dailyRows, true);
+
+      const matchedEmails = new Set<string>();
+      const codeByEmail = new Map<string, string>();
+      let unmapped = 0;
+      for (const [code, row] of employeesByCode) {
+        const email = !ambiguousCodes.has(code) ? emailByCode.get(code) : undefined;
         if (!email) continue;
         matchedEmails.add(email);
+        codeByEmail.set(email, code);
         emailSet.add(email);
         if (row.name && !names.has(email)) names.set(email, row.name);
       }
-      for (const row of odooResult.result.dailyRows) {
-        const code = normalizeUpcareMktEmployeeCode(row.code);
+      for (const key of odooRevenueByCodeDay.keys()) {
+        const [code, date] = key.split('\0');
         const email = code && !ambiguousCodes.has(code) ? emailByCode.get(code) : undefined;
         if (!email) {
           unmapped += 1;
@@ -189,23 +235,29 @@ export const HeatmapView: React.FC = () => {
         }
         matchedEmails.add(email);
         emailSet.add(email);
-        const key = `${email}\0${row.date}`;
-        odooRevenueByEmailDay.set(key, (odooRevenueByEmailDay.get(key) || 0) + Math.round((Number(row.amount) || 0) * UPCARE_ODOO_VND_RATE));
-        if (row.name && !names.has(email)) names.set(email, row.name);
       }
       for (const email of matchedEmails) {
+        const code = codeByEmail.get(email);
+        if (!code) continue;
         for (const date of keys) {
-          const key = `${email}\0${date}`;
-          const current = next.get(key) || { ad: 0, rev: 0 };
-          current.rev = odooRevenueByEmailDay.get(key) || 0;
-          next.set(key, current);
+          const emailDayKey = `${email}\0${date}`;
+          const current = next.get(emailDayKey) || { ad: 0, rev: 0 };
+          current.rev = odooRevenueByCodeDay.get(`${code}\0${date}`) || 0;
+          next.set(emailDayKey, current);
         }
       }
       if (ambiguousCodes.size || unmapped) {
-        setSourceWarning(`Odoo trả doanh số theo nhân sự, nhưng ${ambiguousCodes.size} mã bị ghép trùng và ${unmapped} dòng chưa ghép được vào email; các dòng chưa ghép giữ doanh thu detail_reports.`);
+        addSourceWarning(`Odoo trả doanh số theo nhân sự, nhưng ${ambiguousCodes.size} mã bị ghép trùng và ${unmapped} dòng chưa ghép được vào email; các dòng chưa ghép giữ doanh thu detail_reports.`);
       }
-    } else if (!odooResult.error) {
-      setSourceWarning('Odoo không trả breakdown đủ 7 ngày; heatmap đang dùng doanh thu detail_reports cho kỳ này.');
+    }
+
+    if (!odooSaleResult.error && odooSaleResult.result) {
+      const returnedSaleCodes = new Set(odooSaleResult.result.employees.map((row) => normalizeUpcareMktEmployeeCode(row.code)));
+      const missingSaleCodes = [...ODOO_SALE_ONLY_CODE_KEYS]
+        .filter((code) => emailByCode.has(code) && !returnedSaleCodes.has(code));
+      if (missingSaleCodes.length) {
+        addSourceWarning(`Odoo Sales chưa trả dòng doanh số cho ${missingSaleCodes.join(', ')} trong 7 ngày gần nhất.`);
+      }
     }
 
     setByKey(next);

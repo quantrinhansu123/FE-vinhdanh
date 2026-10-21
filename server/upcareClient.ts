@@ -117,8 +117,8 @@ export function createUpcareClient(env: UpcareEnv, options: ClientOptions = {}) 
   return {
     async request(pathAndQuery: string, init: RequestInit = {}): Promise<Response> {
       const url = new URL(`${base}${pathAndQuery}`);
-      // Expose only MKT data to the browser, never credential/token endpoints.
-      if (url.origin !== new URL(base).origin || url.pathname !== '/api/employee/mkt' || (init.method && init.method !== 'GET')) {
+      // Expose only the requested employee summaries, never credential/token endpoints.
+      if (url.origin !== new URL(base).origin || !['/api/employee/mkt', '/api/employee/sale'].includes(url.pathname) || (init.method && init.method !== 'GET')) {
         throw new Error('Unsupported Upcare request');
       }
       if (pendingLogin) await pendingLogin;
