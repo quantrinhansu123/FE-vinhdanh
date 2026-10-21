@@ -177,6 +177,21 @@ export const HeatmapView: React.FC = () => {
       setSourceWarning(`Không tải được danh sách mã nhân sự để ghép Odoo: ${empRes.error?.message || 'lỗi truy vấn'}.`);
     }
 
+    // Keep the revenue-only Odoo staff visible without counting any Meta/detail_reports values.
+    for (const [email, employee] of empMap) {
+      const code = normalizeUpcareMktEmployeeCode(employee.ma_ns);
+      if (!ODOO_SALE_ONLY_CODE_KEYS.has(code)) continue;
+      emailSet.add(email);
+      if (employee.name && !names.has(email)) names.set(email, employee.name);
+      for (const date of keys) {
+        const dayKey = `${email}\0${date}`;
+        const current = next.get(dayKey) || { ad: 0, rev: 0 };
+        current.ad = 0;
+        current.rev = 0;
+        next.set(dayKey, current);
+      }
+    }
+
     if (odooResult.error) {
       const reason = odooResult.error instanceof Error ? odooResult.error.message : 'Không tải được Odoo.';
       addSourceWarning(`Không tải được Odoo MKT cho heatmap: ${reason}`);

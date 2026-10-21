@@ -528,6 +528,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     for (const row of repRes.data || []) {
       const ck = codeKey((row as { code?: string | null }).code);
       if (!ck || !allowedCodeKeys.has(ck)) continue;
+      if (ODOO_SALE_ONLY_CODE_KEYS.has(normalizeUpcareMktEmployeeCode(ck))) continue;
 
       codesWithDetailRows.add(ck);
       const drList = detailByCode.get(ck) || [];
