@@ -8,7 +8,7 @@
   "crons": [
     {
       "path": "/api/cron-marketing-sync",
-      "schedule": "15 * * * *"
+      "schedule": "*/15 * * * *"
     }
   ],
   "rewrites": [
