@@ -531,7 +531,6 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     for (const row of repRes.data || []) {
       const ck = codeKey((row as { code?: string | null }).code);
       if (!ck || !allowedCodeKeys.has(ck)) continue;
-      if (ODOO_SALE_ONLY_CODE_KEYS.has(normalizeUpcareMktEmployeeCode(ck))) continue;
 
       codesWithDetailRows.add(ck);
       const drList = detailByCode.get(ck) || [];
@@ -565,7 +564,10 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       if (!key || usedCodes.has(key)) return false;
       usedCodes.add(key);
       const odoo = odooByCode?.get(normalizeUpcareMktEmployeeCode(e.ma_ns));
-      if (odoo) {
+      const isSaleOnly = ODOO_SALE_ONLY_CODE_KEYS.has(normalizeUpcareMktEmployeeCode(e.ma_ns));
+      const hasOdooMetrics = Boolean(odoo && (odoo.revenueVnd !== 0 || odoo.dataCount !== 0 || odoo.orderCount !== 0));
+      const useSavedSaleMetrics = Boolean(isSaleOnly && odoo && !hasOdooMetrics && codesWithDetailRows.has(key));
+      if (odoo && !useSavedSaleMetrics) {
         codesWithOdooRows.add(key);
         const a = next.get(key) || emptyAgg();
         a.rev = odoo.revenueVnd;
@@ -585,7 +587,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
         .map((e) => safeTrim(e.ma_ns))
         .filter(Boolean);
       if (missingCodes.length) {
-        setOdooWarning(`Odoo không trả mã ${[...new Set(missingCodes)].join(', ')} trong kỳ; các mã này đang dùng số đã lưu trong detail_reports.`);
+        setOdooWarning(`Odoo chưa có số liệu doanh thu/đơn cho mã ${[...new Set(missingCodes)].join(', ')} trong kỳ; các mã này đang dùng số đã lưu trong detail_reports.`);
       }
     } else {
       setOdooWarning('Nhân sự chưa có mã Odoo để đối chiếu; các chỉ số doanh số, data và đơn đang lấy từ detail_reports.');
