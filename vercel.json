@@ -3,7 +3,10 @@
     "api/meta-ads.ts": { "maxDuration": 60 },
     "api/meta-qc.ts": { "maxDuration": 60 },
     "api/meta-project-qc.ts": { "maxDuration": 60 },
-    "api/cron-marketing-sync.ts": { "maxDuration": 60 }
+    "api/cron-marketing-sync.ts": { "maxDuration": 60 },
+    "api/heatmap.ts": { "maxDuration": 60 },
+    "api/crm-session.ts": { "maxDuration": 30 },
+    "api/crm-staff-password.ts": { "maxDuration": 60 }
   },
   "crons": [
     {

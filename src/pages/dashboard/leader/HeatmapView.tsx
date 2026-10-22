@@ -1,19 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calendar, Loader2, RefreshCw, TrendingUp, Zap } from 'lucide-react';
-import { supabase } from '../../../api/supabase';
-import { fetchAllRows } from '../../../api/fetchAllRows';
-import {
-  fetchUpcareMktEmployeesForRange,
-  fetchUpcareSaleEmployeesForRange,
-  normalizeUpcareMktEmployeeCode,
-  UPCARE_ODOO_VND_RATE,
-} from '../../../api/upcareCrm';
+import { fetchHeatmap, type HeatmapApiResult } from '../../../api/crmSession';
 import { ADS_LIMIT_PERCENT, ADS_WARNING_PERCENT, adsTone, performanceTextClass } from '../../../utils/performanceThresholds';
-import { REPORTS_TABLE, toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
+import { toLocalYyyyMmDd } from '../mkt/mktDetailReportShared';
 import '../../../styles/stitchSystem.css';
-
-const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
-const ODOO_SALE_ONLY_CODE_KEYS = new Set(['fbc.oldcustomer', 'fbc.hotline']);
 
 function addDays(d: Date, n: number): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -49,7 +39,14 @@ function heatType(pct: number): 'G' | 'Y' | 'R' {
 
 type RowAgg = { ad: number; rev: number };
 
-type EmpMeta = { name: string; avatar_url: string | null; vi_tri: string | null; ma_ns?: string | null };
+type EmpMeta = {
+  name: string;
+  avatar_url: string | null;
+  vi_tri: string | null;
+  ma_ns: string | null;
+  teamId: string | null;
+  teamName: string;
+};
 
 function buildLast7Ymd(anchor: Date): string[] {
   return Array.from({ length: 7 }, (_, i) => toLocalYyyyMmDd(addDays(anchor, -6 + i)));
@@ -62,11 +59,14 @@ function initialsFromName(name: string): string {
   return (p[0][0] + p[p.length - 1][0]).toUpperCase();
 }
 
-function ObsidianHeatCell({ pct }: { pct: number | null }) {
+function ObsidianHeatCell({ pct, adCost }: { pct: number | null; adCost: number }) {
   if (pct == null) {
     return (
-      <div className="heatmap-cell w-full min-h-[56px] rounded-xl bg-[#f0f4f1] border border-[#e2e8e5]/80 flex items-center justify-center text-sm font-semibold text-[#8b9b94]">
-        —
+      <div
+        className={`heatmap-cell w-full min-h-[56px] rounded-xl border flex items-center justify-center text-xs font-semibold ${adCost > 0 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-[#f0f4f1] border-[#e2e8e5]/80 text-[#8b9b94]'}`}
+        title={adCost > 0 ? 'Có chi phí Ads nhưng chưa có doanh thu VND' : 'Chưa có doanh thu'}
+      >
+        {adCost > 0 ? 'Chưa có DT' : '—'}
       </div>
     );
   }
@@ -92,6 +92,10 @@ export const HeatmapView: React.FC = () => {
   const [byKey, setByKey] = useState<Map<string, RowAgg>>(() => new Map());
   const [displayNames, setDisplayNames] = useState<Map<string, string>>(() => new Map());
   const [empByEmail, setEmpByEmail] = useState<Map<string, EmpMeta>>(() => new Map());
+  const [heatmapTeams, setHeatmapTeams] = useState<HeatmapApiResult['teams']>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState('all');
+  const [scope, setScope] = useState<HeatmapApiResult['scope']>('team');
+  const [scopeWarning, setScopeWarning] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   const load = useCallback(async () => {
@@ -102,184 +106,49 @@ export const HeatmapView: React.FC = () => {
     setDayKeys(keys);
     const from = keys[0];
     const to = keys[keys.length - 1];
-    const addSourceWarning = (message: string) => {
-      setSourceWarning((current) => [current, message].filter(Boolean).join(' '));
-    };
-    const [reportResult, odooResult, odooSaleResult] = await Promise.all([
-      fetchAllRows<any>(supabase
-        .from(REPORTS_TABLE)
-        .select('email, name, report_date, ad_cost, revenue')
-        .gte('report_date', from)
-        .lte('report_date', to)),
-      fetchUpcareMktEmployeesForRange({ dateFrom: from, dateTo: to })
-        .then((result) => ({ result, error: null as unknown }))
-        .catch((cause: unknown) => ({ result: null, error: cause })),
-      fetchUpcareSaleEmployeesForRange({ dateFrom: from, dateTo: to })
-        .then((result) => ({ result, error: null as unknown }))
-        .catch((cause: unknown) => ({ result: null, error: cause })),
-    ]);
-
-    if (reportResult.error) {
-      console.error('heatmap detail_reports:', reportResult.error);
-      setError(reportResult.error.message || 'Không tải được detail_reports.');
+    try {
+      const result = await fetchHeatmap(from, to);
+      const next = new Map<string, RowAgg>();
+      const names = new Map<string, string>();
+      const employees = new Map<string, EmpMeta>();
+      for (const row of result.rows) {
+        const email = row.email.trim().toLowerCase();
+        if (!email) continue;
+        const key = `${email}\0${row.date}`;
+        const current = next.get(key) || { ad: 0, rev: 0 };
+        current.ad += Number(row.adCost) || 0;
+        current.rev += Number(row.revenueVnd) || 0;
+        next.set(key, current);
+        if (row.name && !names.has(email)) names.set(email, row.name);
+        employees.set(email, {
+          name: row.name || email,
+          avatar_url: row.avatarUrl,
+          vi_tri: row.position,
+          ma_ns: row.code,
+          teamId: row.teamId,
+          teamName: row.teamName,
+        });
+      }
+      setByKey(next);
+      setDisplayNames(names);
+      setEmpByEmail(employees);
+      setHeatmapTeams(result.teams);
+      setScope(result.scope);
+      setScopeWarning(result.scopeWarning);
+      setSourceWarning(result.warnings.length ? result.warnings.join(' ') : null);
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : 'Không tải được Heatmap.';
+      setError(reason);
       setByKey(new Map());
       setDisplayNames(new Map());
       setEmpByEmail(new Map());
+      setHeatmapTeams([]);
+      setScopeWarning(null);
+      setSourceWarning(null);
+    } finally {
       setLoading(false);
       setLastRefresh(new Date());
-      return;
     }
-
-    const next = new Map<string, RowAgg>();
-    const names = new Map<string, string>();
-    const emailSet = new Set<string>();
-    for (const r of reportResult.data || []) {
-      const email = String(r.email || '')
-        .trim()
-        .toLowerCase();
-      if (!email) continue;
-      emailSet.add(email);
-      const d = String(r.report_date || '').slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
-      const k = `${email}\0${d}`;
-      const ad = Number(r.ad_cost) || 0;
-      const rev = Number(r.revenue) || 0;
-      const prev = next.get(k) || { ad: 0, rev: 0 };
-      prev.ad += ad;
-      prev.rev += rev;
-      next.set(k, prev);
-      const nm = String(r.name || '').trim();
-      if (nm && !names.has(email)) names.set(email, nm);
-    }
-
-    const empRes = await fetchAllRows<EmpMeta & { email: string }>(supabase.from(EMPLOYEES_TABLE).select('email, name, ma_ns, avatar_url, vi_tri').not('email', 'is', null));
-    const empMap = new Map<string, EmpMeta>();
-    const emailByCode = new Map<string, string>();
-    const ambiguousCodes = new Set<string>();
-    if (!empRes.error && empRes.data) {
-      for (const row of empRes.data as { email?: string; name?: string; ma_ns?: string | null; avatar_url?: string | null; vi_tri?: string | null }[]) {
-        const em = String(row.email || '').trim().toLowerCase();
-        const code = normalizeUpcareMktEmployeeCode(row.ma_ns);
-        if (em) {
-          empMap.set(em, {
-            name: String(row.name || '').trim() || em,
-            avatar_url: row.avatar_url ?? null,
-            vi_tri: row.vi_tri ?? null,
-            ma_ns: row.ma_ns ?? null,
-          });
-        }
-        if (!code || !em) continue;
-        const priorEmail = emailByCode.get(code);
-        if (priorEmail && priorEmail !== em) ambiguousCodes.add(code);
-        else emailByCode.set(code, em);
-      }
-    } else {
-      setSourceWarning(`Không tải được danh sách mã nhân sự để ghép Odoo: ${empRes.error?.message || 'lỗi truy vấn'}.`);
-    }
-
-    // Keep the revenue-only Odoo staff visible without counting any Meta/detail_reports values.
-    for (const [email, employee] of empMap) {
-      const code = normalizeUpcareMktEmployeeCode(employee.ma_ns);
-      if (!ODOO_SALE_ONLY_CODE_KEYS.has(code)) continue;
-      emailSet.add(email);
-      if (employee.name && !names.has(email)) names.set(email, employee.name);
-      for (const date of keys) {
-        const dayKey = `${email}\0${date}`;
-        const current = next.get(dayKey) || { ad: 0, rev: 0 };
-        current.ad = 0;
-        current.rev = 0;
-        next.set(dayKey, current);
-      }
-    }
-
-    if (odooResult.error) {
-      const reason = odooResult.error instanceof Error ? odooResult.error.message : 'Không tải được Odoo.';
-      addSourceWarning(`Không tải được Odoo MKT cho heatmap: ${reason}`);
-    } else if (odooResult.result && !odooResult.result.hasDailyBreakdown) {
-      addSourceWarning('Odoo MKT không trả breakdown đủ 7 ngày; heatmap dùng doanh thu detail_reports cho các mã này.');
-    }
-    if (odooSaleResult.error) {
-      const reason = odooSaleResult.error instanceof Error ? odooSaleResult.error.message : 'Không tải được Odoo Sales.';
-      addSourceWarning(`Không tải được Odoo Sales cho heatmap: ${reason}`);
-    } else if (odooSaleResult.result && !odooSaleResult.result.hasDailyBreakdown) {
-      addSourceWarning('Odoo Sales không trả breakdown đủ 7 ngày cho FBC.OldCustomer và FBC.Hotline.');
-    }
-
-    const mktData = odooResult.result?.hasDailyBreakdown ? odooResult.result : null;
-    const saleData = odooSaleResult.result?.hasDailyBreakdown ? odooSaleResult.result : null;
-    if (mktData || saleData) {
-      const odooRevenueByCodeDay = new Map<string, number>();
-      const combinedEmployees = [
-        ...(mktData?.employees || []).filter((row) => !ODOO_SALE_ONLY_CODE_KEYS.has(normalizeUpcareMktEmployeeCode(row.code))),
-        ...(saleData?.employees || []),
-      ];
-      const employeesByCode = new Map<string, typeof combinedEmployees[number]>();
-      for (const row of combinedEmployees) {
-        const code = normalizeUpcareMktEmployeeCode(row.code);
-        if (code) employeesByCode.set(code, row);
-      }
-
-      const addDailyRows = (dailyRows: Array<{ code?: string | number; date: string; amount: number }>, saleSource = false) => {
-        for (const row of dailyRows) {
-          const code = normalizeUpcareMktEmployeeCode(row.code);
-          if (!code || (!saleSource && ODOO_SALE_ONLY_CODE_KEYS.has(code))) continue;
-          const key = `${code}\0${row.date}`;
-          odooRevenueByCodeDay.set(key, Math.round((Number(row.amount) || 0) * UPCARE_ODOO_VND_RATE));
-        }
-      };
-      if (mktData) addDailyRows(mktData.dailyRows);
-      if (saleData) addDailyRows(saleData.dailyRows, true);
-
-      const matchedEmails = new Set<string>();
-      const codeByEmail = new Map<string, string>();
-      let unmapped = 0;
-      for (const [code, row] of employeesByCode) {
-        const email = !ambiguousCodes.has(code) ? emailByCode.get(code) : undefined;
-        if (!email) continue;
-        matchedEmails.add(email);
-        codeByEmail.set(email, code);
-        emailSet.add(email);
-        if (row.name && !names.has(email)) names.set(email, row.name);
-      }
-      for (const key of odooRevenueByCodeDay.keys()) {
-        const [code, date] = key.split('\0');
-        const email = code && !ambiguousCodes.has(code) ? emailByCode.get(code) : undefined;
-        if (!email) {
-          unmapped += 1;
-          continue;
-        }
-        matchedEmails.add(email);
-        emailSet.add(email);
-      }
-      for (const email of matchedEmails) {
-        const code = codeByEmail.get(email);
-        if (!code) continue;
-        for (const date of keys) {
-          const emailDayKey = `${email}\0${date}`;
-          const current = next.get(emailDayKey) || { ad: 0, rev: 0 };
-          current.rev = odooRevenueByCodeDay.get(`${code}\0${date}`) || 0;
-          next.set(emailDayKey, current);
-        }
-      }
-      if (ambiguousCodes.size || unmapped) {
-        addSourceWarning(`Odoo trả doanh số theo nhân sự, nhưng ${ambiguousCodes.size} mã bị ghép trùng và ${unmapped} dòng chưa ghép được vào email; các dòng chưa ghép giữ doanh thu detail_reports.`);
-      }
-    }
-
-    if (!odooSaleResult.error && odooSaleResult.result) {
-      const returnedSaleCodes = new Set(odooSaleResult.result.employees.map((row) => normalizeUpcareMktEmployeeCode(row.code)));
-      const missingSaleCodes = [...ODOO_SALE_ONLY_CODE_KEYS]
-        .filter((code) => emailByCode.has(code) && !returnedSaleCodes.has(code));
-      if (missingSaleCodes.length) {
-        addSourceWarning(`Odoo Sales chưa trả dòng doanh số cho ${missingSaleCodes.join(', ')} trong 7 ngày gần nhất.`);
-      }
-    }
-
-    setByKey(next);
-    setDisplayNames(names);
-    setEmpByEmail(empMap);
-    setLoading(false);
-    setLastRefresh(new Date());
   }, []);
 
   useEffect(() => {
@@ -298,10 +167,16 @@ export const HeatmapView: React.FC = () => {
     });
   }, [byKey, displayNames, empByEmail]);
 
+  const selectedTeam = heatmapTeams.some((team) => team.id === selectedTeamId) ? selectedTeamId : 'all';
+  const marketersInScope = useMemo(() => selectedTeam === 'all'
+    ? marketers
+    : marketers.filter((email) => empByEmail.get(email)?.teamId === selectedTeam),
+  [marketers, empByEmail, selectedTeam]);
+
   const insights = useMemo(() => {
     const pcts: number[] = [];
     let danger = 0;
-    for (const email of marketers) {
+    for (const email of marketersInScope) {
       for (const ymd of dayKeys) {
         const a = byKey.get(`${email}\0${ymd}`);
         const pct = a ? adsDtPct(a.ad, a.rev) : null;
@@ -314,15 +189,15 @@ export const HeatmapView: React.FC = () => {
     const avg = pcts.length ? pcts.reduce((s, x) => s + x, 0) / pcts.length : null;
     const vs30 = avg != null ? avg - 30 : null;
     return { avg, danger, cellCount: pcts.length, vs30 };
-  }, [byKey, marketers, dayKeys]);
+  }, [byKey, marketersInScope, dayKeys]);
 
   const monthLabel = useMemo(() => monthBannerLabel(dayKeys), [dayKeys]);
 
   const exportCsv = () => {
     const sep = ';';
-    const h = ['Marketing', 'Email', 'TB 7 ngày %', ...dayKeys.map(formatColHeader)];
+    const h = ['Marketing', 'Team', 'Email', 'TB 7 ngày %', ...dayKeys.map(formatColHeader)];
     const lines = [h.join(sep)];
-    for (const email of marketers) {
+    for (const email of marketersInScope) {
       let wAd = 0;
       let wRev = 0;
       for (const ymd of dayKeys) {
@@ -334,12 +209,13 @@ export const HeatmapView: React.FC = () => {
       }
       const avgPct = adsDtPct(wAd, wRev);
       const label = displayNames.get(email) || empByEmail.get(email)?.name || email;
-      const row: string[] = [label.replaceAll(sep, ','), email];
-      row.push(avgPct != null ? avgPct.toFixed(2) : '');
+      const team = empByEmail.get(email)?.teamName || '';
+      const row: string[] = [label.replaceAll(sep, ','), team.replaceAll(sep, ','), email];
+      row.push(avgPct != null ? avgPct.toFixed(2) : wAd > 0 ? 'Chưa có DT' : '');
       for (const ymd of dayKeys) {
         const a = byKey.get(`${email}\0${ymd}`);
         const pct = a ? adsDtPct(a.ad, a.rev) : null;
-        row.push(pct != null ? pct.toFixed(2) : '');
+        row.push(pct != null ? pct.toFixed(2) : (a?.ad || 0) > 0 ? 'Chưa có DT' : '');
       }
       lines.push(row.join(sep));
     }
@@ -347,20 +223,22 @@ export const HeatmapView: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `heatmap-ads-dt-${dayKeys[0]}-${dayKeys[6]}.csv`;
+    a.download = `heatmap-ads-dt-${selectedTeam === 'all' ? 'all-teams' : selectedTeam}-${dayKeys[0]}-${dayKeys[6]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const exportJson = () => {
-    const rows = marketers.map((email) => {
+    const rows = marketersInScope.map((email) => {
       let wAd = 0;
       let wRev = 0;
       const days: Record<string, number | null> = {};
+      const dayStatuses: Record<string, 'ok' | 'no_revenue' | 'no_report'> = {};
       for (const ymd of dayKeys) {
         const agg = byKey.get(`${email}\0${ymd}`);
         const pct = agg ? adsDtPct(agg.ad, agg.rev) : null;
         days[ymd] = pct;
+        dayStatuses[ymd] = !agg ? 'no_report' : agg.rev <= 0 ? 'no_revenue' : 'ok';
         if (agg) {
           wAd += agg.ad;
           wRev += agg.rev;
@@ -369,8 +247,11 @@ export const HeatmapView: React.FC = () => {
       return {
         email,
         name: displayNames.get(email) || empByEmail.get(email)?.name || email,
+        team: empByEmail.get(email)?.teamName || null,
         tb7: adsDtPct(wAd, wRev),
+        status: wRev <= 0 ? 'no_revenue' : 'ok',
         days,
+        dayStatuses,
       };
     });
     const blob = new Blob([JSON.stringify({ range: { from: dayKeys[0], to: dayKeys[6] }, rows }, null, 2)], {
@@ -379,7 +260,7 @@ export const HeatmapView: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `heatmap-ads-dt-${dayKeys[0]}-${dayKeys[6]}.json`;
+    a.download = `heatmap-ads-dt-${selectedTeam === 'all' ? 'all-teams' : selectedTeam}-${dayKeys[0]}-${dayKeys[6]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -399,7 +280,7 @@ export const HeatmapView: React.FC = () => {
               </span>
             </div>
             <span className="font-sans text-xs text-[#476355] font-medium tracking-wide">
-              Chi phí từ {REPORTS_TABLE} · doanh thu Odoo theo ngày
+              Ads + doanh thu VND theo ngày · detail_reports/Odoo
             </span>
           </div>
         </div>
@@ -432,14 +313,40 @@ export const HeatmapView: React.FC = () => {
           {error}
         </div>
       )}
-      {sourceWarning && <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900" role="status">{sourceWarning}</div>}
+      {sourceWarning ? (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+          {sourceWarning}
+        </div>
+      ) : null}
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e2e8e5] bg-white px-4 py-3">
+        <div className="text-xs font-semibold text-[#476355]">
+          Phạm vi dữ liệu: <span className="text-[#006e51]">{scope === 'all' ? 'Toàn hệ thống' : scope === 'project' ? 'Các team thuộc dự án được giao' : 'Team được giao'}</span>
+          {scopeWarning ? <span className="ml-2 text-amber-700">· {scopeWarning}</span> : null}
+        </div>
+        {heatmapTeams.length > 1 ? (
+          <label className="flex items-center gap-2 text-xs font-semibold text-[#476355]">
+            Team
+            <select
+              value={selectedTeam}
+              onChange={(event) => setSelectedTeamId(event.target.value)}
+              className="rounded-lg border border-[#e2e8e5] bg-white px-3 py-2 text-sm text-[#191c1b]"
+            >
+              <option value="all">Tất cả team trong phạm vi</option>
+              {heatmapTeams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+            </select>
+          </label>
+        ) : heatmapTeams.length === 1 ? (
+          <span className="rounded-full bg-[#ecfdf5] px-3 py-1 text-xs font-bold text-[#006e51]">{heatmapTeams[0].name}</span>
+        ) : null}
+      </div>
 
       <section className="bg-white rounded-2xl overflow-hidden shadow-xs border border-[#e2e8e5] relative">
         <div className="overflow-x-auto leader-dash-no-scrollbar">
-          {loading && marketers.length === 0 ? (
+          {loading && marketersInScope.length === 0 ? (
             <div className="flex items-center justify-center gap-2 py-20 text-[#476355] text-sm font-medium">
               <Loader2 className="animate-spin w-5 h-5 text-[#006e51]" />
-              Đang tải {REPORTS_TABLE}…
+              Đang tải Heatmap…
             </div>
           ) : (
             <table className="w-full text-left border-collapse min-w-[900px]">
@@ -462,7 +369,7 @@ export const HeatmapView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e2e8e5]">
-                {marketers.length === 0 ? (
+                {marketersInScope.length === 0 ? (
                   <tr>
                     <td
                       colSpan={dayKeys.length + 2}
@@ -472,7 +379,7 @@ export const HeatmapView: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  marketers.map((email) => {
+                  marketersInScope.map((email) => {
                     const emp = empByEmail.get(email);
                     const label = displayNames.get(email) || emp?.name || email;
                     const role = emp?.vi_tri?.trim() || 'Marketing';
@@ -501,8 +408,8 @@ export const HeatmapView: React.FC = () => {
                               <p className="font-sans font-bold text-sm text-[#191c1b] truncate" title={label}>
                                 {label}
                               </p>
-                              <p className="font-sans text-xs text-[#476355] truncate">
-                                {role}
+                              <p className="font-sans text-xs text-[#476355] truncate" title={`${emp?.teamName || 'Chưa gán team'} · ${role}`}>
+                                {emp?.teamName || 'Chưa gán team'} · {role}
                               </p>
                             </div>
                           </div>
@@ -517,7 +424,7 @@ export const HeatmapView: React.FC = () => {
                           const pct = a ? adsDtPct(a.ad, a.rev) : null;
                           return (
                             <td key={ymd} className="p-2 align-middle">
-                              <ObsidianHeatCell pct={pct} />
+                              <ObsidianHeatCell pct={pct} adCost={a?.ad || 0} />
                             </td>
                           );
                         })}
@@ -553,17 +460,17 @@ export const HeatmapView: React.FC = () => {
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-[#476355]">
             <span className="uppercase text-[10px] tracking-wider text-[#8b9b94]">Xuất file:</span>
-            <button type="button" onClick={exportCsv} className="px-3 py-1.5 bg-white border border-[#e2e8e5] rounded-lg shadow-2xs hover:text-[#006e51] hover:border-[#006e51] transition-all disabled:opacity-40" disabled={!marketers.length}>
+            <button type="button" onClick={exportCsv} className="px-3 py-1.5 bg-white border border-[#e2e8e5] rounded-lg shadow-2xs hover:text-[#006e51] hover:border-[#006e51] transition-all disabled:opacity-40" disabled={!marketersInScope.length}>
               CSV
             </button>
-            <button type="button" onClick={exportJson} className="px-3 py-1.5 bg-white border border-[#e2e8e5] rounded-lg shadow-2xs hover:text-[#006e51] hover:border-[#006e51] transition-all disabled:opacity-40" disabled={!marketers.length}>
+            <button type="button" onClick={exportJson} className="px-3 py-1.5 bg-white border border-[#e2e8e5] rounded-lg shadow-2xs hover:text-[#006e51] hover:border-[#006e51] transition-all disabled:opacity-40" disabled={!marketersInScope.length}>
               JSON
             </button>
             <button
               type="button"
               onClick={() => window.print()}
               className="px-3 py-1.5 bg-white border border-[#e2e8e5] rounded-lg shadow-2xs hover:text-[#006e51] hover:border-[#006e51] transition-all disabled:opacity-40"
-              disabled={!marketers.length}
+              disabled={!marketersInScope.length}
               title="Dùng hộp thoại in của trình duyệt"
             >
               PDF
@@ -588,7 +495,7 @@ export const HeatmapView: React.FC = () => {
           </p>
           <div className="flex items-end gap-2">
             <span className="text-3xl font-extrabold font-mono text-[#191c1b]">{insights.avg != null ? `${insights.avg.toFixed(1)}%` : '—'}</span>
-            <span className="font-sans text-xs text-[#476355] mb-1">Toàn sàn</span>
+            <span className="font-sans text-xs text-[#476355] mb-1">Trong phạm vi</span>
           </div>
         </div>
 

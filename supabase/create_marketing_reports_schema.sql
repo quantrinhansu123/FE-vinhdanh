@@ -60,35 +60,12 @@ alter table public.detail_reports drop column if exists warning;
 
 alter table public.detail_reports enable row level security;
 
+-- Browser report access is granted by the CRM Auth/RLS migration after
+-- employees, crm_teams, and du_an are available. Keep anon closed by default.
 DROP POLICY IF EXISTS "anon can read detail reports" ON public.detail_reports;
 DROP POLICY IF EXISTS "anon can insert detail reports" ON public.detail_reports;
 DROP POLICY IF EXISTS "anon can update detail reports" ON public.detail_reports;
 DROP POLICY IF EXISTS "anon can delete detail reports" ON public.detail_reports;
-
-create policy "anon can read detail reports"
-on public.detail_reports
-for select
-to anon
-using (true);
-
-create policy "anon can insert detail reports"
-on public.detail_reports
-for insert
-to anon
-with check (true);
-
-create policy "anon can update detail reports"
-on public.detail_reports
-for update
-to anon
-using (true)
-with check (true);
-
-create policy "anon can delete detail reports"
-on public.detail_reports
-for delete
-to anon
-using (true);
 
 -- Optional staff seed for auto-fill in report form
 insert into public.marketing_staff (id_ns, name, email, team, branch, role)

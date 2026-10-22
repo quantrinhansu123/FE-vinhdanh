@@ -44,15 +44,11 @@ for each row execute procedure public.crm_teams_set_updated_at();
 
 alter table public.crm_teams enable row level security;
 
+-- The CRM Auth/RLS migration adds scoped authenticated policies for this table.
 drop policy if exists "anon can read crm_teams" on public.crm_teams;
 drop policy if exists "anon can insert crm_teams" on public.crm_teams;
 drop policy if exists "anon can update crm_teams" on public.crm_teams;
 drop policy if exists "anon can delete crm_teams" on public.crm_teams;
-
-create policy "anon can read crm_teams" on public.crm_teams for select to anon using (true);
-create policy "anon can insert crm_teams" on public.crm_teams for insert to anon with check (true);
-create policy "anon can update crm_teams" on public.crm_teams for update to anon using (true) with check (true);
-create policy "anon can delete crm_teams" on public.crm_teams for delete to anon using (true);
 
 insert into public.crm_teams (ma_team, ten_team, leader, so_thanh_vien, member_ids, du_an_ids, doanh_so_thang, trang_thai)
 select 'TEAM-A', 'Elite Performance', 'Trần Hoàng', 12, '[]'::jsonb, '[]'::jsonb, 1240000000, 'hoat_dong'

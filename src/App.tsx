@@ -20,10 +20,10 @@ import { LeaderboardPage } from './pages/LeaderboardPage';
 import type { Employee, AuthUser } from './types';
 import { crmAdminPathForView } from './utils/crmAdminRoutes';
 import { crmNavTierFromUser, defaultViewForTier } from './utils/crmNavAccess';
+import { loginCrmSession, logoutCrmSession, restoreCrmSession, CrmSessionClientError } from './api/crmSession';
 
-const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_EMPLOYEES_TABLE?.trim() || 'employees';
+const EMPLOYEES_TABLE = import.meta.env.VITE_SUPABASE_LEADERBOARD_VIEW?.trim() || 'employee_leaderboard';
 const AVATARS_BUCKET = import.meta.env.VITE_SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
-const AUTH_STORAGE_KEY = 'fe_vinhdanh_auth_user';
 
 function logSupabaseError(action: string, error: { code?: string; message?: string; details?: string; hint?: string } | null) {
   if (!error) return;
@@ -38,7 +38,7 @@ function logSupabaseError(action: string, error: { code?: string; message?: stri
 
   if (error.code === 'PGRST205') {
     console.error(
-      `Supabase table \"${EMPLOYEES_TABLE}\" was not found in the exposed REST schema. Create the table in schema public or set VITE_SUPABASE_EMPLOYEES_TABLE correctly.`
+      `Supabase table/view \"${EMPLOYEES_TABLE}\" was not found in the exposed REST schema. Apply the CRM access migration and check VITE_SUPABASE_LEADERBOARD_VIEW.`
     );
   }
 }
@@ -69,18 +69,23 @@ function AppRoutes() {
       return;
     }
 
-    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as AuthUser;
-        if (parsed?.email) {
-          setAuthUser(parsed);
-        }
-      } catch (error) {
-        console.warn('Invalid login cache, reset required.', error);
-      }
-    }
-    setAuthChecking(false);
+    void restoreCrmSession()
+      .then((user) => {
+        if (!user) return;
+        return supabase.auth.getSession().then(({ data, error }) => {
+          const sessionEmail = data.session?.user.email?.trim().toLowerCase();
+          if (error || !sessionEmail || sessionEmail !== user.email.trim().toLowerCase()) {
+            throw new CrmSessionClientError(401, 'Phiên dữ liệu đã hết hạn. Vui lòng đăng nhập lại.');
+          }
+          setAuthUser(user);
+        });
+      })
+      .catch((error: unknown) => {
+        console.warn('CRM session restore:', error);
+        void supabase.auth.signOut({ scope: 'local' });
+        setAuthUser(null);
+      })
+      .finally(() => setAuthChecking(false));
   }, []);
 
   useEffect(() => {
@@ -93,7 +98,10 @@ function AppRoutes() {
 
   const fetchEmployees = async () => {
     setLoading(true);
-    const { data, error } = await fetchAllRows<Employee>(supabase.from(EMPLOYEES_TABLE).select('*').order('score', { ascending: false }));
+    const { data, error } = await fetchAllRows<Employee>(supabase
+      .from(EMPLOYEES_TABLE)
+      .select('id, name, team, score, avatar_url, ma_ns')
+      .order('score', { ascending: false }));
 
     let rankedData: Employee[] = [];
     if (error) {
@@ -184,48 +192,19 @@ function AppRoutes() {
   };
 
   const handleLogin = async (email: string, password: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const { data, error } = await supabase
-      .from(EMPLOYEES_TABLE)
-      .select('id, name, email, pass, team, avatar_url, vi_tri, ma_ns')
-      .ilike('email', normalizedEmail)
-      .eq('pass', password)
-      .limit(1);
-
+    const result = await loginCrmSession(email, password);
+    const { error } = await supabase.auth.setSession(result.session);
     if (error) {
-      throw new Error(error.message || 'Không thể đăng nhập');
+      await logoutCrmSession().catch(() => undefined);
+      throw new CrmSessionClientError(502, 'Không thiết lập được phiên dữ liệu Supabase.');
     }
-
-    const user = (data || [])[0] as {
-      id?: string;
-      email?: string;
-      name?: string;
-      team?: string;
-      avatar_url?: string | null;
-      vi_tri?: string | null;
-      ma_ns?: string | null;
-    } | undefined;
-    if (!user?.email) {
-      throw new Error('Sai email hoặc mật khẩu');
-    }
-
-    const nextUser: AuthUser = {
-      id: String(user.id || ''),
-      email: String(user.email),
-      role: normalizedEmail === 'upedu2024@gmail.com' ? 'admin' : 'user',
-      name: String(user.name || ''),
-      team: String(user.team || ''),
-      avatar_url: user.avatar_url || null,
-      vi_tri: user.vi_tri?.trim() ? user.vi_tri.trim() : null,
-      ma_ns: user.ma_ns?.trim() ? user.ma_ns.trim() : null,
-    };
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextUser));
-    setAuthUser(nextUser);
+    setAuthUser(result.user);
     navigate('/', { replace: true });
   };
 
   const handleLogout = () => {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+    void logoutCrmSession().catch((error) => console.warn('CRM session logout:', error));
+    void supabase.auth.signOut({ scope: 'local' });
     setAuthUser(null);
     navigate('/login', { replace: true });
   };
@@ -293,7 +272,9 @@ function AppRoutes() {
               onClose={() => navigate('/')}
               onLogout={handleLogout}
               userName={authUser.name || 'Admin User'}
-              userSubtitle={authUser.role === 'admin' ? 'Hệ thống cấp cao' : authUser.team || 'Người dùng'}
+              userSubtitle={authUser.role === 'admin'
+                ? 'Hệ thống cấp cao'
+                : [authUser.vi_tri, authUser.team].filter((value): value is string => Boolean(value?.trim())).join(' · ') || 'Người dùng'}
               avatarUrl={authUser.avatar_url}
               reportUser={authUser}
             />

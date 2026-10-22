@@ -54,15 +54,11 @@ for each row execute procedure public.du_an_set_updated_at();
 
 alter table public.du_an enable row level security;
 
+-- The CRM Auth/RLS migration adds scoped authenticated policies for this table.
 drop policy if exists "anon can read du_an" on public.du_an;
 drop policy if exists "anon can insert du_an" on public.du_an;
 drop policy if exists "anon can update du_an" on public.du_an;
 drop policy if exists "anon can delete du_an" on public.du_an;
-
-create policy "anon can read du_an" on public.du_an for select to anon using (true);
-create policy "anon can insert du_an" on public.du_an for insert to anon with check (true);
-create policy "anon can update du_an" on public.du_an for update to anon using (true) with check (true);
-create policy "anon can delete du_an" on public.du_an for delete to anon using (true);
 
 -- ---------------------------------------------------------------------------
 -- Nếu bảng du_an đã có từ bản cũ: CREATE IF NOT EXISTS không thêm cột mới.

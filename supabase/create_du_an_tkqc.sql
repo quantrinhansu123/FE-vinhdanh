@@ -192,15 +192,11 @@ set staff_ids = '[]'::jsonb
 where staff_ids is null;
 alter table public.tkqc enable row level security;
 
+-- The CRM Auth/RLS migration adds scoped authenticated policies for public.du_an.
 drop policy if exists "anon can read du_an" on public.du_an;
 drop policy if exists "anon can insert du_an" on public.du_an;
 drop policy if exists "anon can update du_an" on public.du_an;
 drop policy if exists "anon can delete du_an" on public.du_an;
-
-create policy "anon can read du_an" on public.du_an for select to anon using (true);
-create policy "anon can insert du_an" on public.du_an for insert to anon with check (true);
-create policy "anon can update du_an" on public.du_an for update to anon using (true) with check (true);
-create policy "anon can delete du_an" on public.du_an for delete to anon using (true);
 
 drop policy if exists "anon can read tkqc" on public.tkqc;
 drop policy if exists "anon can insert tkqc" on public.tkqc;
