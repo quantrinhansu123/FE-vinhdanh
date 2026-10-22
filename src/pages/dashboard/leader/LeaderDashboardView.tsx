@@ -13,6 +13,7 @@ import { ADS_LIMIT_PERCENT, ADS_WARNING_PERCENT, adsTone, closeTone, performance
 import { STITCH_PORTAL_CLASS } from '../../../components/ui/StitchUI';
 import type { AuthUser, Employee } from '../../../types';
 import { crmAdminPathForView } from '../../../utils/crmAdminRoutes';
+import { TeamMemberFilter } from './TeamMemberFilter';
 import {
   formatReportDateVi,
   toLocalYyyyMmDd,
@@ -334,6 +335,8 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
   const [staffTargets, setStaffTargets] = useState<Map<string, number>>(() => new Map());
   const [filterHighCpdt, setFilterHighCpdt] = useState(false);
   const [viewMode, setViewMode] = useState<'personal' | 'team'>('personal');
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[] | null>(null);
+  const memberFilterActive = viewMode === 'personal' && selectedMemberIds !== null;
   const [detailRowsByCodeKey, setDetailRowsByCodeKey] = useState<Map<string, Record<string, unknown>[]>>(() => new Map());
   const [mktNameByCode, setMktNameByCode] = useState<Map<string, string>>(() => new Map());
   const [mktDetailCodeKey, setMktDetailCodeKey] = useState<string | null>(null);
@@ -644,7 +647,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     [byCodeKey]
   );
 
-  const tableRows = useMemo(() => {
+  const allTableRows = useMemo(() => {
     const rows = members.map((m) => {
       const a = aggForMember(m);
       const cpdt = adsDtPct(a.ads, a.rev);
@@ -661,6 +664,22 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     rows.sort((x, y) => y.a.rev - x.a.rev);
     return rows;
   }, [members, aggForMember]);
+
+  const memberOptions = useMemo(() => allTableRows.map(({ m }) => ({
+    id: m.id,
+    name: mktNameWithCode(m, mktNameByCode),
+    code: safeTrim(m.ma_ns) || safeTrim(m.code),
+  })), [allTableRows, mktNameByCode]);
+
+  const tableRows = useMemo(() => {
+    if (!memberFilterActive) return allTableRows;
+    const selected = new Set(selectedMemberIds);
+    return allTableRows.filter(({ m }) => selected.has(m.id));
+  }, [allTableRows, memberFilterActive, selectedMemberIds]);
+
+  const personalTargetVnd = memberFilterActive
+    ? tableRows.reduce((sum, { m }) => sum + (staffTargets.get(m.id) || 0), 0) || null
+    : teamTargetVnd;
 
   const teamTotals = useMemo(() => {
     let rev = 0;
@@ -979,7 +998,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     : 0;
   const targetRangeFactor = Math.min(1, targetDaysInRange / Math.max(1, monthDayCount));
   const monthlyTargetPacePct = targetRangeFactor * 100;
-  const teamRangeTarget = teamTargetVnd != null ? teamTargetVnd * targetRangeFactor : null;
+  const teamRangeTarget = personalTargetVnd != null ? personalTargetVnd * targetRangeFactor : null;
   const kpiPctForRange = teamRangeTarget != null && teamRangeTarget > 0 ? (teamTotals.rev / teamRangeTarget) * 100 : null;
   const todayYmd = toLocalYyyyMmDd(new Date());
   const elapsedDays = todayYmd < start ? 0 : todayYmd > end ? rangeDays : Math.max(1, Math.round((new Date(`${todayYmd}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime()) / 86400000) + 1);
@@ -1065,6 +1084,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
           </div>
         </div>
         <div className="team-dashboard-filters">
+          {viewMode === 'personal' ? <TeamMemberFilter options={memberOptions} value={selectedMemberIds} onChange={setSelectedMemberIds} disabled={loading} /> : null}
           <div className="team-dashboard-segment" role="tablist" aria-label="Chế độ xem">
             <button type="button" role="tab" aria-selected={viewMode === 'personal'} onClick={() => setViewMode('personal')} className={viewMode === 'personal' ? 'active' : ''}>Theo cá nhân</button>
             <button type="button" role="tab" aria-selected={viewMode === 'team'} onClick={() => setViewMode('team')} className={viewMode === 'team' ? 'active' : ''}>Theo team</button>
@@ -1158,7 +1178,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       ) : (
         <>
           <section className="team-dashboard-summary-grid" aria-label="Tổng quan team">
-            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Doanh số team</p><strong>{revStr}</strong><p className="td-sub">Mục tiêu kỳ {teamRangeTarget ? formatVndDots(teamRangeTarget) : 'chưa thiết lập'} <span className={kpiPctForRange != null && kpiPctForRange >= periodPacePct ? 'td-good' : 'td-warn'}>{kpiPctForRange == null ? '—' : `${kpiPctForRange.toFixed(1)}%`}</span></p></article>
+            <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">{memberFilterActive ? 'Doanh số nhóm đã chọn' : 'Doanh số team'}</p><strong>{revStr}</strong><p className="td-sub">Mục tiêu kỳ {teamRangeTarget ? formatVndDots(teamRangeTarget) : 'chưa thiết lập'} <span className={kpiPctForRange != null && kpiPctForRange >= periodPacePct ? 'td-good' : 'td-warn'}>{kpiPctForRange == null ? '—' : `${kpiPctForRange.toFixed(1)}%`}</span></p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Chi phí quảng cáo</p><strong>{adsStr}</strong><p className="td-sub">CP/DT hiện tại <span className={performanceTextClass(adsTone(adsTeamPct))}>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</span></p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Tổng Data Odoo</p><strong>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</strong><p className="td-sub">CPL bình quân <span className={cplValueClass(cplTeam)}>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</span></p></article>
             <article className="team-dashboard-card team-dashboard-summary"><p className="td-label">Tổng đơn</p><strong>{teamTotals.orders.toLocaleString('vi-VN')}</strong><p className="td-sub">Tỷ lệ chốt <span className={performanceTextClass(closeTone(chotTeam))}>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</span></p></article>
@@ -1167,12 +1187,12 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
 
           <section className="team-dashboard-main-grid">
             <article className="team-dashboard-card team-dashboard-panel">
-              <div className="team-dashboard-panel-title"><div><h2>Bảng hiệu suất tổng hợp theo thành viên</h2><p>Team là tổng các nhân sự có báo cáo trong khoảng đã chọn</p></div><button type="button" onClick={exportCsv} disabled={!displayRows.length} className="team-dashboard-export">Export CSV</button></div>
+              <div className="team-dashboard-panel-title"><div><h2>Bảng hiệu suất tổng hợp theo thành viên</h2><p>{memberFilterActive ? `Đang xem ${tableRows.length} nhân viên có báo cáo trong nhóm đã chọn` : 'Team là tổng các nhân sự có báo cáo trong khoảng đã chọn'}</p></div><button type="button" onClick={exportCsv} disabled={!displayRows.length} className="team-dashboard-export">Export CSV</button></div>
               <div className="team-dashboard-table-wrap">
                 <table className="team-dashboard-table">
                   <thead><tr><th>Nhân sự</th><th>Doanh số</th><th>Chi phí</th><th>CP/DT</th><th>Mess</th><th>CPA</th><th>Data Odoo</th><th>CPL</th><th>Đơn</th><th>CPO</th><th>%CR</th><th>AOV</th></tr></thead>
                   <tbody>
-                    <tr className="team-row"><td className="person team-name">TEAM · {teamName || '—'}</td><td>{formatVndDots(teamTotals.rev)}</td><td>{formatVndDots(teamTotals.ads)}</td><td className={performanceTextClass(adsTone(adsTeamPct))}>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</td><td>{Math.round(teamMess).toLocaleString('vi-VN')}</td><td>{teamCpa > 0 ? formatVndDots(teamCpa) : '—'}</td><td>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</td><td className={cplValueClass(cplTeam)}>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</td><td>{teamTotals.orders.toLocaleString('vi-VN')}</td><td>{teamCpo > 0 ? formatVndDots(teamCpo) : '—'}</td><td className={performanceTextClass(closeTone(chotTeam))}>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</td><td>{averageOrderValue > 0 ? formatVndDots(averageOrderValue) : '—'}</td></tr>
+                    <tr className="team-row"><td className="person team-name">{memberFilterActive ? `NHÓM ĐÃ CHỌN · ${tableRows.length} nhân viên` : `TEAM · ${teamName || '—'}`}</td><td>{formatVndDots(teamTotals.rev)}</td><td>{formatVndDots(teamTotals.ads)}</td><td className={performanceTextClass(adsTone(adsTeamPct))}>{adsTeamPct == null ? '—' : `${adsTeamPct.toFixed(1)}%`}</td><td>{Math.round(teamMess).toLocaleString('vi-VN')}</td><td>{teamCpa > 0 ? formatVndDots(teamCpa) : '—'}</td><td>{Math.round(teamTotals.leads).toLocaleString('vi-VN')}</td><td className={cplValueClass(cplTeam)}>{cplTeam > 0 ? formatVndDots(cplTeam) : '—'}</td><td>{teamTotals.orders.toLocaleString('vi-VN')}</td><td>{teamCpo > 0 ? formatVndDots(teamCpo) : '—'}</td><td className={performanceTextClass(closeTone(chotTeam))}>{chotTeam == null ? '—' : `${chotTeam.toFixed(1)}%`}</td><td>{averageOrderValue > 0 ? formatVndDots(averageOrderValue) : '—'}</td></tr>
                     {tableRows.map((row, index) => <tr key={row.m.id}>
                       <td className="person"><span className={`td-rank ${index === 0 ? 'top' : ''}`}>{index + 1}</span>{mktNameWithCode(row.m, mktNameByCode)}</td>
                       <td className={index === 0 ? 'td-good' : ''}>{formatVndDots(row.a.rev)}</td><td>{formatVndDots(row.a.ads)}</td>
@@ -1180,7 +1200,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
                       <td>{Math.round(row.mess).toLocaleString('vi-VN')}</td><td>{row.cpa > 0 ? formatVndDots(row.cpa) : '—'}</td><td>{Math.round(row.lead).toLocaleString('vi-VN')}</td><td className={cplValueClass(row.cpl)}>{row.cpl > 0 ? formatVndDots(row.cpl) : '—'}</td>
                       <td>{row.a.orders.toLocaleString('vi-VN')}</td><td>{row.cpo > 0 ? formatVndDots(row.cpo) : '—'}</td><td className={performanceTextClass(closeTone(row.crPct))}>{row.crPct == null ? '—' : `${row.crPct.toFixed(1)}%`}</td><td>{row.aov > 0 ? formatVndDots(row.aov) : '—'}</td>
                     </tr>)}
-                    {!tableRows.length ? <tr><td colSpan={12} className="td-empty">Chưa có dữ liệu Odoo hoặc báo cáo Meta của thành viên trong khoảng ngày này.</td></tr> : null}
+                    {!tableRows.length ? <tr><td colSpan={12} className="td-empty">{selectedMemberIds?.length === 0 ? 'Chưa chọn nhân viên. Hãy tích chọn nhân viên muốn xem trong bộ lọc.' : 'Chưa có dữ liệu Odoo hoặc báo cáo Meta của thành viên trong khoảng ngày này.'}</td></tr> : null}
                   </tbody>
                 </table>
               </div>
