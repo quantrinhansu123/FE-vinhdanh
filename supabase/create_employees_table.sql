@@ -47,12 +47,35 @@ where email is not null and length(trim(email)) > 0;
 alter table public.employees enable row level security;
 
 -- Re-create policies safely
--- Browser access is granted only by the Supabase Auth/RLS migration after the
--- related CRM tables exist. Do not expose employee rows or password fields to anon.
 DROP POLICY IF EXISTS "anon can read employees" ON public.employees;
 DROP POLICY IF EXISTS "anon can insert employees" ON public.employees;
 DROP POLICY IF EXISTS "anon can update employees" ON public.employees;
 DROP POLICY IF EXISTS "anon can delete employees" ON public.employees;
+
+create policy "anon can read employees"
+on public.employees
+for select
+to anon
+using (true);
+
+create policy "anon can insert employees"
+on public.employees
+for insert
+to anon
+with check (true);
+
+create policy "anon can update employees"
+on public.employees
+for update
+to anon
+using (true)
+with check (true);
+
+create policy "anon can delete employees"
+on public.employees
+for delete
+to anon
+using (true);
 
 -- Optional seed data
 insert into public.employees (name, team, score, avatar_url)
@@ -64,13 +87,12 @@ on conflict do nothing;
 
 update public.employees
 set name = 'System Admin',
-    team = 'Admin'
+    team = 'Admin',
+    pass = '123456'
 where lower(email) = lower('upedu2024@gmail.com');
 
--- Bootstrap the initial admin with Supabase Auth (Dashboard > Authentication > Users),
--- using this email. The Auth user is linked by email in the CRM access migration.
-insert into public.employees (name, team, score, avatar_url, email)
-select 'System Admin', 'Admin', 0, null, 'upedu2024@gmail.com'
+insert into public.employees (name, team, score, avatar_url, email, pass)
+select 'System Admin', 'Admin', 0, null, 'upedu2024@gmail.com', '123456'
 where not exists (
   select 1 from public.employees where lower(email) = lower('upedu2024@gmail.com')
 );
@@ -87,9 +109,6 @@ DROP POLICY IF EXISTS "public can view avatars" ON storage.objects;
 DROP POLICY IF EXISTS "anon can upload avatars" ON storage.objects;
 DROP POLICY IF EXISTS "anon can update avatars" ON storage.objects;
 DROP POLICY IF EXISTS "anon can delete avatars" ON storage.objects;
-DROP POLICY IF EXISTS "crm admin can upload avatars" ON storage.objects;
-DROP POLICY IF EXISTS "crm admin can update avatars" ON storage.objects;
-DROP POLICY IF EXISTS "crm admin can delete avatars" ON storage.objects;
 
 create policy "public can view avatars"
 on storage.objects
@@ -97,4 +116,21 @@ for select
 to public
 using (bucket_id = 'avatars');
 
--- The CRM Auth/RLS migration adds authenticated admin-only avatar writes.
+create policy "anon can upload avatars"
+on storage.objects
+for insert
+to anon
+with check (bucket_id = 'avatars');
+
+create policy "anon can update avatars"
+on storage.objects
+for update
+to anon
+using (bucket_id = 'avatars')
+with check (bucket_id = 'avatars');
+
+create policy "anon can delete avatars"
+on storage.objects
+for delete
+to anon
+using (bucket_id = 'avatars');

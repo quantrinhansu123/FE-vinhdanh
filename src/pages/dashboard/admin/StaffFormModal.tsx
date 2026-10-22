@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../../../api/supabase';
-import { setCrmEmployeePasswords } from '../../../api/crmSession';
 import { fetchAllRows } from '../../../api/fetchAllRows';
 import { isVisibleTeam } from '../../../utils/managementVisibility';
 import type { CrmTeamRow, Employee } from '../../../types';
@@ -217,18 +216,6 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
       setFormError('Chọn team từ danh sách.');
       return;
     }
-    if (pass.trim() && !email.trim()) {
-      setFormError('Cần email để tạo tài khoản đăng nhập.');
-      return;
-    }
-    if (pass.trim() && pass.trim().length < 8) {
-      setFormError('Mật khẩu mới phải có ít nhất 8 ký tự.');
-      return;
-    }
-    if (isEdit && initial?.email?.trim().toLowerCase() !== email.trim().toLowerCase() && !pass.trim()) {
-      setFormError('Đổi email đăng nhập cần đặt mật khẩu mới cùng lúc.');
-      return;
-    }
     if (avatarFile && avatarError) {
       setFormError(avatarError);
       return;
@@ -249,9 +236,15 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
       trang_thai: trangThai,
     };
 
+    if (!isEdit && pass.trim()) {
+      basePayload.pass = pass.trim();
+    }
+    if (isEdit && pass.trim()) {
+      basePayload.pass = pass.trim();
+    }
+
     setSaving(true);
     let uploadedAvatarPath: string | null = null;
-    let employeeSaved = false;
     try {
       const employeeId = isEdit && initial?.id ? initial.id : crypto.randomUUID();
       if (avatarFile) {
@@ -274,34 +267,22 @@ export const StaffFormModal: React.FC<Props> = ({ open, initial, onClose, onSave
       }
 
       if (isEdit && initial?.id) {
-        const { error: uErr } = await supabase.from(EMPLOYEES_TABLE).update(basePayload).eq('id', initial.id);
+        const payload = { ...basePayload };
+        if (!pass.trim()) {
+          delete payload.pass;
+        }
+        const { error: uErr } = await supabase.from(EMPLOYEES_TABLE).update(payload).eq('id', initial.id);
         if (uErr) throw uErr;
-        employeeSaved = true;
       } else {
         const { error: iErr } = await supabase.from(EMPLOYEES_TABLE).insert({ ...basePayload, id: employeeId });
         if (iErr) throw iErr;
-        employeeSaved = true;
-      }
-      if (pass.trim()) {
-        const result = await setCrmEmployeePasswords([{ employeeId, password: pass.trim() }]);
-        const outcome = result.outcomes[0];
-        if (!outcome?.ok) throw new Error(outcome?.message || 'Không cập nhật được mật khẩu đăng nhập.');
       }
     } catch (err: unknown) {
-      if (uploadedAvatarPath && !employeeSaved) {
+      if (uploadedAvatarPath) {
         const { error: cleanupError } = await supabase.storage.from(AVATARS_BUCKET).remove([uploadedAvatarPath]);
         if (cleanupError) console.warn('avatar upload cleanup:', cleanupError);
       }
-      if (employeeSaved && !isEdit) {
-        const message = `Thông tin nhân sự đã lưu nhưng mật khẩu chưa được cập nhật: ${getSaveErrorMessage(err)}. Mở lại hồ sơ để đặt mật khẩu.`;
-        void onSaved();
-        onClose();
-        window.alert(message);
-      } else {
-        setFormError(employeeSaved
-          ? `Thông tin nhân sự đã lưu nhưng mật khẩu chưa được cập nhật: ${getSaveErrorMessage(err)}`
-          : getSaveErrorMessage(err));
-      }
+      setFormError(getSaveErrorMessage(err));
       console.error('employees save:', err);
       return;
     } finally {
