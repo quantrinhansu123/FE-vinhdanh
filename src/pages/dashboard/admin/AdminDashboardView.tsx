@@ -876,7 +876,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
       </section>
 
       <section className="personal-kpi-grid" aria-label="Chỉ số tổng quan">
-        <MetricCard title="Doanh số" value={formatCompactVnd(totals.revenue)} detail={previousOdooMetrics ? 'Odoo theo kỳ · so với kỳ trước' : 'Odoo theo kỳ'} icon={ChartNoAxesColumnIncreasing} color="#15803d" badge="Doanh thu Odoo" delta={revDelta} trend={daily.slice(-8).map((d) => d.rev)} />
+        <MetricCard title="Doanh số" value={formatCompactVnd(totals.revenue)} detail={previousOdooMetrics ? 'Odoo theo kỳ · so với kỳ trước' : 'Odoo theo kỳ'} icon={ChartNoAxesColumnIncreasing} color="#0044AE" badge="Doanh thu Odoo" delta={revDelta} trend={daily.slice(-8).map((d) => d.rev)} />
         <MetricCard title="Chi phí quảng cáo" value={formatCompactVnd(totals.adCost)} detail="so với kỳ trước" icon={CreditCard} color="#9333ea" badge="Chi phí" delta={spendDelta} deltaTone={spendDelta != null && spendDelta > 0 ? 'warning' : 'good'} trend={daily.slice(-8).map((d) => d.spend)} />
         <MetricCard title="CP/DT" value={adsRevenuePct == null ? '—' : `${adsRevenuePct.toFixed(1)}%`} detail={`Trần Ads: ${ADS_DT_WARN}% · Theo dõi từ ${ADS_DT_MED}%`} icon={Percent} color={adsTone(adsRevenuePct) === 'red' ? PERFORMANCE_COLORS.red : '#ca8a04'} valueTone={adsTone(adsRevenuePct) === 'green' ? undefined : adsTone(adsRevenuePct)} badge={adsRevenuePct == null ? 'Chưa có dữ liệu' : adsTone(adsRevenuePct) === 'red' ? 'Vượt trần' : adsTone(adsRevenuePct) === 'amber' ? 'Theo dõi' : 'Trong ngưỡng'} badgeAccent delta={adsRevenuePct != null && prevTotals.adsDtPct != null ? adsRevenuePct - prevTotals.adsDtPct : null} deltaTone="danger" trend={daily.slice(-8).map((d) => d.adsPct)} tone={adsTone(adsRevenuePct) === 'red' ? 'warning' : undefined} />
         <MetricCard title="Tin nhắn" value={Math.round(totals.mess).toLocaleString('vi-VN')} detail="theo báo cáo" icon={MessageCircleMore} color="#06b6d4" delta={pctChange(totals.mess, prevTotals.mess)} trend={daily.slice(-8).map((d) => d.mess)} />
@@ -913,7 +913,7 @@ export const AdminDashboardView: React.FC<AdminDashboardProps> = ({ viewer }) =>
                   labelFormatter={(label) => formatReportDateVi(String(label))}
                   formatter={(value, name) => [String(name) === 'CP/DT' ? `${Number(value).toFixed(1)}%` : formatCompactVnd(Number(value)), String(name)]}
                 />
-                <Bar yAxisId="money" dataKey="rev" name="Doanh thu" fill="#16a34a" radius={[4, 4, 0, 0]} maxBarSize={24} />
+                <Bar yAxisId="money" dataKey="rev" name="Doanh thu" fill="#0044AE" radius={[4, 4, 0, 0]} maxBarSize={24} />
                 <Bar yAxisId="money" dataKey="spend" name="Chi phí quảng cáo" fill="#0284c7" radius={[4, 4, 0, 0]} maxBarSize={24} />
                 <Line yAxisId="ratio" type="monotone" dataKey="adsPct" name="CP/DT" stroke="#f59e0b" strokeWidth={2.5} connectNulls={false} dot={{ r: 4, fill: '#f59e0b', stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 5 }} />
               </ComposedChart>

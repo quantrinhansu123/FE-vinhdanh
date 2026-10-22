@@ -53,7 +53,7 @@ export function LeaderboardPage({
     'px-3 py-2 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-xl transition-all border border-white/10 backdrop-blur-md text-xs font-semibold flex items-center gap-1';
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center p-0 font-sans antialiased overflow-hidden relative bg-[#006638] [--podium-offset:0px] lg:[--podium-offset:-120px]">
+    <div className="min-h-screen w-full flex flex-col items-center p-0 font-sans antialiased overflow-hidden relative bg-[#002d68] [--podium-offset:0px] lg:[--podium-offset:-120px]">
       <div
         className="absolute top-12 -bottom-12 right-0 z-0 pointer-events-none"
         style={{
@@ -192,7 +192,7 @@ export function LeaderboardPage({
                           </div>
                         </div>
                         <div className="col-span-4 flex justify-end items-center gap-2">
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-900/50 border border-emerald-500/30 text-emerald-200 text-[10px] font-medium truncate max-w-[60px] text-center">
+                          <span className="px-2 py-0.5 rounded-full bg-blue-900/50 border border-blue-500/30 text-blue-200 text-[10px] font-medium truncate max-w-[60px] text-center">
                             {winner.team}
                           </span>
                           <span className="hidden xl:block text-yellow-400 font-mono font-bold text-[12px]">{winner.score.toLocaleString()}</span>

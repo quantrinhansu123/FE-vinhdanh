@@ -415,8 +415,8 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
             {formOpen ? (
             <>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-[10px] mb-[16px]">
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
-                <div className="text-[10px] uppercase tracking-wider font-extrabold text-emerald-800">Mục tiêu team</div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3">
+                <div className="text-[10px] uppercase tracking-wider font-extrabold text-blue-800">Mục tiêu team</div>
                 <div className="mt-1 text-sm font-extrabold font-mono text-[#1f2937]">{teamSummary.rev > 0 ? `${formatVndDots(teamSummary.rev)} VND` : '—'}</div>
               </div>
               <div className="rounded-xl border border-lime-200 bg-lime-50/60 p-3">
@@ -527,7 +527,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                 Phân bổ theo nhân sự trong team ({teamMembers.length})
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-[10px]">
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-2.5 text-xs font-bold text-emerald-900">
+                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-2.5 text-xs font-bold text-blue-900">
                   Tổng phân bổ DT: {allocationSummary.revTotal > 0 ? `${formatVndDots(allocationSummary.revTotal)} VND` : '—'}
                 </div>
                 <div className="rounded-xl border border-lime-200 bg-lime-50/50 p-2.5 text-xs font-bold text-lime-900">
@@ -546,7 +546,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                 teamMembers.map((mkt) => (
                   <div
                     key={mkt.id}
-                    className="p-4 bg-white border border-[var(--stitch-border)] rounded-xl shadow-sm hover:border-[#86efac] transition-all"
+                    className="p-4 bg-white border border-[var(--stitch-border)] rounded-xl shadow-sm hover:border-[#99b7e8] transition-all"
                   >
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-[12px] min-w-0">
@@ -651,7 +651,7 @@ export const KpiTargetView: React.FC<KpiTargetViewProps> = ({ viewer = null }) =
                         return (
                           <tr
                             key={r.nam_thang}
-                            className={`border-b border-[#eef2ef] transition-colors ${selected ? 'bg-[#f0fdf4]' : 'hover:bg-[#f8fcf9]'}`}
+                            className={`border-b border-[#edf1f8] transition-colors ${selected ? 'bg-[#eff6ff]' : 'hover:bg-[#f7f9fd]'}`}
                           >
                             <td className="p-3 font-bold text-[#1f2937]">{r.nam_thang}</td>
                             <td className="p-3 text-right font-mono font-bold text-[var(--stitch-green-700)]">

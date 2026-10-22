@@ -16,28 +16,28 @@
   --font-mono: "Roboto", sans-serif;
   --font-crm: "Roboto", sans-serif;
 
-  /* CRM Admin — tông xanh lá (emerald/teal), nền tối, vàng nhấn */
-  --color-crm-primary: #22c55e;
-  --color-crm-primary-variant: #15803d;
-  --color-crm-secondary: #14b8a6;
-  --color-crm-surface: #0a1210;
-  --color-crm-surface-container: #121f18;
-  --color-crm-surface-accent: #1a2e22;
-  --color-crm-on-surface: #eaf7ef;
-  --color-crm-on-surface-variant: #8ba899;
+  /* CRM Admin — màu thương hiệu xanh dương */
+  --color-crm-primary: #0044AE;
+  --color-crm-primary-variant: #003584;
+  --color-crm-secondary: #2563c5;
+  --color-crm-surface: #0a1020;
+  --color-crm-surface-container: #111b31;
+  --color-crm-surface-accent: #1a2a49;
+  --color-crm-on-surface: #edf3ff;
+  --color-crm-on-surface-variant: #9aabc9;
   --color-crm-error: #f87171;
   --color-crm-success: #4ade80;
   --color-crm-warning: #fbbf24;
-  --color-crm-outline: #2d4f3e;
+  --color-crm-outline: #30456d;
   --color-crm-accent-warm: #fbbf24;
 
-  /* Google Ads Dashboard — tông xanh lá đậm */
-  --color-ads-navy: #06120e;
-  --color-ads-sidebar: #0c1812;
-  --color-ads-card: #12261c;
-  --color-ads-active: #166534;
-  --color-ads-accent: #22c55e;
-  --color-ads-table-header: #0f2918;
+  /* Ads dashboard — tông xanh dương đậm */
+  --color-ads-navy: #07152a;
+  --color-ads-sidebar: #0b1d38;
+  --color-ads-card: #11284b;
+  --color-ads-active: #0044AE;
+  --color-ads-accent: #0044AE;
+  --color-ads-table-header: #142c50;
 
   /* Mini Ads Dashboard Colors (from Dashboard.html) */
   --color-dash-bg0: #07090f;
@@ -50,8 +50,8 @@
   --color-dash-text: #dde4f0;
   --color-dash-text2: #8896b0;
   --color-dash-text3: #4d5d78;
-  --color-dash-accent: #3d8ef0;
-  --color-dash-accent-d: rgba(61, 142, 240, 0.12);
+  --color-dash-accent: #0044AE;
+  --color-dash-accent-d: rgba(0, 68, 174, 0.12);
   --color-dash-green: #0fa86d;
   --color-dash-green-d: rgba(15, 168, 109, 0.12);
   --color-dash-green-b: rgba(15, 168, 109, 0.25);
@@ -101,18 +101,18 @@ optgroup {
 */
 .crm-admin-theme {
   font-family: "Roboto", sans-serif;
-  --color-crm-primary: #22c55e;
-  --color-crm-primary-variant: #15803d;
-  --color-crm-secondary: #14b8a6;
-  --color-crm-surface: #0a1210;
-  --color-crm-surface-container: #121f18;
-  --color-crm-surface-accent: #1a2e22;
-  --color-crm-on-surface: #eaf7ef;
-  --color-crm-on-surface-variant: #8ba899;
+  --color-crm-primary: #0044AE;
+  --color-crm-primary-variant: #003584;
+  --color-crm-secondary: #2563c5;
+  --color-crm-surface: #0a1020;
+  --color-crm-surface-container: #111b31;
+  --color-crm-surface-accent: #1a2a49;
+  --color-crm-on-surface: #edf3ff;
+  --color-crm-on-surface-variant: #9aabc9;
   --color-crm-error: #f87171;
   --color-crm-success: #4ade80;
   --color-crm-warning: #fbbf24;
-  --color-crm-outline: #2d4f3e;
+  --color-crm-outline: #30456d;
   --color-crm-accent-warm: #fbbf24;
 }
 
@@ -244,11 +244,11 @@ optgroup {
   }
   
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: #0c1812;
+    background: #0b1d38;
   }
   
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #166534;
+    background: #003b98;
     border-radius: 10px;
   }
   
@@ -257,7 +257,7 @@ optgroup {
   }
 }
 
-/* CRM Admin dashboard — glass & glow (nền xanh đậm, nhấn xanh lá) */
+/* CRM Admin dashboard — glass & glow (nền xanh đậm, nhấn xanh dương) */
 @layer utilities {
   .crm-glass-card {
     background: color-mix(in srgb, var(--color-crm-surface-container) 72%, transparent);
@@ -321,26 +321,26 @@ optgroup {
 /* Leader dashboard (/crm-admin/leader-dash) — Stitch Light palette */
 .leader-dash-obsidian {
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --ld-background: #f8faf8;
+  --ld-background: #f7f9fd;
   --ld-surface-container-low: #ffffff;
-  --ld-surface-container: #f8faf9;
+  --ld-surface-container: #f7f9fd;
   --ld-surface-container-high: #ffffff;
-  --ld-surface-container-highest: #eef3ef;
-  --ld-surface-bright: #e7eee9;
+  --ld-surface-container-highest: #eef3fb;
+  --ld-surface-bright: #e7edf8;
   --ld-on-surface: #191c1b;
-  --ld-on-surface-variant: #476355;
-  --ld-primary: #15803d;
-  --ld-primary-container: #16a34a;
-  --ld-secondary: #059669;
+  --ld-on-surface-variant: #52627d;
+  --ld-primary: #003b98;
+  --ld-primary-container: #0044AE;
+  --ld-secondary: #2563c5;
   --ld-tertiary: #b45309;
   --ld-error: #be123c;
-  --ld-outline-variant: #e2e8e5;
-  --ld-secondary-container: #dcfce7;
+  --ld-outline-variant: #dbe4f2;
+  --ld-secondary-container: #dbeafe;
   --ld-tertiary-container: #fef3c7;
   --ld-error-container: #fff1f2;
   --ld-on-primary-container: #ffffff;
   --ld-on-primary: #ffffff;
-  --ld-primary-dim: #15803d;
+  --ld-primary-dim: #003b98;
   --ld-on-error-container: #be123c;
 }
 
@@ -363,9 +363,9 @@ optgroup {
 }
 
 .leader-dash-obsidian .ld-glass-chip {
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  color: #15803d;
+  background: #eff6ff;
+  border: 1px solid #bfd4f7;
+  color: #003b98;
 }
 
 .leader-obsidian-scrollbar::-webkit-scrollbar {
@@ -824,10 +824,10 @@ optgroup {
 .leader-dash-obsidian.team-dashboard-modern {
   --td-bg: transparent;
   --td-panel: #ffffff;
-  --td-panel2: #f8faf9;
-  --td-border: #e2e8e5;
+  --td-panel2: #f7f9fd;
+  --td-border: #dbe4f2;
   --td-text: #191c1b;
-  --td-muted: #476355;
+  --td-muted: #52627d;
   min-height: 100%;
   padding: 16px 20px 24px;
   color: var(--td-text);
@@ -857,10 +857,10 @@ optgroup {
   height: 38px;
   flex: 0 0 38px;
   place-items: center;
-  border: 1px solid #bbf7d0;
+  border: 1px solid #bfd4f7;
   border-radius: 10px;
-  background: #f0fdf4;
-  color: #15803d;
+  background: #eff6ff;
+  color: #003b98;
 }
 .team-dashboard-modern .team-dashboard-brand h1 {
   margin: 0;
@@ -894,12 +894,12 @@ optgroup {
   white-space: nowrap;
   cursor: pointer;
 }
-.team-dashboard-modern .team-dashboard-segment button:hover { background: #ecfdf5; color: #15803d; }
+.team-dashboard-modern .team-dashboard-segment button:hover { background: #eff6ff; color: #003b98; }
 .team-dashboard-modern .team-dashboard-segment button.active {
-  background: #16a34a;
+  background: #0044AE;
   color: #ffffff;
   font-weight: 700;
-  box-shadow: 0 1px 3px rgba(22, 163, 74, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 68, 174, 0.2);
 }
 .team-dashboard-modern .team-dashboard-datebox { gap: 6px; padding: 0 8px; color: #476355; }
 .team-dashboard-modern .team-dashboard-datebox input {
@@ -923,7 +923,7 @@ optgroup {
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
-.team-dashboard-modern .team-dashboard-refresh:hover { border-color: #86efac; color: #15803d; background: #f0fdf4; }
+.team-dashboard-modern .team-dashboard-refresh:hover { border-color: #99b7e8; color: #003b98; background: #eff6ff; }
 .team-dashboard-modern .team-dashboard-refresh:disabled { opacity: .5; cursor: wait; }
 .team-dashboard-modern .team-dashboard-error {
   margin-top: 10px;
@@ -967,7 +967,7 @@ optgroup {
   left: 0;
   right: 0;
   height: 3px;
-  background: #16a34a;
+  background: #0044AE;
   content: '';
 }
 .team-dashboard-modern .team-dashboard-summary .td-label {
@@ -1060,9 +1060,9 @@ optgroup {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .team-dashboard-modern .team-dashboard-export:hover {
-  border-color: #86efac;
-  background: #f0fdf4;
-  color: #15803d;
+  border-color: #99b7e8;
+  background: #eff6ff;
+  color: #003b98;
 }
 .team-dashboard-modern .team-dashboard-export:disabled { opacity: .45; cursor: not-allowed; }
 .team-dashboard-modern .team-dashboard-table-wrap {
@@ -1100,13 +1100,13 @@ optgroup {
   background: #ffffff;
 }
 .team-dashboard-modern .team-dashboard-table tbody tr:nth-child(odd) td { background: #ffffff; }
-.team-dashboard-modern .team-dashboard-table tbody tr:nth-child(even) td { background: #fafcfb; }
-.team-dashboard-modern .team-dashboard-table tbody tr:hover td { background: #f0fdf4 !important; }
+.team-dashboard-modern .team-dashboard-table tbody tr:nth-child(even) td { background: #f8faff; }
+.team-dashboard-modern .team-dashboard-table tbody tr:hover td { background: #eff6ff !important; }
 .team-dashboard-modern .team-dashboard-table tbody tr.team-row td {
-  background: #f0fdf4 !important;
-  color: #166534;
+  background: #eff6ff !important;
+  color: #003b98;
   font-weight: 800;
-  border-bottom: 2px solid #bbf7d0;
+  border-bottom: 2px solid #bfd4f7;
 }
 .team-dashboard-modern .team-dashboard-table td.person {
   max-width: 220px;
@@ -1114,7 +1114,7 @@ optgroup {
   font-weight: 700;
   color: #191c1b;
 }
-.team-dashboard-modern .team-dashboard-table .team-name { color: #15803d; }
+.team-dashboard-modern .team-dashboard-table .team-name { color: #003b98; }
 .team-dashboard-modern .td-rank {
   display: inline-grid;
   width: 20px;
@@ -1249,15 +1249,15 @@ optgroup {
   width: 44px;
   height: 44px;
   place-items: center;
-  border: 1px solid #15803d;
+  border: 1px solid #003b98;
   border-radius: 50%;
-  background: #16a34a;
+  background: #0044AE;
   color: white;
-  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.28);
+  box-shadow: 0 8px 24px rgba(0, 68, 174, 0.28);
   font-size: 24px;
   cursor: pointer;
 }
-.team-dashboard-modern .team-dashboard-kpi-button:hover { transform: scale(1.05); background: #15803d; }
+.team-dashboard-modern .team-dashboard-kpi-button:hover { transform: scale(1.05); background: #003b98; }
 .team-dashboard-modern .team-dashboard-modal-backdrop {
   position: fixed;
   inset: 0;

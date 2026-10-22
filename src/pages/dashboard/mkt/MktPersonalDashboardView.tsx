@@ -573,23 +573,23 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
     <div className="mx-auto w-full max-w-[1580px] space-y-3.5 pb-6 text-[#1f2937]">
       <header className="relative flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-xl border border-[var(--stitch-border)] bg-white p-3.5 shadow-[var(--stitch-shadow)] sm:p-4">
         <div>
-          <p className="mb-1 inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[.1em] text-emerald-800"><LockKeyhole size={10} /> Hiệu quả cá nhân · Marketing</p>
+          <p className="mb-1 inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[.1em] text-blue-800"><LockKeyhole size={10} /> Hiệu quả cá nhân · Marketing</p>
           <h1 className="text-[20px] font-extrabold tracking-tight text-[#1f2937] sm:text-[22px]">{viewerIsAdmin ? 'Báo cáo cá nhân' : 'Báo cáo của tôi'}</h1>
           <p className="mt-0.5 max-w-2xl text-[11px] leading-4 text-[#64748b]">{viewerIsAdmin ? 'Chọn nhân sự để xem kết quả, chi phí quảng cáo và chất lượng chuyển đổi.' : 'Theo dõi kết quả, chi phí quảng cáo và chất lượng chuyển đổi của riêng bạn.'}</p>
         </div>
         {viewerIsAdmin ? (
           <label className="grid min-w-[220px] gap-1 text-[9px] font-bold uppercase tracking-wide text-[#64748b]">
-            <span className="inline-flex items-center gap-1"><Users size={11} className="text-emerald-700" /> Nhân sự đang xem</span>
+            <span className="inline-flex items-center gap-1"><Users size={11} className="text-[#0044AE]" /> Nhân sự đang xem</span>
             <select value={selectedPersonId} onChange={(event) => setSelectedPersonId(event.target.value)} disabled={peopleLoading} className="stitch-field max-w-[340px] text-xs font-semibold">
               <option value="">{peopleLoading ? 'Đang tải danh sách…' : 'Chọn nhân sự cần xem'}</option>
               {people.map((person) => <option key={person.id} value={person.id}>{person.name || person.email} · {person.email}</option>)}
             </select>
           </label>
         ) : (
-          <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-900">
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-600 text-[10px] font-extrabold text-white">{(selectedPerson?.name || 'T').slice(0, 2).toUpperCase()}</span>
-            <span><span className="block text-[8px] font-semibold uppercase tracking-wider text-emerald-700">Tài khoản cá nhân</span><span className="block">{selectedPerson?.name || 'Tài khoản của tôi'}</span></span>
-            <LockKeyhole size={12} className="ml-1 text-emerald-600" />
+          <div className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-900">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-[#0044AE] text-[10px] font-extrabold text-white">{(selectedPerson?.name || 'T').slice(0, 2).toUpperCase()}</span>
+            <span><span className="block text-[8px] font-semibold uppercase tracking-wider text-blue-700">Tài khoản cá nhân</span><span className="block">{selectedPerson?.name || 'Tài khoản của tôi'}</span></span>
+            <LockKeyhole size={12} className="ml-1 text-[#0044AE]" />
           </div>
         )}
       </header>
@@ -606,10 +606,10 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#475569]"><CalendarDays size={16} className="text-emerald-700" />{dateText(range.from)} – {dateText(range.to)}</div>
-          <button type="button" onClick={() => { setDraftRange(range); setShowCustom((value) => !value); }} className="rounded-lg border border-[var(--stitch-border)] bg-white px-3 py-2 text-[11px] font-bold text-[#475569] hover:border-[#86efac] hover:bg-[#f0fdf4] hover:text-[var(--stitch-green-700)]">Chọn thời gian</button>
-          <button type="button" onClick={() => setCompare((value) => !value)} aria-pressed={compare} className={`rounded-lg border px-3 py-2 text-[11px] font-bold transition ${compare ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-[var(--stitch-border)] bg-white text-[#475569] hover:border-[#86efac] hover:bg-[#f0fdf4] hover:text-[var(--stitch-green-700)]'}`}>Đối chiếu kỳ trước</button>
-          <button type="button" onClick={() => void load()} className="rounded-lg border border-[var(--stitch-border)] bg-white p-2 text-[#475569] hover:border-[#86efac] hover:bg-[#f0fdf4] hover:text-[var(--stitch-green-700)]" aria-label="Tải lại"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
+          <div className="flex items-center gap-2 text-xs font-semibold text-[#475569]"><CalendarDays size={16} className="text-[#0044AE]" />{dateText(range.from)} – {dateText(range.to)}</div>
+          <button type="button" onClick={() => { setDraftRange(range); setShowCustom((value) => !value); }} className="rounded-lg border border-[var(--stitch-border)] bg-white px-3 py-2 text-[11px] font-bold text-[#475569] hover:border-[#99b7e8] hover:bg-[#eff6ff] hover:text-[var(--stitch-green-700)]">Chọn thời gian</button>
+          <button type="button" onClick={() => setCompare((value) => !value)} aria-pressed={compare} className={`rounded-lg border px-3 py-2 text-[11px] font-bold transition ${compare ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-[var(--stitch-border)] bg-white text-[#475569] hover:border-[#99b7e8] hover:bg-[#eff6ff] hover:text-[var(--stitch-green-700)]'}`}>Đối chiếu kỳ trước</button>
+          <button type="button" onClick={() => void load()} className="rounded-lg border border-[var(--stitch-border)] bg-white p-2 text-[#475569] hover:border-[#99b7e8] hover:bg-[#eff6ff] hover:text-[var(--stitch-green-700)]" aria-label="Tải lại"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
         </div>
       </section>
 
@@ -622,11 +622,11 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
       )}
 
       {viewerIsAdmin && !selectedPerson ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-sm font-semibold text-emerald-900">{peopleLoading ? 'Đang tải danh sách nhân sự…' : peopleError || 'Chọn một nhân sự để xem báo cáo cá nhân.'}</div>
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm font-semibold text-blue-900">{peopleLoading ? 'Đang tải danh sách nhân sự…' : peopleError || 'Chọn một nhân sự để xem báo cáo cá nhân.'}</div>
       ) : error ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800">{error}</div>
       ) : loading ? (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-800"><RefreshCw size={14} className="animate-spin" /> Đang tổng hợp dữ liệu cá nhân…</div>
+        <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs font-semibold text-blue-800"><RefreshCw size={14} className="animate-spin" /> Đang tổng hợp dữ liệu cá nhân…</div>
       ) : rows.length === 0 && !odooTotals ? (
         <div className="rounded-xl border border-[var(--stitch-border)] bg-white p-4 text-xs font-semibold text-[#64748b]">Chưa có báo cáo trong khoảng thời gian đã chọn.</div>
       ) : (
@@ -695,14 +695,14 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
                   <YAxis yAxisId="percent" orientation="right" tickFormatter={(value: number) => `${value}%`} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} width={38} />
                   <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8e5', borderRadius: 8, color: '#1f2937', fontSize: 11, boxShadow: '0 8px 24px rgba(15,23,42,.1)' }} labelFormatter={(value) => formatReportDateVi(String(value))} formatter={(value, name) => [name === '%ADS' ? `${Number(value).toFixed(1)}%` : formatMoney(Number(value)), name]} />
                   <ReferenceLine yAxisId="percent" y={ADS_LIMIT_PERCENT} stroke="#f43f5e" strokeDasharray="5 5" />
-                  <Bar yAxisId="money" dataKey="revenue" name="Doanh số" fill="#16a34a" radius={[3, 3, 0, 0]} maxBarSize={15} />
+                  <Bar yAxisId="money" dataKey="revenue" name="Doanh số" fill="#0044AE" radius={[3, 3, 0, 0]} maxBarSize={15} />
                   <Bar yAxisId="money" dataKey="adCost" name="Chi phí Ads" fill="#6366f1" radius={[3, 3, 0, 0]} maxBarSize={15} />
                   <Line yAxisId="percent" type="monotone" dataKey={(row: DailyMetrics) => row.revenue ? row.adCost / row.revenue * 100 : 0} name="%ADS" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[9px] text-[#64748b]"><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-emerald-600" />Doanh số</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-indigo-500" />Chi phí</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-amber-500" />%ADS thực tế</span><span className="inline-flex items-center gap-1.5"><i className="h-px w-3 bg-rose-500" />Trần %ADS {ADS_LIMIT_PERCENT}%</span></div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[9px] text-[#64748b]"><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-[#0044AE]" />Doanh số</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-indigo-500" />Chi phí</span><span className="inline-flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-amber-500" />%ADS thực tế</span><span className="inline-flex items-center gap-1.5"><i className="h-px w-3 bg-rose-500" />Trần %ADS {ADS_LIMIT_PERCENT}%</span></div>
         </section>
 
         <section className="rounded-xl border border-[var(--stitch-border)] bg-white p-3.5 shadow-[var(--stitch-shadow)] sm:p-4">
@@ -765,16 +765,16 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
         </section>
       </div>
 
-      <section className="mb-4 overflow-hidden rounded-xl border border-emerald-900/10 bg-[#f5faf6] p-3.5 text-slate-800 shadow-[0_12px_32px_rgba(15,80,43,.10)] sm:p-4">
+      <section className="mb-4 overflow-hidden rounded-xl border border-blue-900/10 bg-[#f5f8ff] p-3.5 text-slate-800 shadow-[0_12px_32px_rgba(0,45,104,.10)] sm:p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-emerald-700 to-green-600 text-white shadow-sm"><BarChart3 size={18} /></span>
-            <div><h2 className="text-base font-extrabold text-emerald-950 sm:text-lg">Chi tiết theo ngày</h2><p className="text-[11px] font-medium text-slate-500">Dữ liệu tổng hợp trong khoảng thời gian đã chọn</p></div>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-[#003b98] to-[#0044AE] text-white shadow-sm"><BarChart3 size={18} /></span>
+            <div><h2 className="text-base font-extrabold text-[#002d68] sm:text-lg">Chi tiết theo ngày</h2><p className="text-[11px] font-medium text-slate-500">Dữ liệu tổng hợp trong khoảng thời gian đã chọn</p></div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-[11px] font-bold text-emerald-950 shadow-sm"><CalendarDays size={14} className="text-emerald-700" />{formatReportDateVi(range.from)} – {formatReportDateVi(range.to)}</div>
-            <label className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-[11px] font-bold text-emerald-950 shadow-sm"><Filter size={14} className="text-emerald-700" /><span className="sr-only">Lọc ngày</span><select aria-label="Lọc ngày" value={dailyFilter} onChange={(event) => setDailyFilter(event.target.value as typeof dailyFilter)} className="max-w-[120px] bg-transparent outline-none text-[11px]"><option value="all">Tất cả ngày</option><option value="active">Có dữ liệu</option><option value="attention">Cần chú ý</option></select></label>
-            <button type="button" onClick={exportCsv} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 text-[11px] font-extrabold text-white shadow-sm transition hover:bg-emerald-800"><Download size={14} /> Tải CSV</button>
+            <div className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-[11px] font-bold text-[#002d68] shadow-sm"><CalendarDays size={14} className="text-[#0044AE]" />{formatReportDateVi(range.from)} – {formatReportDateVi(range.to)}</div>
+            <label className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-[11px] font-bold text-[#002d68] shadow-sm"><Filter size={14} className="text-[#0044AE]" /><span className="sr-only">Lọc ngày</span><select aria-label="Lọc ngày" value={dailyFilter} onChange={(event) => setDailyFilter(event.target.value as typeof dailyFilter)} className="max-w-[120px] bg-transparent outline-none text-[11px]"><option value="all">Tất cả ngày</option><option value="active">Có dữ liệu</option><option value="attention">Cần chú ý</option></select></label>
+            <button type="button" onClick={exportCsv} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#0044AE] px-3 text-[11px] font-extrabold text-white shadow-sm transition hover:bg-[#003b98]"><Download size={14} /> Tải CSV</button>
           </div>
         </div>
 
@@ -802,9 +802,9 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
           })}
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-emerald-900/5 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-xl border border-blue-900/5 bg-white shadow-sm">
           <table className="w-full min-w-[1280px] border-collapse text-center text-xs">
-            <thead><tr className="bg-gradient-to-r from-emerald-700 to-green-700 text-[10px] font-extrabold text-white">
+            <thead><tr className="bg-gradient-to-r from-[#003b98] to-[#0044AE] text-[10px] font-extrabold text-white">
               <th className="p-3">#</th><th className="p-3">Ngày</th><th className="p-3">Doanh số</th><th className="p-3">Chi phí</th><th className="p-3">% ADS</th><th className="p-3">Mess</th><th className="p-3">CPA</th><th className="p-3">Tổng data</th><th className="p-3">CPL</th><th className="p-3">Tỉ lệ xin số</th><th className="p-3">Đơn</th><th className="p-3">%CR</th><th className="p-3">AOV</th><th className="p-3">Thao tác</th>
             </tr></thead>
             <tbody className="font-semibold text-slate-800">
@@ -817,10 +817,10 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
                 const aov = row.orders ? row.revenue / row.orders : 0;
                 const greenPill = 'inline-flex min-w-[58px] justify-center rounded-full bg-emerald-100 px-3 py-1.5 font-extrabold text-emerald-800';
                 const redPill = 'inline-flex min-w-[58px] justify-center rounded-full bg-rose-100 px-3 py-1.5 font-extrabold text-rose-700';
-                return <tr key={row.date} className={`border-b border-emerald-900/[0.04] hover:bg-emerald-50 ${index % 2 === 0 ? 'bg-emerald-50/70' : 'bg-white'}`}>
+                return <tr key={row.date} className={`border-b border-blue-900/[0.04] hover:bg-blue-50 ${index % 2 === 0 ? 'bg-blue-50/70' : 'bg-white'}`}>
                   <td className="p-2.5">{index + 1}</td>
                   <td className="p-2.5 font-bold">{dateText(row.date)}</td>
-                  <td className="p-2.5 font-bold text-emerald-800">{row.revenue ? formatMoney(row.revenue) : '—'}</td>
+                  <td className="p-2.5 font-bold text-[#003b98]">{row.revenue ? formatMoney(row.revenue) : '—'}</td>
                   <td className="p-2.5">{row.adCost ? formatMoney(row.adCost) : '—'}</td>
                   <td className="p-2.5"><span className={performancePillClass(adsTone(row.revenue > 0 ? adsPct : row.adCost > 0 ? 100 : null))}>{row.revenue > 0 ? formatPercent(adsPct) : '—'}</span></td>
                   <td className="p-2.5">{formatCount(row.mess)}</td>
@@ -831,7 +831,7 @@ export const MktDashboardView: React.FC<MktDashboardViewProps> = ({ reportUser =
                   <td className="p-2.5">{formatCount(row.orders)}</td>
                   <td className="p-2.5"><span className={performancePillClass(closeTone(row.leads > 0 ? closePct : null))}>{row.leads > 0 ? formatPercent(closePct) : '—'}</span></td>
                   <td className="p-2.5">{row.orders ? formatMoney(aov) : '—'}</td>
-                  <td className="p-2.5"><button type="button" title={`Xem riêng ngày ${dateText(row.date)}`} aria-label={`Xem riêng ngày ${dateText(row.date)}`} onClick={() => { setRange({ from: row.date, to: row.date }); setDraftRange({ from: row.date, to: row.date }); setPreset('custom'); }} className="rounded-md p-1 text-slate-500 hover:bg-emerald-100 hover:text-emerald-800"><MoreVertical size={17} /></button></td>
+                  <td className="p-2.5"><button type="button" title={`Xem riêng ngày ${dateText(row.date)}`} aria-label={`Xem riêng ngày ${dateText(row.date)}`} onClick={() => { setRange({ from: row.date, to: row.date }); setDraftRange({ from: row.date, to: row.date }); setPreset('custom'); }} className="rounded-md p-1 text-slate-500 hover:bg-blue-100 hover:text-blue-800"><MoreVertical size={17} /></button></td>
                 </tr>;
               }) : <tr><td colSpan={14} className="p-8 text-slate-500">{dailyFilter === 'all' ? 'Không có dữ liệu trong khoảng thời gian này.' : 'Không có ngày phù hợp với bộ lọc.'}</td></tr>}
             </tbody>
