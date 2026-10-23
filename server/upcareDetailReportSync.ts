@@ -21,6 +21,9 @@ type UpcareAggregate = {
   orderCount: number;
 };
 
+/** Odoo MKT currently returns zero metrics for these staff while their saved Odoo orders are valid. */
+const ODOO_ZERO_SALES_FALLBACK_CODES = new Set(['fbc.hotline', 'fbc.oldcustomer']);
+
 export class UpcareDetailReportSyncError extends Error {
   constructor(message: string, readonly statusCode = 502, readonly errorCode = 'upcare_detail_sync_failed') {
     super(message);
@@ -224,6 +227,14 @@ export async function syncUpcareMktToDetailReports(
       tong_data_nhan: number;
     }[];
     for (const aggregate of aggregates.values()) {
+      // Do not let an all-zero Odoo response overwrite manually reconciled sales in detail_reports.
+      if (
+        ODOO_ZERO_SALES_FALLBACK_CODES.has(aggregate.codeKey) &&
+        aggregate.amount === 0 &&
+        aggregate.dataCount === 0 &&
+        aggregate.orderCount === 0
+      ) continue;
+
       const staff = staffByCode.get(aggregate.codeKey);
       const name = staff?.name || aggregate.apiName;
       if (!staff?.email || !name) {
