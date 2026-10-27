@@ -17,6 +17,7 @@ import {
 import { LoginPage } from './pages/LoginPage';
 import { DashboardAdminLayout } from './pages/DashboardAdminLayout';
 import { LeaderboardPage } from './pages/LeaderboardPage';
+import { FabicoSaleArenaPage } from './pages/FabicoSaleArenaPage';
 import type { Employee, AuthUser } from './types';
 import { crmAdminPathForView } from './utils/crmAdminRoutes';
 import { crmNavTierFromUser, defaultViewForTier } from './utils/crmNavAccess';
@@ -244,6 +245,8 @@ function AppRoutes() {
         path="/login"
         element={authUser ? <Navigate to="/" replace /> : <LoginPage onLogin={handleLogin} />}
       />
+
+      <Route path="/sale-arena" element={<FabicoSaleArenaPage />} />
 
       <Route
         path="/"
