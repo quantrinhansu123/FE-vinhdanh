@@ -54,6 +54,8 @@ export function FabicoArenaDashboard() {
   const [caption, setCaption] = useState('Dữ liệu minh họa · Sẵn sàng kết nối API');
   const [now, setNow] = useState(() => new Date());
   const [reloadKey, setReloadKey] = useState(0);
+  const [growthBy, setGrowthBy] = useState<'growth' | 'revenue'>('growth');
+  const [cleanBy, setCleanBy] = useState<'return' | 'orders'>('return');
   const requestRef = useRef(0);
   const hasDataRef = useRef(false);
 
@@ -115,8 +117,16 @@ export function FabicoArenaDashboard() {
   );
   const tabNames = ['all', ...new Set(['FALCON', 'LION', 'WOLF', 'TITAN', 'PHOENIX', ...(data?.sales.map((sale) => sale.bu) ?? [])])];
   const top = data ? sortSales(data.sales).slice(0, 3) : [];
-  const growth = data ? [...data.sales].sort((a, b) => b.growth - a.growth).slice(0, 3) : [];
-  const clean = data ? [...data.sales].sort((a, b) => a.returnRate - b.returnRate).slice(0, 3) : [];
+  const growth = data
+    ? [...data.sales]
+        .sort((a, b) => (growthBy === 'revenue' ? b.revenue - a.revenue : b.growth - a.growth))
+        .slice(0, 3)
+    : [];
+  const clean = data
+    ? [...data.sales]
+        .sort((a, b) => (cleanBy === 'orders' ? b.orders - a.orders : a.returnRate - b.returnRate))
+        .slice(0, 3)
+    : [];
   const buRows = data ? [...data.buRanking].sort((a, b) => b.revenue - a.revenue) : [];
   const buMax = Math.max(...buRows.map((item) => item.revenue), 1);
 
@@ -386,10 +396,18 @@ export function FabicoArenaDashboard() {
                 <h2>
                   <span className="icon-trend">
                     <TrendIcon />
-                  </span>{' '}
-                  TOP CHIẾN BINH BỨT PHÁ
+                  </span>
+                  <span className="side-title">TOP CHIẾN BINH BỨT PHÁ</span>
                 </h2>
-                <small>Tăng trưởng doanh số</small>
+                <select
+                  className="side-select"
+                  aria-label="Chọn tiêu chí bứt phá"
+                  value={growthBy}
+                  onChange={(event) => setGrowthBy(event.target.value as 'growth' | 'revenue')}
+                >
+                  <option value="growth">Tăng trưởng doanh số</option>
+                  <option value="revenue">Doanh số</option>
+                </select>
               </div>
               <div>
                 {growth.map((sale, index) => (
@@ -403,9 +421,20 @@ export function FabicoArenaDashboard() {
                 <h2>
                   <span className="icon-shield">
                     <ShieldIcon />
-                  </span>{' '}
-                  SALE ĐƠN SẠCH <small>(TỶ LỆ HOÀN THẤP NHẤT)</small>
+                  </span>
+                  <span className="side-title">
+                    SALE ĐƠN SẠCH <small>(TỶ LỆ HOÀN THẤP NHẤT)</small>
+                  </span>
                 </h2>
+                <select
+                  className="side-select"
+                  aria-label="Chọn tiêu chí đơn sạch"
+                  value={cleanBy}
+                  onChange={(event) => setCleanBy(event.target.value as 'return' | 'orders')}
+                >
+                  <option value="return">Tỷ lệ hoàn/hủy</option>
+                  <option value="orders">Số đơn</option>
+                </select>
               </div>
               <div>
                 {clean.map((sale, index) => (
