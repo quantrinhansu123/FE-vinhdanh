@@ -5,8 +5,8 @@ import {
   getUpcareProjectScopeForUi,
   isUpcareMktConfigured,
   isUpcareOauthRefreshConfigured,
-  type UpcareMktEmployeeRow,
 } from '../../../api/upcareCrm';
+import { mapUpcareMktAccountTotals, shouldSkipZeroRevenueSync, type UpcareAccountRow } from '../../../api/upcareSaleAccounts';
 import { supabase } from '../../../api/supabase';
 import { fetchAllRows } from '../../../api/fetchAllRows';
 import { isMissingTienVietError } from '../../../utils/detailReportsVnd';
@@ -14,7 +14,7 @@ import { normalizeMaNsCode, REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboa
 
 /** Fabico MKT → detail_reports: cập nhật doanh thu + số đơn (không đụng name/email/code/report_date). */
 type UpcareReportsPatch = { revenue: number; tien_viet: number; order_count: number; tong_data_nhan: number };
-type UpcareDailyEmployeeRow = UpcareMktEmployeeRow & { reportDate: string };
+type UpcareDailyEmployeeRow = UpcareAccountRow & { reportDate: string };
 import { downloadMktReportExcelTemplate } from '../../dashboard/mkt/mktHistoryExcel';
 
 /** Gộp trùng mã trong cùng ngày; không cộng lẫn số liệu giữa các ngày. */
@@ -90,8 +90,8 @@ export const UpcareMktEmployeesView: React.FC = () => {
       // Upcare returns employee totals without a date for range requests, so query each day separately.
       for (let i = 0; i < days.length; i += 4) {
         const batch = await Promise.all(days.slice(i, i + 4).map(async (reportDate) => {
-          const dayRows = await fetchUpcareMktEmployees({ dateFrom: reportDate, dateTo: reportDate });
-          return dayRows.map((row) => ({ ...row, reportDate }));
+          const mktRows = await fetchUpcareMktEmployees({ dateFrom: reportDate, dateTo: reportDate });
+          return mapUpcareMktAccountTotals(mktRows).map((row) => ({ ...row, reportDate }));
         }));
         rowsByDay.push(...batch.flat());
       }
@@ -138,6 +138,10 @@ export const UpcareMktEmployeesView: React.FC = () => {
     }),
     { data: 0, orders: 0, amount: 0 },
   ), [filteredRows]);
+
+  const zeroSaleCodes = useMemo(() => Array.from(new Set(
+    rows.filter(shouldSkipZeroRevenueSync).map((row) => String(row.code)),
+  )), [rows]);
 
   const groupedRows = useMemo(() => {
     const groups = new Map<string, UpcareDailyEmployeeRow[]>();
@@ -214,11 +218,16 @@ export const UpcareMktEmployeesView: React.FC = () => {
       type RowUp = { id: string; patch: UpcareReportsPatch };
       const toUpdate: RowUp[] = [];
       let skippedNoDbRow = 0;
+      let skippedZeroSales = 0;
       const unmatchedPairs: string[] = [];
 
       for (const r of rowsAggregated) {
         const ymd = normalizeReportDate(r.reportDate);
         if (ymd < dateFrom || ymd > dateTo) continue;
+        if (shouldSkipZeroRevenueSync(r)) {
+          skippedZeroSales += 1;
+          continue;
+        }
         const c = String(r.code).trim();
         const k = `${ymd}\0${normalizeMaNsCode(c)}`;
         const id = idByKey.get(k);
@@ -241,7 +250,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
 
       if (toUpdate.length === 0) {
         window.alert(
-          `Kh\u00f4ng c\u1eadp nh\u1eadt \u0111\u01b0\u1ee3c d\u00f2ng n\u00e0o trong kho\u1ea3ng ${dateFrom} \u0111\u1ebfn ${dateTo}. H\u00e3y \u0111\u1ed3ng b\u1ed9 Meta v\u00e0o detail_reports tr\u01b0\u1edbc, sau \u0111\u00f3 ki\u1ec3m tra m\u00e3 NV trong Odoo c\u00f3 kh\u1edbp employees.ma_ns kh\u00f4ng. C\u1eb7p ch\u01b0a kh\u1edbp: ${Array.from(new Set(unmatchedPairs)).join('; ') || 'kh\u00f4ng c\u00f3 m\u00e3 kh\u1edbp'}.`
+          `Không cập nhật được dòng nào từ ${dateFrom} đến ${dateTo}. Đã bỏ qua ${skippedZeroSales} dòng Hotline/Old Customer vì Odoo Sales trả doanh thu và số đơn bằng 0; giữ số đã đối soát trong detail_reports. Các cặp chưa khớp: ${Array.from(new Set(unmatchedPairs)).join('; ') || 'không có'}.`
         );
         return;
       }
@@ -287,7 +296,10 @@ export const UpcareMktEmployeesView: React.FC = () => {
         skippedNoDbRow > 0
           ? ` ${skippedNoDbRow} cặp (ngày+mã) không có trong detail_reports — bỏ qua (không thêm dòng): ${Array.from(new Set(unmatchedPairs)).join('; ')}.`
           : '';
-      const okMsg = `Đã cập nhật ${toUpdate.length} bản ghi đúng theo ngày trong detail_reports (cột revenue, tien_viet, order_count).${tailNoCode}${tailMerge}${tailSkip}`;
+      const tailZeroSales = skippedZeroSales > 0
+        ? ` Giữ nguyên ${skippedZeroSales} dòng Hotline/Old Customer vì Odoo Sales trả doanh thu và số đơn bằng 0.`
+        : '';
+      const okMsg = `Đã cập nhật ${toUpdate.length} bản ghi đúng theo ngày trong detail_reports (cột revenue, tien_viet, order_count).${tailNoCode}${tailMerge}${tailSkip}${tailZeroSales}`;
       try { window.alert(okMsg); } catch {}
       // Ẩn dữ liệu source sau khi đẩy
       setRows([]);
@@ -317,7 +329,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
               ) : null}
             </p>
             <p className="mt-1 text-xs text-[#a5aac2]">
-              Mỗi ngày gọi riêng qua proxy với <code className="text-[#3bbffa]">date_from = date_to</code>, sau đó hiển thị tách theo ngày.
+              Mỗi ngày gọi Odoo MKT qua proxy; Hotline và Old Customer lấy doanh thu từ <code className="text-[#3bbffa]">f99_uid → total</code> và số đơn từ <code className="text-[#3bbffa]">sale_count</code>.
             </p>
             <p className="mt-1 text-xs text-[#a5aac2]">
               Bước 2: sau khi đồng bộ Meta ở trang Meta Ads, tải cùng khoảng ngày rồi đẩy doanh thu, số đơn và data Odoo vào detail_reports theo ngày + mã nhân viên.
@@ -411,6 +423,12 @@ export const UpcareMktEmployeesView: React.FC = () => {
         {error ? (
           <div className="rounded-xl border border-red-500/30 bg-red-950/40 px-4 py-3 text-sm text-red-200">{error}</div>
         ) : null}
+        {zeroSaleCodes.length > 0 ? (
+          <div role="status" className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
+            Odoo MKT hiện trả doanh thu và số đơn bằng 0 cho {zeroSaleCodes.join(', ')} trong khoảng ngày đã tải.
+            Số 0 này sẽ không ghi đè dữ liệu đã lưu trong detail_reports.
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-[#41475b]/20 bg-[#0c1326] px-5 py-4">
@@ -457,12 +475,13 @@ export const UpcareMktEmployeesView: React.FC = () => {
                   <th className="px-4 py-3 text-right sm:px-6">Data</th>
                   <th className="px-4 py-3 text-right sm:px-6">Số đơn chốt</th>
                   <th className="px-4 py-3 text-right sm:px-6">Doanh số</th>
+                  <th className="px-4 py-3 text-right sm:px-6">Odoo f99_uid total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#41475b]/10">
                 {loading && rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-[#a5aac2]">
+                    <td colSpan={9} className="px-6 py-12 text-center text-[#a5aac2]">
                       <span className="inline-flex items-center gap-2">
                         <Loader2 className="h-5 w-5 animate-spin" />
                         Đang tải…
@@ -472,14 +491,14 @@ export const UpcareMktEmployeesView: React.FC = () => {
                 ) : null}
                 {!loading && configured && rows.length === 0 && !error ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-[#a5aac2]">
+                    <td colSpan={9} className="px-6 py-12 text-center text-[#a5aac2]">
                       Không có bản ghi. Chọn khoảng ngày và bấm Tải dữ liệu.
                     </td>
                   </tr>
                 ) : null}
                 {!loading && rows.length > 0 && filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-[#a5aac2]">
+                    <td colSpan={9} className="px-6 py-12 text-center text-[#a5aac2]">
                       Không tìm thấy Code “{codeFilter.trim()}”.
                     </td>
                   </tr>
@@ -487,12 +506,12 @@ export const UpcareMktEmployeesView: React.FC = () => {
                 {groupedRows.map(({ date, rows: dayRows }) => (
                   <React.Fragment key={date}>
                     <tr className="border-y border-[#3bbffa]/20 bg-[#11192e]">
-                      <td colSpan={8} className="px-4 py-2 font-semibold text-[#3bbffa] sm:px-6">
+                      <td colSpan={9} className="px-4 py-2 font-semibold text-[#3bbffa] sm:px-6">
                         Ngày báo cáo: {date} <span className="ml-2 text-xs font-normal text-[#a5aac2]">({dayRows.length} dòng)</span>
                       </td>
                     </tr>
                     {dayRows.map((row, idx) => (
-                  <tr key={row.id} className="bg-[#11192e]/50 transition-colors hover:bg-[#171f36]">
+                  <tr key={`${date}-${row.id}-${String(row.code ?? '')}`} className="bg-[#11192e]/50 transition-colors hover:bg-[#171f36]">
                     <td className="px-4 py-3 tabular-nums text-[#a5aac2] sm:px-6">{idx + 1}</td>
                     <td className="px-4 py-3 sm:px-6">
                       {row.avatar ? (
@@ -526,6 +545,9 @@ export const UpcareMktEmployeesView: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums text-[#69f6b8] sm:px-6">
                       {formatAmount(Number(row.amount) || 0)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums text-[#3bbffa] sm:px-6">
+                      {row.saleRevenue == null ? '—' : formatAmount(row.saleRevenue)}
                     </td>
                   </tr>
                     ))}
