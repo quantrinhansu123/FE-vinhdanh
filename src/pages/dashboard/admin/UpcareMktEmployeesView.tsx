@@ -2,9 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
   fetchUpcareMktEmployees,
+  fetchUpcareSaleEmployeesForRange,
   getUpcareProjectScopeForUi,
   isUpcareMktConfigured,
   isUpcareOauthRefreshConfigured,
+  normalizeUpcareMktEmployeeCode,
+  UPCARE_ODOO_VND_RATE,
+  type UpcareMktEmployeeDayRow,
 } from '../../../api/upcareCrm';
 import { mapUpcareMktAccountTotals, shouldSkipZeroRevenueSync, type UpcareAccountRow } from '../../../api/upcareSaleAccounts';
 import { supabase } from '../../../api/supabase';
@@ -16,6 +20,37 @@ import { normalizeMaNsCode, REPORTS_TABLE, toLocalYyyyMmDd } from '../../dashboa
 type UpcareReportsPatch = { revenue: number; tien_viet: number; order_count: number; tong_data_nhan: number };
 type UpcareDailyEmployeeRow = UpcareAccountRow & { reportDate: string };
 import { downloadMktReportExcelTemplate } from '../../dashboard/mkt/mktHistoryExcel';
+
+const ODOO_SALE_CODES = new Set(['fbc.hotline', 'fbc.oldcustomer']);
+const ODOO_SALE_NAMES: Record<string, string> = {
+  'fbc.hotline': 'Hotline FABICO',
+  'fbc.oldcustomer': 'Old Customer Sale FABICO',
+};
+const ODOO_SALE_CANONICAL_CODES: Record<string, string> = {
+  'fbc.hotline': 'FBC.Hotline',
+  'fbc.oldcustomer': 'FBC.OldCustomer',
+};
+
+type LeaderRevenueRow = { report_date: string; code: string | null; revenue?: unknown; tien_viet?: unknown };
+
+function leaderReportRevenueVnd(row: LeaderRevenueRow): number {
+  const value = Number(row.tien_viet != null ? row.tien_viet : row.revenue);
+  return Number.isFinite(value) ? value : 0;
+}
+
+async function fetchOdooSaleDailyRows(dateFrom: string, dateTo: string, days: string[]): Promise<UpcareMktEmployeeDayRow[]> {
+  const range = await fetchUpcareSaleEmployeesForRange({ dateFrom, dateTo });
+  if (range.hasDailyBreakdown) return range.dailyRows;
+
+  const rows: UpcareMktEmployeeDayRow[] = [];
+  for (let i = 0; i < days.length; i += 4) {
+    const batch = await Promise.all(days.slice(i, i + 4).map((date) =>
+      fetchUpcareSaleEmployeesForRange({ dateFrom: date, dateTo: date }),
+    ));
+    rows.push(...batch.flatMap((result) => result.dailyRows));
+  }
+  return rows;
+}
 
 /** Gộp trùng mã trong cùng ngày; không cộng lẫn số liệu giữa các ngày. */
 function aggregateUpcareRowsBySameCode(list: UpcareDailyEmployeeRow[]): UpcareDailyEmployeeRow[] {
@@ -87,13 +122,87 @@ export const UpcareMktEmployeesView: React.FC = () => {
       if (dateFrom > dateTo) throw new Error('Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.');
       const days = inclusiveDates(dateFrom, dateTo);
       const rowsByDay: UpcareDailyEmployeeRow[] = [];
+      const saleRowsPromise = fetchOdooSaleDailyRows(dateFrom, dateTo, days);
+      const leaderRowsPromise = fetchAllRows<LeaderRevenueRow>(
+        supabase.from(REPORTS_TABLE)
+          .select('report_date, code, revenue, tien_viet')
+          .gte('report_date', dateFrom)
+          .lte('report_date', dateTo)
+          .in('code', ['FBC.Hotline', 'FBC.OldCustomer'])
+      );
       // Upcare returns employee totals without a date for range requests, so query each day separately.
       for (let i = 0; i < days.length; i += 4) {
         const batch = await Promise.all(days.slice(i, i + 4).map(async (reportDate) => {
           const mktRows = await fetchUpcareMktEmployees({ dateFrom: reportDate, dateTo: reportDate });
-          return mapUpcareMktAccountTotals(mktRows).map((row) => ({ ...row, reportDate }));
+          return mapUpcareMktAccountTotals(mktRows).map((row) => ({
+            ...row,
+            saleRevenue: ODOO_SALE_CODES.has(normalizeUpcareMktEmployeeCode(row.code)) ? 0 : row.saleRevenue,
+            reportDate,
+          }));
         }));
         rowsByDay.push(...batch.flat());
+      }
+      const [saleRows, leaderRowsResult] = await Promise.all([saleRowsPromise, leaderRowsPromise]);
+      if (leaderRowsResult.error) throw leaderRowsResult.error;
+      const leaderRevenueByDayAndCode = new Map<string, number>();
+      for (const report of leaderRowsResult.data || []) {
+        const codeKey = normalizeUpcareMktEmployeeCode(report.code);
+        if (!ODOO_SALE_CODES.has(codeKey)) continue;
+        const key = `${String(report.report_date || '').slice(0, 10)}\0${codeKey}`;
+        leaderRevenueByDayAndCode.set(key, (leaderRevenueByDayAndCode.get(key) || 0) + leaderReportRevenueVnd(report));
+      }
+      const rowsByDayAndCode = new Map<string, UpcareDailyEmployeeRow>(rowsByDay.map((row) => [
+        `${row.reportDate}\0${normalizeUpcareMktEmployeeCode(row.code)}`,
+        row,
+      ] as const));
+      const saleRowsByDayAndCode = new Map<string, UpcareMktEmployeeDayRow>();
+      for (const saleRow of saleRows) {
+        const codeKey = normalizeUpcareMktEmployeeCode(saleRow.code);
+        if (!ODOO_SALE_CODES.has(codeKey)) continue;
+        const key = `${saleRow.date}\0${codeKey}`;
+        saleRowsByDayAndCode.set(key, saleRow);
+        const existing = rowsByDayAndCode.get(key);
+        if (existing) continue;
+        const added: UpcareDailyEmployeeRow = {
+          ...saleRow,
+          name: saleRow.name.trim() || ODOO_SALE_NAMES[codeKey],
+          saleRevenue: 0,
+          reportDate: saleRow.date,
+        };
+        rowsByDay.push(added);
+        rowsByDayAndCode.set(key, added);
+      }
+      for (const row of rowsByDay) {
+        const codeKey = normalizeUpcareMktEmployeeCode(row.code);
+        if (!ODOO_SALE_CODES.has(codeKey)) continue;
+        const key = `${row.reportDate}\0${codeKey}`;
+        const saleRow = saleRowsByDayAndCode.get(key);
+        const amount = Number(saleRow?.amount);
+        const dataCount = Number(saleRow?.dataCount);
+        const orderCount = Number(saleRow?.count);
+        const hasOdooMetrics = Boolean(saleRow && [amount, dataCount, orderCount].some((value) => Number.isFinite(value) && value !== 0));
+        row.saleRevenue = hasOdooMetrics
+          ? Math.round((Number.isFinite(amount) ? amount : 0) * UPCARE_ODOO_VND_RATE)
+          : leaderRevenueByDayAndCode.get(key) || 0;
+      }
+      for (const [key, saleRevenue] of leaderRevenueByDayAndCode) {
+        if (rowsByDayAndCode.has(key)) continue;
+        const [reportDate, codeKey] = key.split('\0');
+        const code = ODOO_SALE_CANONICAL_CODES[codeKey];
+        if (!reportDate || !code) continue;
+        const added: UpcareDailyEmployeeRow = {
+          id: codeKey === 'fbc.hotline' ? -1 : -2,
+          code,
+          name: ODOO_SALE_NAMES[codeKey],
+          avatar: null,
+          amount: 0,
+          dataCount: 0,
+          count: 0,
+          saleRevenue,
+          reportDate,
+        };
+        rowsByDay.push(added);
+        rowsByDayAndCode.set(key, added);
       }
       const sorted = rowsByDay.sort((a, b) =>
         a.reportDate.localeCompare(b.reportDate) || (Number(b.amount) || 0) - (Number(a.amount) || 0)
@@ -329,7 +438,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
               ) : null}
             </p>
             <p className="mt-1 text-xs text-[#a5aac2]">
-              Mỗi ngày gọi Odoo MKT qua proxy; Hotline và Old Customer lấy doanh thu từ <code className="text-[#3bbffa]">f99_uid → total</code> và số đơn từ <code className="text-[#3bbffa]">sale_count</code>.
+              Doanh thu Hotline/Old Customer khớp Leader Dash theo ngày: dùng Odoo Sales khi có số liệu, nếu Odoo trả 0 thì dùng doanh thu đã đối soát trong detail_reports. Chỉ áp dụng cho <code className="text-[#3bbffa]">FBC.Hotline</code> và <code className="text-[#3bbffa]">FBC.OldCustomer</code>.
             </p>
             <p className="mt-1 text-xs text-[#a5aac2]">
               Bước 2: sau khi đồng bộ Meta ở trang Meta Ads, tải cùng khoảng ngày rồi đẩy doanh thu, số đơn và data Odoo vào detail_reports theo ngày + mã nhân viên.
@@ -475,7 +584,7 @@ export const UpcareMktEmployeesView: React.FC = () => {
                   <th className="px-4 py-3 text-right sm:px-6">Data</th>
                   <th className="px-4 py-3 text-right sm:px-6">Số đơn chốt</th>
                   <th className="px-4 py-3 text-right sm:px-6">Doanh số</th>
-                  <th className="px-4 py-3 text-right sm:px-6">Odoo f99_uid total</th>
+                  <th className="px-4 py-3 text-right sm:px-6">Doanh thu Odoo (VND)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#41475b]/10">
