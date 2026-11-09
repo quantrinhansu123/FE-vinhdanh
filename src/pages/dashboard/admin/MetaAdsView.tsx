@@ -6,6 +6,7 @@ import { formatFullVnd, formatReportDateVi } from '../mkt/mktDetailReportShared'
 
 type MetaQcRow = {
   accountId: string;
+  accountName: string;
   date: string;
   employeeCode: string | null;
   campaignName: string;
@@ -289,10 +290,11 @@ export const MetaAdsView: React.FC = () => {
           )}
 
           <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-            <table className="w-full min-w-[1000px] text-left text-xs">
+            <table className="w-full min-w-[1180px] text-left text-xs">
               <thead>
                 <tr className="border-b border-[var(--border)] bg-[var(--bg3)] text-[10px] font-extrabold uppercase tracking-wide text-[var(--text3)]">
-                  <th className="whitespace-nowrap p-3">Tài khoản</th>
+                  <th className="whitespace-nowrap p-3">ID tài khoản</th>
+                  <th className="whitespace-nowrap p-3">Tên tài khoản</th>
                   <th className="whitespace-nowrap p-3">Ngày</th>
                   <th className="whitespace-nowrap p-3">Mã NV</th>
                   <th className="min-w-[340px] p-3">Tên chiến dịch</th>
@@ -302,12 +304,13 @@ export const MetaAdsView: React.FC = () => {
               </thead>
               <tbody>
                 {loading && rows.length === 0 ? (
-                  <tr><td colSpan={6} className="p-10 text-center text-[var(--text3)]"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />Đang tải trực tiếp từ Meta Ads…</td></tr>
+                  <tr><td colSpan={7} className="p-10 text-center text-[var(--text3)]"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />Đang tải trực tiếp từ Meta Ads…</td></tr>
                 ) : rows.length === 0 ? (
-                  <tr><td colSpan={6} className="p-10 text-center text-[var(--text3)]">{error ? 'Không tải được dữ liệu Meta Ads.' : 'Không có dữ liệu Meta Ads trong khoảng ngày này.'}</td></tr>
+                  <tr><td colSpan={7} className="p-10 text-center text-[var(--text3)]">{error ? 'Không tải được dữ liệu Meta Ads.' : 'Không có dữ liệu Meta Ads trong khoảng ngày này.'}</td></tr>
                 ) : pageRows.map((row, index) => (
                   <tr key={`${row.accountId}-${row.date}-${row.campaignName}-${index}`} className="border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--bg3)]">
                     <td className="whitespace-nowrap p-3">{row.accountId}</td>
+                    <td className="min-w-[220px] max-w-[360px] whitespace-normal break-words p-3" title={row.accountName}>{row.accountName || '—'}</td>
                     <td className="whitespace-nowrap p-3">{formatReportDateVi(row.date)}</td>
                     <td className="whitespace-nowrap p-3">{row.employeeCode || '—'}</td>
                     <td className="max-w-[480px] truncate p-3" title={row.campaignName}>{row.campaignName}</td>

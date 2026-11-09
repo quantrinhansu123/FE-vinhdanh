@@ -4,6 +4,7 @@ begin;
 
 create table if not exists public.meta_project_qc_insights (
   account_id text not null,
+  account_name text not null default '',
   report_date date not null,
   employee_code text,
   campaign_name text not null,
@@ -12,6 +13,9 @@ create table if not exists public.meta_project_qc_insights (
   fetched_at timestamptz not null,
   primary key (account_id, report_date, campaign_name)
 );
+
+alter table public.meta_project_qc_insights
+  add column if not exists account_name text not null default '';
 
 create index if not exists meta_project_qc_insights_report_date_idx
   on public.meta_project_qc_insights (report_date desc);
@@ -95,13 +99,14 @@ begin
   where report_date between p_since and p_until;
 
   insert into public.meta_project_qc_insights (
-    account_id, report_date, employee_code, campaign_name,
+    account_id, account_name, report_date, employee_code, campaign_name,
     spend_vnd, conversations, fetched_at
   )
-  select r.account_id, r.report_date, nullif(btrim(r.employee_code), ''), btrim(r.campaign_name),
+  select r.account_id, coalesce(nullif(btrim(r.account_name), ''), ''), r.report_date,
+         nullif(btrim(r.employee_code), ''), btrim(r.campaign_name),
          r.spend_vnd, r.conversations, p_fetched_at
   from jsonb_to_recordset(p_rows) as r(
-    account_id text, report_date date, employee_code text, campaign_name text,
+    account_id text, account_name text, report_date date, employee_code text, campaign_name text,
     spend_vnd numeric, conversations numeric
   );
   get diagnostics inserted_count = row_count;

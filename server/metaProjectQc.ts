@@ -2,6 +2,7 @@ import { getMetaAccessToken, MetaTokenManagerError } from './metaTokenManager.js
 
 export type MetaProjectQcRow = {
   accountId: string;
+  accountName: string;
   date: string;
   employeeCode: string | null;
   campaignName: string;
@@ -29,6 +30,7 @@ export class MetaProjectQcError extends Error {
 type MetaEnvironment = Record<string, string | undefined>;
 type MetaAction = { action_type?: string; value?: string | number };
 type MetaInsight = {
+  account_id?: string;
   account_currency?: string;
   campaign_name?: string;
   date_start?: string;
@@ -123,7 +125,7 @@ async function fetchAccountInsights(
   url.searchParams.set('level', 'campaign');
   url.searchParams.set('time_increment', '1');
   url.searchParams.set('time_range', JSON.stringify({ since: dateFrom, until: dateTo }));
-  url.searchParams.set('fields', 'account_currency,campaign_name,date_start,spend,actions');
+  url.searchParams.set('fields', 'account_id,account_currency,campaign_name,date_start,spend,actions');
   url.searchParams.set('limit', String(PAGE_SIZE));
 
   const rows: MetaInsight[] = [];
@@ -162,6 +164,42 @@ async function fetchAccountInsights(
   }
 
   throw new MetaProjectQcError('Dữ liệu Meta vượt giới hạn phân trang. Hãy chọn khoảng ngày ngắn hơn.', 422, 'meta_result_too_large');
+}
+
+async function fetchAccountName(
+  accountId: string,
+  apiVersion: string,
+  token: string,
+  fetcher: typeof fetch
+): Promise<string> {
+  const url = new URL(`https://graph.facebook.com/${apiVersion}/act_${accountId}`);
+  url.searchParams.set('fields', 'account_id,name,currency,account_status');
+
+  let response: Response;
+  try {
+    response = await fetcher(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      redirect: 'error',
+      signal: AbortSignal.timeout(20000),
+    });
+  } catch (error) {
+    const message = error instanceof Error && error.name === 'TimeoutError'
+      ? 'Meta Ads API timeout khi lấy tên tài khoản quảng cáo.'
+      : 'Không kết nối được Meta Ads API để lấy tên tài khoản quảng cáo.';
+    throw new MetaProjectQcError(message, 502, 'meta_connection_failed');
+  }
+
+  const body = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (!body) throw new MetaProjectQcError(`Meta Ads API trả JSON không hợp lệ (HTTP ${response.status}).`);
+  if (!response.ok || body.error) throw graphError(response, body);
+
+  const returnedAccountId = String(body.account_id || '').trim();
+  const accountName = typeof body.name === 'string' ? body.name.trim() : '';
+  if (returnedAccountId !== accountId || !accountName) {
+    throw new MetaProjectQcError('Meta Ads API không trả về ID và tên tài khoản quảng cáo.', 502, 'meta_invalid_account');
+  }
+  return accountName;
 }
 
 async function mapConcurrent<T, R>(items: T[], concurrency: number, task: (item: T) => Promise<R>): Promise<R[]> {
@@ -209,16 +247,22 @@ export async function loadMetaProjectQcRows(
     throw new MetaProjectQcError('Thiếu META_AD_ACCOUNT_IDS trong cấu hình server Vercel.', 503, 'meta_not_configured');
   }
 
-  const results = await mapConcurrent(accountIds, 5, (accountId) =>
-    fetchAccountInsights(accountId, dateFrom, dateTo, apiVersion, token, fetcher)
-  );
+  const accounts = await mapConcurrent(accountIds, 5, async (accountId) => {
+    const [accountName, insights] = await Promise.all([
+      fetchAccountName(accountId, apiVersion, token, fetcher),
+      fetchAccountInsights(accountId, dateFrom, dateTo, apiVersion, token, fetcher),
+    ]);
+    return { accountId, accountName, insights };
+  });
   const grouped = new Map<string, MetaProjectQcRow>();
   const skippedCurrencies = new Set<string>();
 
-  for (let accountIndex = 0; accountIndex < results.length; accountIndex += 1) {
-    const accountId = accountIds[accountIndex];
-    const insights = results[accountIndex];
+  for (const account of accounts) {
+    const { accountId, accountName, insights } = account;
     for (const insight of insights) {
+      if (insight.account_id && insight.account_id !== accountId) {
+        throw new MetaProjectQcError('Meta Ads API trả dữ liệu thuộc tài khoản quảng cáo khác.', 502, 'meta_invalid_account');
+      }
       const date = String(insight.date_start || '').trim();
       const campaignName = String(insight.campaign_name || '').trim();
       if (!isValidDate(date) || date < dateFrom || date > dateTo || !campaignName) continue;
@@ -231,6 +275,7 @@ export async function loadMetaProjectQcRows(
       const key = `${accountId}\u0000${date}\u0000${campaignName}`;
       const current = grouped.get(key) || {
         accountId,
+        accountName,
         date,
         employeeCode: campaignName.match(/\[([^\]]+)\]/)?.[1]?.trim() || null,
         campaignName,

@@ -127,6 +127,7 @@ export async function syncMetaProjectQcToDetailReports(
   const fetchedAt = (options.now?.() || new Date()).toISOString();
   const sourceRows = result.rows.map((row: MetaProjectQcRow) => ({
     account_id: row.accountId,
+    account_name: row.accountName,
     report_date: row.date,
     employee_code: row.employeeCode,
     campaign_name: row.campaignName,
