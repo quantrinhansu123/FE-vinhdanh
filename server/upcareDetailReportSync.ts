@@ -21,8 +21,8 @@ type UpcareAggregate = {
   orderCount: number;
 };
 
-/** Odoo MKT currently returns zero metrics for these staff while their saved Odoo orders are valid. */
-const ODOO_ZERO_SALES_FALLBACK_CODES = new Set(['fbc.hotline', 'fbc.oldcustomer']);
+/** Both requested sales measures use the Odoo MKT total for these two accounts. */
+const ODOO_DELIVERY_REVENUE_CODES = new Set(['fbc.hotline', 'fbc.oldcustomer']);
 
 export class UpcareDetailReportSyncError extends Error {
   constructor(message: string, readonly statusCode = 502, readonly errorCode = 'upcare_detail_sync_failed') {
@@ -223,18 +223,11 @@ export async function syncUpcareMktToDetailReports(
       team: string | null;
       revenue: number;
       tien_viet: number;
+      delivery_revenue: number | null;
       order_count: number;
       tong_data_nhan: number;
     }[];
     for (const aggregate of aggregates.values()) {
-      // Do not let an all-zero Odoo response overwrite manually reconciled sales in detail_reports.
-      if (
-        ODOO_ZERO_SALES_FALLBACK_CODES.has(aggregate.codeKey) &&
-        aggregate.amount === 0 &&
-        aggregate.dataCount === 0 &&
-        aggregate.orderCount === 0
-      ) continue;
-
       const staff = staffByCode.get(aggregate.codeKey);
       const name = staff?.name || aggregate.apiName;
       if (!staff?.email || !name) {
@@ -250,6 +243,7 @@ export async function syncUpcareMktToDetailReports(
         team: staff.team,
         revenue,
         tien_viet: Math.round(revenue * 25000),
+        delivery_revenue: ODOO_DELIVERY_REVENUE_CODES.has(aggregate.codeKey) ? revenue : null,
         order_count: Math.round(aggregate.orderCount),
         tong_data_nhan: Math.round(aggregate.dataCount),
       });

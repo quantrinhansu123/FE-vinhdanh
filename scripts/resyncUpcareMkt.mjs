@@ -161,6 +161,9 @@ async function main() {
       ...row,
       revenue: Math.round((row.revenue + Number.EPSILON) * 100) / 100,
       tien_viet: Math.round(row.revenue * 25000),
+      delivery_revenue: ['fbc.hotline', 'fbc.oldcustomer'].includes(normalizeCode(row.code))
+        ? Math.round((row.revenue + Number.EPSILON) * 100) / 100
+        : null,
       order_count: Math.round(row.order_count),
       tong_data_nhan: Math.round(row.tong_data_nhan),
     }));

@@ -6,7 +6,6 @@ import { fetchAllRows } from '../../../api/fetchAllRows';
 import {
   aggregateUpcareMktPeriodEmployees,
   fetchUpcareMktEmployeesForRange,
-  fetchUpcareSaleEmployeesForRange,
   normalizeUpcareMktEmployeeCode,
 } from '../../../api/upcareCrm';
 import { ADS_LIMIT_PERCENT, ADS_WARNING_PERCENT, adsTone, closeTone, performanceTextClass } from '../../../utils/performanceThresholds';
@@ -21,7 +20,7 @@ import {
 
 /** Hiệu suất Marketing (leader): luôn lấy từ bảng này, không dùng VITE_SUPABASE_REPORTS_TABLE */
 const DETAIL_REPORTS_TABLE = 'detail_reports';
-const ODOO_SALE_ONLY_CODE_KEYS = new Set(['fbc.oldcustomer', 'fbc.hotline']);
+const ODOO_TOTAL_SOURCE_CODE_KEYS = new Set(['fbc.hotline', 'fbc.oldcustomer']);
 
 /** Lấy theo lô + keyset `id > lastId` để không bị trần một lần query */
 const DETAIL_REPORTS_PAGE_SIZE = 1000;
@@ -436,8 +435,6 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     const kpiTeamKeyList = isAdminViewer
       ? [...new Set(teamList.map((e) => safeTrim(e.team)).filter(Boolean))]
       : teamKeys;
-    const hasSaleOnlyEmployees = teamList.some((e) => ODOO_SALE_ONLY_CODE_KEYS.has(normalizeUpcareMktEmployeeCode(e.ma_ns)));
-
     /** Lấy toàn bộ KPI tháng rồi lọc theo khóa chuẩn hóa — tránh .in(team_key) lệch chữ với employees / báo cáo. */
     const teamKpiPromise =
       kpiTeamKeyList.length > 0
@@ -447,7 +444,7 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
             .eq('nam_thang', selectedYm)
         : Promise.resolve({ data: [] as { muc_tieu_doanh_thu_team?: number; team_key?: string }[], error: null });
 
-    const [teamKpiRes, staffKpiRes, repRes, odooResult, odooSaleResult] = await Promise.all([
+    const [teamKpiRes, staffKpiRes, repRes, odooResult] = await Promise.all([
       teamKpiPromise,
       idList.length
         ? supabase
@@ -463,14 +460,6 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
             .catch((cause: unknown) => ({
               data: null,
               error: cause instanceof Error ? cause : new Error('Không tải được Odoo theo kỳ.'),
-            }))
-        : Promise.resolve({ data: null, error: null as Error | null }),
-      hasSaleOnlyEmployees
-        ? fetchUpcareSaleEmployeesForRange({ dateFrom: start, dateTo: end })
-            .then((data) => ({ data, error: null as Error | null }))
-            .catch((cause: unknown) => ({
-              data: null,
-              error: cause instanceof Error ? cause : new Error('Không tải được Odoo Sales theo kỳ.'),
             }))
         : Promise.resolve({ data: null, error: null as Error | null }),
     ]);
@@ -552,22 +541,17 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
     }
 
     const mktRows = odooResult.data?.employees || [];
-    const saleRows = odooSaleResult.data?.employees || [];
-    const odooByCode = aggregateUpcareMktPeriodEmployees([
-      ...mktRows.filter((row) => !ODOO_SALE_ONLY_CODE_KEYS.has(normalizeUpcareMktEmployeeCode(row.code))),
-      ...saleRows,
-    ]).byCode;
+    const odooByCode = aggregateUpcareMktPeriodEmployees(mktRows).byCode;
     const codesWithOdooRows = new Set<string>();
     const usedCodes = new Set<string>();
     const membersWithMetrics = teamList.filter((e) => {
       const key = codeKey(e.ma_ns);
       if (!key || usedCodes.has(key)) return false;
       usedCodes.add(key);
-      const odoo = odooByCode?.get(normalizeUpcareMktEmployeeCode(e.ma_ns));
-      const isSaleOnly = ODOO_SALE_ONLY_CODE_KEYS.has(normalizeUpcareMktEmployeeCode(e.ma_ns));
-      const hasOdooMetrics = Boolean(odoo && (odoo.revenueVnd !== 0 || odoo.dataCount !== 0 || odoo.orderCount !== 0));
-      const useSavedSaleMetrics = Boolean(isSaleOnly && odoo && !hasOdooMetrics && codesWithDetailRows.has(key));
-      if (odoo && !useSavedSaleMetrics) {
+      const employeeCodeKey = normalizeUpcareMktEmployeeCode(e.ma_ns);
+      const isOdooTotalSourceCode = ODOO_TOTAL_SOURCE_CODE_KEYS.has(employeeCodeKey);
+      const odoo = odooByCode?.get(employeeCodeKey);
+      if (odoo) {
         codesWithOdooRows.add(key);
         const a = next.get(key) || emptyAgg();
         a.rev = odoo.revenueVnd;
@@ -576,12 +560,21 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
         a.tongLead = odoo.dataCount;
         a.orders = odoo.orderCount;
         next.set(key, a);
+      } else if (isOdooTotalSourceCode && odooResult.data) {
+        // A missing Odoo row for these fixed accounts means zero for this period; never reuse stale detail_reports totals.
+        codesWithOdooRows.add(key);
+        const a = next.get(key) || emptyAgg();
+        a.rev = 0;
+        a.tongData = 0;
+        a.tongLead = 0;
+        a.orders = 0;
+        next.set(key, a);
       }
-      return codesWithDetailRows.has(key) || Boolean(odoo);
+      return codesWithDetailRows.has(key) || Boolean(odoo) || (isOdooTotalSourceCode && Boolean(odooResult.data));
     });
     if (odooResult.error) {
       setOdooWarning(`Không tải được Odoo cho khoảng ${start} – ${end}; doanh số, data và đơn đang tạm lấy từ detail_reports. ${odooResult.error.message}`);
-    } else if (odooResult.data || odooSaleResult.data) {
+    } else if (odooResult.data) {
       const missingCodes = membersWithMetrics
         .filter((e) => !codesWithOdooRows.has(codeKey(e.ma_ns) || ''))
         .map((e) => safeTrim(e.ma_ns))
@@ -591,18 +584,6 @@ export const LeaderDashboardView: React.FC<LeaderDashboardViewProps> = ({ viewer
       }
     } else {
       setOdooWarning('Nhân sự chưa có mã Odoo để đối chiếu; các chỉ số doanh số, data và đơn đang lấy từ detail_reports.');
-    }
-    if (odooSaleResult.error) {
-      setOdooWarning((current) => [current, `Không tải được nguồn Odoo Sales cho FBC.OldCustomer và FBC.Hotline; ${odooSaleResult.error?.message || 'doanh số chưa được cập nhật từ Odoo Sales.'}`].filter(Boolean).join(' '));
-    } else if (hasSaleOnlyEmployees) {
-      const saleCodeKeys = new Set(saleRows.map((row) => normalizeUpcareMktEmployeeCode(row.code)));
-      const missingSaleCodes = teamList
-        .filter((e) => ODOO_SALE_ONLY_CODE_KEYS.has(normalizeUpcareMktEmployeeCode(e.ma_ns)))
-        .filter((e) => !saleCodeKeys.has(normalizeUpcareMktEmployeeCode(e.ma_ns)))
-        .map((e) => safeTrim(e.ma_ns));
-      if (missingSaleCodes.length) {
-        setOdooWarning((current) => [current, `Odoo Sales chưa trả dòng doanh số cho ${missingSaleCodes.join(', ')} trong kỳ ${start} – ${end}.`].filter(Boolean).join(' '));
-      }
     }
     setMktNameByCode(nameByCodeMap);
     setDetailRowsByCodeKey(detailByCode);
