@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Hướng dẫn thêm tài khoản quảng cáo Meta</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  :root {
+    --ink: #1b2430; --muted: #5b6675; --line: #d9dee5; --soft: #f4f6f9;
+    --brand: #0b3d91; --brand-soft: #e8eef9; --warn: #8a5a00; --warn-soft: #fff6e0;
+    --bad: #a12a2a; --bad-soft: #fdecec; --ok: #1d6b3a; --ok-soft: #e7f5ec;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Noto Sans", "DejaVu Sans", sans-serif; color: var(--ink); font-size: 10.2pt; line-height: 1.5; margin: 0; }
+  code, pre, .mono { font-family: "Noto Sans Mono", "DejaVu Sans Mono", monospace; }
+  code { background: var(--soft); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; font-size: 8.9pt; word-break: break-all; }
+  pre { background: #10161f; color: #e6edf5; border-radius: 6px; padding: 9px 11px; font-size: 8.4pt; line-height: 1.45; white-space: pre-wrap; word-break: break-all; margin: 6px 0 10px; }
+  pre code { background: none; border: 0; padding: 0; color: inherit; font-size: inherit; }
+  h1 { font-size: 21pt; line-height: 1.2; margin: 0 0 6px; color: var(--brand); }
+  h2 { font-size: 13.5pt; color: var(--brand); margin: 20px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--brand-soft); break-after: avoid; }
+  h3 { font-size: 11pt; margin: 14px 0 6px; break-after: avoid; }
+  p { margin: 0 0 7px; }
+  ul, ol { margin: 0 0 8px; padding-left: 20px; }
+  li { margin-bottom: 3px; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 9pt; break-inside: auto; }
+  th, td { border: 1px solid var(--line); padding: 5px 7px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); font-weight: 700; }
+  tr { break-inside: avoid; }
+  .cover { border-left: 5px solid var(--brand); padding: 4px 0 4px 14px; margin-bottom: 14px; }
+  .subtitle { color: var(--muted); font-size: 10.5pt; }
+  .meta { color: var(--muted); font-size: 8.8pt; margin-top: 6px; }
+  .box { border-radius: 6px; padding: 8px 11px; margin: 8px 0 12px; break-inside: avoid; }
+  .box b.lbl { display: block; margin-bottom: 2px; }
+  .info { background: var(--brand-soft); border-left: 4px solid var(--brand); }
+  .warn { background: var(--warn-soft); border-left: 4px solid #d99a00; }
+  .warn b.lbl { color: var(--warn); }
+  .bad { background: var(--bad-soft); border-left: 4px solid var(--bad); }
+  .bad b.lbl { color: var(--bad); }
+  .ok { background: var(--ok-soft); border-left: 4px solid var(--ok); }
+  .ok b.lbl { color: var(--ok); }
+  .step { display: grid; grid-template-columns: 30px 1fr; gap: 10px; margin: 14px 0 6px; }
+  .step > div:last-child > *:first-child, .step > div:last-child > p:nth-child(2) { break-after: avoid; }
+  pre, ol li, ul li { break-inside: avoid; }
+  .num { width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 11pt; }
+  .step h3 { margin: 3px 0 6px; }
+  .path { font-weight: 600; color: var(--brand); }
+  .flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 12px; font-size: 8.8pt; }
+  .flow span.n { background: var(--soft); border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; }
+  .flow span.a { color: var(--muted); }
+  .checklist li { list-style: none; margin-left: -18px; }
+  .checklist li::before { content: "☐  "; font-family: "DejaVu Sans", sans-serif; }
+  .small { font-size: 8.6pt; color: var(--muted); }
+  .pb { break-before: page; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  td.mono, td code { white-space: nowrap; }
+  .st-a { color: var(--ok); font-weight: 600; }
+  .st-d { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>Hướng dẫn thêm tài khoản quảng cáo Meta</h1>
+  <div class="subtitle">Dành cho dev tiếp quản hệ thống MAS / FE-vinhdanh: đưa một tài khoản quảng cáo (TKQC) mới vào trang Meta Ads, báo cáo <code>detail_reports</code> và cron đồng bộ.</div>
+  <div class="meta">Cập nhật 18/11/2026 · Áp dụng từ commit <code>792c948</code> (PR #5) trên <code>main</code> · Tài liệu liên quan: <code>docs/meta-api-handover.vi.md</code></div>
+</div>
+
+<h2>1. Tóm tắt nhanh</h2>
+<p>Hệ thống <b>không</b> có nút "Kết nối Facebook". Mọi dữ liệu Meta được đọc bằng <b>một token chung</b> của một System User, trên một <b>danh sách TKQC cố định</b> trong biến môi trường. Muốn thêm một tài khoản thì phải làm đủ 3 việc. Thiếu một việc là tài khoản sẽ không hiện:</p>
+<ol>
+  <li><b>Cấp quyền trên Meta:</b> gán System User <i>Conversions API System User</i> vào TKQC với quyền <b>Xem hiệu quả</b>.</li>
+  <li><b>Khai báo ID:</b> thêm Ad Account ID vào <code>META_AD_ACCOUNT_IDS</code> trên <b>Vercel Production</b> (và <code>.env</code> local, <code>.env.example</code>).</li>
+  <li><b>Redeploy</b> trên Vercel. Biến môi trường mới chỉ áp dụng cho các lần deploy sau.</li>
+</ol>
+
+<div class="flow">
+  <span class="n">TKQC trên Meta</span><span class="a">→ gán quyền →</span>
+  <span class="n">System User (token <code>ads_read</code>)</span><span class="a">→</span>
+  <span class="n"><code>META_AD_ACCOUNT_IDS</code> trên Vercel</span><span class="a">→ redeploy →</span>
+  <span class="n"><code>/api/meta-project-qc</code></span><span class="a">→</span>
+  <span class="n">Trang Meta Ads · detail_reports · cron 15 phút</span>
+</div>
+
+<h3>Thông tin cố định</h3>
+<table>
+  <tr><th style="width:34%">Mục</th><th>Giá trị</th></tr>
+  <tr><td>Business Portfolio (BM)</td><td><b>Sofonio Fenda</b>, business_id <code>1469792650826396</code></td></tr>
+  <tr><td>System User</td><td><b>Conversions API System User</b>. ID trên giao diện BM: <code>61581767862922</code>. ID mà Graph API <code>/me</code> trả về: <code>122148037605058928</code>. Đây là cùng một user.</td></tr>
+  <tr><td>App Meta</td><td><b>fabico</b>, App ID <code>1777660466866495</code></td></tr>
+  <tr><td>Token</td><td>Biến <code>META_ACCESS_TOKEN</code>, loại SYSTEM_USER, scope <code>ads_read</code>, không có hạn cố định. <b>Không cần tạo token mới</b> khi thêm tài khoản.</td></tr>
+  <tr><td>Graph API</td><td><code>META_API_VERSION=v26.0</code></td></tr>
+  <tr><td>Vercel project / domain production</td><td><code>fe-vinhdanh</code> → <code>https://fe-vinhdanh.vercel.app</code></td></tr>
+  <tr><td>Trang kiểm tra</td><td><code>/crm-admin/meta-ads</code> (CRM Admin → Báo cáo → Meta Ads)</td></tr>
+</table>
+
+<div class="box warn"><b class="lbl">Quyền cần có trước khi bắt đầu</b>
+Bạn cần: quyền quản trị BM Sofonio Fenda trên Facebook, quyền sửa Environment Variables và Redeploy trên Vercel project <code>fe-vinhdanh</code>, file <code>.env</code> local có <code>META_ACCESS_TOKEN</code>, và một tài khoản Admin CRM để mở trang Meta Ads. Chỉ có tài khoản Admin CRM là không đủ.</div>
+
+<h2>2. Các bước thêm tài khoản</h2>
+
+<div class="step"><div class="num">1</div><div>
+  <h3>Lấy Ad Account ID của tài khoản mới</h3>
+  <p>Cách nhanh nhất: <span class="path">business.facebook.com → Cài đặt → Tài khoản → Tài khoản quảng cáo</span>, bấm vào tên tài khoản. ID hiện ngay dưới tên, dạng số 15–17 chữ số, ví dụ <code>2895622560812930</code>.</p>
+  <p>Hoặc trong Ads Manager: bấm ô chọn tài khoản ở góc trên bên trái → chọn BM <b>Sofonio Fenda</b> → danh sách hiện "ID tài khoản quảng cáo: …" (danh sách dài thì bấm "Xem thêm").</p>
+  <div class="box info"><b class="lbl">Lưu ý</b>Chỉ dùng <b>Ad Account ID</b>. Không dùng Business ID, Page ID, Facebook User ID hay mã TKQC nội bộ CRM. Không thêm tiền tố <code>act_</code> vào env (code tự bỏ nếu có, nhưng nên giữ đồng nhất).</div>
+</div></div>
+
+<div class="step"><div class="num">2</div><div>
+  <h3>Gán System User vào tài khoản với quyền "Xem hiệu quả"</h3>
+  <p><b>Cách A, khi thêm nhiều tài khoản cùng lúc:</b></p>
+  <ol>
+    <li><span class="path">Cài đặt → Người dùng → Người dùng hệ thống</span> → chọn <b>Conversions API System User</b>.</li>
+    <li>Bấm nút <b>⋯</b> cạnh "Tạo mã / Thu hồi mã" → <b>Chỉ định tài sản</b>.</li>
+    <li>Cột trái chọn <b>Tài khoản quảng cáo</b>. Tick các tài khoản cần thêm. Tài khoản đã gán sẵn có nhãn "Đã chỉ định".</li>
+    <li>Cột phải bật <b>Xem hiệu quả</b> (thuộc "Quyền truy cập một phần"). <b>Không</b> bật "Quản lý chiến dịch" hay "Quản lý tài khoản quảng cáo": hệ thống chỉ đọc.</li>
+    <li>Bấm <b>Chỉ định tài sản</b>, đợi thông báo "Đã chỉ định tài sản".</li>
+  </ol>
+  <p><b>Cách B, khi thêm một tài khoản:</b> <span class="path">Cài đặt → Tài khoản quảng cáo</span> → chọn tài khoản → <b>Chỉ định người</b> → tìm "Conversions" → tick <i>Conversions API System User (Người dùng hệ thống)</i> → bật <b>Xem hiệu quả</b> → <b>Chỉ định</b>.</p>
+  <div class="box warn"><b class="lbl">Tài khoản không nằm trong danh sách để chọn?</b>Nghĩa là tài khoản đó chưa được chia sẻ cho BM Sofonio Fenda. Phải nhờ BM sở hữu (cột "… sở hữu tài sản này") chia sẻ quyền truy cập cho Sofonio Fenda trước, rồi mới gán được.</div>
+</div></div>
+
+<div class="step"><div class="num">3</div><div>
+  <h3>Kiểm tra token đã đọc được tài khoản mới</h3>
+  <p>Chạy ở thư mục gốc repo. Script chỉ <b>đọc</b>, không in token ra màn hình. Truyền ID mới ở tham số thứ hai để kiểm tra trước khi thêm vào env:</p>
+<pre><code>node scripts/checkMetaAccounts.mjs .env 2895622560812930</code></pre>
+  <p>Kết quả đạt, ví dụ:</p>
+<pre><code>token valid: true | type: SYSTEM_USER | app: fabico
+scopes: ads_read, public_profile
+  OK   1403117645112746 | FBC - A1 | ACTIVE | VND
+  OK   2895622560812930 (new) | FBC - C4 | ACTIVE | VND
+readable: 38/38</code></pre>
+  <div class="box bad"><b class="lbl">Thấy dòng FAIL với "(#200) Ad account owner has NOT grant ads_management or ads_read permission"</b>Bước 2 chưa xong hoặc gán nhầm user. Quay lại bước 2. <b>Không</b> tạo token mới: token hiện tại đã đủ scope, chỉ thiếu quyền trên tài sản.</div>
+  <p class="small">Script cần Node 18+ (dùng <code>fetch</code> có sẵn). Exit code 1 nếu có tài khoản FAIL, nên có thể dùng trong CI.</p>
+</div></div>
+
+<div class="step"><div class="num">4</div><div>
+  <h3>Thêm ID vào biến môi trường local và <code>.env.example</code></h3>
+  <p>Nối ID mới vào cuối <code>META_AD_ACCOUNT_IDS</code>, phân cách bằng dấu phẩy, không dấu cách, <b>giữ nguyên các ID cũ</b>:</p>
+<pre><code>META_AD_ACCOUNT_IDS=1403117645112746,4138174149811846,...,4041009812777827,&lt;ID_MOI&gt;</code></pre>
+  <ul>
+    <li><code>.env</code> (hoặc <code>.env.local</code>): cấu hình local, không commit (đã có trong <code>.gitignore</code>).</li>
+    <li><code>.env.example</code>: cập nhật cùng danh sách rồi commit, để người sau biết danh sách hiện hành. Chỉ chứa ID, <b>không bao giờ</b> chứa token.</li>
+    <li>Chạy lại <code>node scripts/checkMetaAccounts.mjs .env</code>: phải ra <code>readable: N/N</code>.</li>
+  </ul>
+  <div class="box info"><b class="lbl">Lưu ý về file .env</b>File <code>.env</code> trong repo dùng xuống dòng kiểu Windows (CRLF). Không dùng <code>source .env</code> trong bash vì ký tự <code>\r</code> sẽ dính vào giá trị và làm request lỗi. Dùng script ở bước 3, hoặc thư viện <code>dotenv</code> như code server.</div>
+</div></div>
+
+<div class="step"><div class="num">5</div><div>
+  <h3>Cập nhật Vercel Production và Redeploy</h3>
+  <ol>
+    <li><span class="path">vercel.com → project fe-vinhdanh → Settings → Environment Variables</span>.</li>
+    <li>Sửa <code>META_AD_ACCOUNT_IDS</code>, dán đúng giá trị như trong <code>.env</code>. Đảm bảo có tick môi trường <b>Production</b>.</li>
+    <li><span class="path">Deployments</span> → bản Production mới nhất → <b>⋯ → Redeploy</b>.</li>
+  </ol>
+  <div class="box bad"><b class="lbl">Lỗi hay gặp nhất</b>Sửa biến mà quên Redeploy, hoặc sửa nhầm project. Tài khoản GitHub này nối với 3 project Vercel: <code>fe-vinhdanh</code>, <code>fe-vinhdanh-9utb</code>, <code>vinhdanhfabico</code>. Domain <code>fe-vinhdanh.vercel.app</code> thuộc project <code>fe-vinhdanh</code>. Ngày 18/11/2026 production vẫn chỉ đọc 18 tài khoản dù đã "sửa trên Vercel", chính vì lý do này.</div>
+</div></div>
+
+<div class="step"><div class="num">6</div><div>
+  <h3>Kiểm tra trên production</h3>
+  <ol>
+    <li>Mở <code>https://fe-vinhdanh.vercel.app/crm-admin/meta-ads</code>, xác nhận tài khoản Admin CRM nếu trang hỏi. Phiên này hết hạn sau 1 giờ.</li>
+    <li>Chọn khoảng ngày có chi tiêu → <b>Lấy từ API Meta</b>.</li>
+    <li>Dòng tổng phải ghi <b>"Đã tải: N tài khoản"</b>, với N đúng bằng số ID trong <code>META_AD_ACCOUNT_IDS</code>.</li>
+    <li>Không có dòng cảnh báo vàng "Token Meta chưa có quyền đọc … tài khoản".</li>
+    <li>Tài khoản mới có chi tiêu thì phải xuất hiện trong bảng, cột "Tên tài khoản".</li>
+  </ol>
+  <p>Chỉ khi số liệu đọc đúng mới bấm <b>Đồng bộ Meta → detail_reports</b>. Cron <code>/api/cron-marketing-sync</code> chạy mỗi 15 phút sẽ tự đồng bộ hôm nay và 3 ngày trước.</p>
+  <div class="box ok"><b class="lbl">Xong</b>Tài khoản mới đã có trong trang Meta Ads, báo cáo nhân viên và cron.</div>
+</div></div>
+
+<h2>3. Hệ thống phản ứng thế nào khi một tài khoản mất quyền</h2>
+<p>Từ PR #5 (18/11/2026), <code>server/metaProjectQc.ts</code> xử lý lỗi theo từng tài khoản:</p>
+<table>
+  <tr><th style="width:34%">Tình huống</th><th>Hành vi</th></tr>
+  <tr><td>Một vài TKQC báo lỗi quyền (Meta code <code>10</code>, <code>200</code>, hoặc <code>100</code>/subcode <code>33</code>)</td><td>Bỏ qua các tài khoản đó, vẫn trả dữ liệu các tài khoản còn lại. API trả thêm <code>failedAccounts</code>. Trang Meta Ads hiện cảnh báo vàng kèm danh sách ID.</td></tr>
+  <tr><td>Tất cả TKQC đều lỗi quyền</td><td>Request lỗi với <code>meta_permission_denied</code>.</td></tr>
+  <tr><td>Token sai hoặc bị thu hồi (code <code>190</code>), rate limit, mất kết nối</td><td>Cả request lỗi, vì các lỗi này ảnh hưởng mọi tài khoản.</td></tr>
+  <tr><td>Bấm <b>Đồng bộ Meta → detail_reports</b> hoặc cron chạy khi có <code>failedAccounts</code></td><td><b>Từ chối đồng bộ</b> với lỗi <code>meta_accounts_incomplete</code>. Lý do: RPC <code>replace_meta_project_qc_insights</code> ghi đè <b>toàn bộ</b> khoảng ngày, nếu đồng bộ với dữ liệu thiếu thì số liệu đã lưu của tài khoản lỗi sẽ bị xoá.</td></tr>
+</table>
+<div class="box warn"><b class="lbl">Hệ quả</b>Một tài khoản mất quyền sẽ <b>chặn cron đồng bộ báo cáo</b>, dù trang Meta Ads vẫn xem được. Thấy cảnh báo vàng thì cấp lại quyền (bước 2), hoặc gỡ ID khỏi danh sách (mục 5).</div>
+
+<h2>4. Xử lý sự cố</h2>
+<table>
+  <tr><th style="width:36%">Hiện tượng / mã lỗi</th><th>Nguyên nhân và cách xử lý</th></tr>
+  <tr><td>Script báo <code>FAIL … (#200) Ad account owner has NOT grant…</code></td><td>System User chưa được gán vào tài khoản. Làm lại bước 2.</td></tr>
+  <tr><td>"Đã tải" ít hơn số ID mong đợi, <b>không</b> có cảnh báo vàng</td><td>Biến trên Vercel chưa có ID mới, chưa Redeploy, hoặc sửa nhầm project/môi trường. Kiểm tra lại bước 5.</td></tr>
+  <tr><td>Có cảnh báo vàng "Token Meta chưa có quyền đọc…"</td><td>ID đã có trong env nhưng System User chưa có quyền. Làm bước 2 cho các ID được liệt kê.</td></tr>
+  <tr><td><code>meta_accounts_incomplete</code> khi đồng bộ hoặc trong log cron</td><td>Giống dòng trên. Đồng bộ bị chặn có chủ đích để bảo vệ dữ liệu cũ.</td></tr>
+  <tr><td><code>meta_token_invalid</code> (code 190)</td><td>Token bị thu hồi hoặc hết hạn. Tạo token mới cho System User (scope <code>ads_read</code>), cập nhật <code>META_ACCESS_TOKEN</code> trên Vercel và Redeploy. Xem mục 4.2 của <code>docs/meta-api-handover.vi.md</code>.</td></tr>
+  <tr><td><code>account_not_allowed</code></td><td>Luồng <code>/api/meta-qc</code> hoặc <code>/api/meta-ads</code> được gọi với ID không có trong env của deployment đang chạy.</td></tr>
+  <tr><td>Có chi tiêu nhưng thiếu trong báo cáo nhân viên</td><td>Tên chiến dịch phải có mã nhân viên trong ngoặc vuông, ví dụ <code>[FBC.ChienNH] …</code>, và mã phải khớp <code>employees.ma_ns</code>. Xem cảnh báo "Chưa khớp mã nhân viên" sau khi đồng bộ.</td></tr>
+  <tr><td>Số liệu lệch ngày so với Ads Manager</td><td>Insights lấy ngày theo <b>múi giờ của từng tài khoản</b>. Một số tài khoản dùng Asia/Manila, Etc/GMT-8, Etc/GMT-9, không phải giờ Việt Nam.</td></tr>
+  <tr><td>Tài khoản dùng tiền khác VND</td><td>Bị bỏ qua, trang hiện "Bỏ qua tài khoản dùng tiền tệ …". Pipeline chỉ hỗ trợ VND.</td></tr>
+  <tr><td><code>npm run test:meta</code> lỗi "installed esbuild for another platform"</td><td><code>node_modules</code> được cài trên Windows. Chạy <code>npm ci</code> trên máy Linux, hoặc trỏ <code>ESBUILD_BINARY_PATH</code> tới binary <code>@esbuild/linux-x64</code> cùng phiên bản (0.28.2).</td></tr>
+</table>
+
+<h2>5. Gỡ một tài khoản khỏi hệ thống</h2>
+<ol>
+  <li>Xoá ID khỏi <code>META_AD_ACCOUNT_IDS</code> trên Vercel, Redeploy, và cập nhật <code>.env</code>, <code>.env.example</code>.</li>
+  <li>Sau đó mới gỡ quyền System User trên Meta, nếu cần.</li>
+</ol>
+<div class="box bad"><b class="lbl">Cẩn thận dữ liệu cũ</b>Lần đồng bộ tiếp theo (kể cả cron) sẽ ghi đè snapshot của khoảng ngày được chạy lại. Số liệu của tài khoản vừa gỡ trong các ngày đó sẽ <b>mất khỏi</b> <code>meta_project_qc_insights</code> và <code>detail_reports</code>. Cron chạy lại hôm nay và 3 ngày trước. Nếu cần giữ lịch sử của tài khoản bị gỡ, hãy sao lưu trước khi đổi env.</div>
+
+<h2>6. Checklist</h2>
+<ul class="checklist">
+  <li>Đã có Ad Account ID dạng số.</li>
+  <li>Đã gán Conversions API System User với quyền "Xem hiệu quả".</li>
+  <li><code>node scripts/checkMetaAccounts.mjs .env &lt;ID&gt;</code> báo OK.</li>
+  <li>Đã cập nhật <code>.env</code> và <code>.env.example</code> (giữ ID cũ). <code>readable: N/N</code>.</li>
+  <li>Đã sửa <code>META_AD_ACCOUNT_IDS</code> trên Vercel project <code>fe-vinhdanh</code>, môi trường Production.</li>
+  <li>Đã Redeploy.</li>
+  <li>Trang <code>/crm-admin/meta-ads</code> hiện "Đã tải: N tài khoản", không có cảnh báo vàng.</li>
+  <li>Đã commit <code>.env.example</code> qua PR.</li>
+</ul>
+
+<h2>7. Mã nguồn liên quan</h2>
+<table>
+  <tr><th style="width:42%">File</th><th>Vai trò</th></tr>
+  <tr><td><code>server/metaProjectQc.ts</code></td><td>Đọc danh sách env, gọi Insights cho từng tài khoản, gom lỗi vào <code>failedAccounts</code>.</td></tr>
+  <tr><td><code>server/metaDetailReportSync.ts</code></td><td>Lưu snapshot và ghép vào <code>detail_reports</code>. Chặn đồng bộ khi thiếu tài khoản.</td></tr>
+  <tr><td><code>server/metaProjectQcHandler.ts</code></td><td>API <code>/api/meta-project-qc</code>: xác thực CRM, GET để đọc, POST để đồng bộ.</td></tr>
+  <tr><td><code>server/marketingDetailReportCron.ts</code>, <code>vercel.json</code></td><td>Cron Meta + Odoo, chạy mỗi 15 phút.</td></tr>
+  <tr><td><code>server/metaTokenManager.ts</code></td><td>Chỉ đọc <code>META_ACCESS_TOKEN</code>. Không có cơ chế tự xoay token.</td></tr>
+  <tr><td><code>src/pages/dashboard/admin/MetaAdsView.tsx</code></td><td>Trang Meta Ads và cảnh báo tài khoản lỗi.</td></tr>
+  <tr><td><code>scripts/checkMetaAccounts.mjs</code></td><td>Script kiểm tra token và quyền từng tài khoản (chỉ đọc).</td></tr>
+  <tr><td><code>server/metaProjectQc.test.ts</code></td><td>Test cho việc bỏ qua tài khoản lỗi và chặn đồng bộ. Chạy bằng <code>npm run test:meta</code>.</td></tr>
+</table>
+
+<h2 class="pb">Phụ lục: 38 tài khoản đang cấu hình (18/11/2026)</h2>
+<p class="small">Tất cả đã gán Conversions API System User (Xem hiệu quả), dùng VND và đã được kiểm tra đọc được. Trạng thái do Meta trả về; tài khoản DISABLED vẫn đọc được dữ liệu lịch sử.</p>
+<div class="two">
+<table>
+  <tr><th>Tên</th><th>Ad Account ID</th><th>Trạng thái</th></tr>
+  <tr><td>FBC - A1</td><td class="mono">1403117645112746</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - A2</td><td class="mono">4138174149811846</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - A4</td><td class="mono">2077138936251119</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC - A5</td><td class="mono">439223261791703</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC - A6</td><td class="mono">1667694257419578</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - A7</td><td class="mono">795287166904506</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - A8</td><td class="mono">872604782404058</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - A9</td><td class="mono">3846653742299007</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - B1</td><td class="mono">3580301642125509</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - B2</td><td class="mono">3024448981242719</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC - B3</td><td class="mono">2100366800598176</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC - B4</td><td class="mono">1111863964935586</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - B5</td><td class="mono">1643112206313001</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - B6</td><td class="mono">1000185126456353</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - B7</td><td class="mono">1002931269547788</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - C1</td><td class="mono">1804253930488901</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - C2</td><td class="mono">1838075144002580</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC - C3</td><td class="mono">1110796096658322</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - C4</td><td class="mono">2895622560812930</td><td class="st-a">ACTIVE</td></tr>
+</table>
+<table>
+  <tr><th>Tên</th><th>Ad Account ID</th><th>Trạng thái</th></tr>
+  <tr><td>FBC - C5</td><td class="mono">2224702628443401</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - C6</td><td class="mono">2029855044346617</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC - C7</td><td class="mono">1669837528200615</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC 1</td><td class="mono">4140666172745855</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 2</td><td class="mono">632847442753709</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 5</td><td class="mono">732866852684821</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 6</td><td class="mono">1862226171366754</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 7 HOLD</td><td class="mono">24349249114765574</td><td class="st-a">ACTIVE</td></tr>
+  <tr><td>FBC 9</td><td class="mono">4041009812777827</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 12</td><td class="mono">3632564380338537</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 13</td><td class="mono">231413379347463</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 14</td><td class="mono">719932067032734</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 15</td><td class="mono">1428440365154180</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 16</td><td class="mono">1396741081394607</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 17</td><td class="mono">1100085358936674</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 18</td><td class="mono">1864850851104194</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 19</td><td class="mono">1883610175836979</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 21</td><td class="mono">1598069334890647</td><td class="st-d">DISABLED</td></tr>
+  <tr><td>FBC 22</td><td class="mono">1338875958163968</td><td class="st-d">DISABLED</td></tr>
+</table>
+</div>
+<p class="small">Không đưa vào hệ thống: "Chạy phủ" (<code>937705059215885</code>), vì không phải tài khoản FBC.</p>
+
+</body>
+</html>
