@@ -10,11 +10,22 @@ export type MetaProjectQcRow = {
   conversations: number;
 };
 
+export type MetaProjectQcFailedAccount = {
+  accountId: string;
+  errorCode: string;
+  message: string;
+};
+
 export type MetaProjectQcResult = {
   rows: MetaProjectQcRow[];
   accountIds: string[];
   skippedCurrencies: string[];
+  /** Accounts the token cannot read; their rows are missing from `rows`. */
+  failedAccounts: MetaProjectQcFailedAccount[];
 };
+
+// Errors scoped to one ad account; anything else (token, rate limit, network) affects every account.
+const PER_ACCOUNT_ERROR_CODES = new Set(['meta_permission_denied', 'meta_account_unavailable']);
 
 export class MetaProjectQcError extends Error {
   constructor(
@@ -102,6 +113,9 @@ function graphError(response: Response, body: Record<string, unknown>): MetaProj
       502,
       'meta_permission_denied'
     );
+  }
+  if (code === 100 && Number(error.error_subcode) === 33) {
+    return new MetaProjectQcError('Tài khoản quảng cáo không tồn tại hoặc token không xem được.', 502, 'meta_account_unavailable');
   }
   if (response.status === 429 || [4, 17, 32, 613].includes(code)) {
     return new MetaProjectQcError('Meta đang giới hạn yêu cầu. Hãy thử tải lại sau ít phút.', 503, 'meta_rate_limited');
@@ -247,17 +261,31 @@ export async function loadMetaProjectQcRows(
     throw new MetaProjectQcError('Thiếu META_AD_ACCOUNT_IDS trong cấu hình server Vercel.', 503, 'meta_not_configured');
   }
 
+  const failedAccounts: MetaProjectQcFailedAccount[] = [];
   const accounts = await mapConcurrent(accountIds, 5, async (accountId) => {
-    const [accountName, insights] = await Promise.all([
-      fetchAccountName(accountId, apiVersion, token, fetcher),
-      fetchAccountInsights(accountId, dateFrom, dateTo, apiVersion, token, fetcher),
-    ]);
-    return { accountId, accountName, insights };
+    try {
+      const [accountName, insights] = await Promise.all([
+        fetchAccountName(accountId, apiVersion, token, fetcher),
+        fetchAccountInsights(accountId, dateFrom, dateTo, apiVersion, token, fetcher),
+      ]);
+      return { accountId, accountName, insights };
+    } catch (error) {
+      // One account losing access must not hide data from the others.
+      if (!(error instanceof MetaProjectQcError) || !PER_ACCOUNT_ERROR_CODES.has(error.errorCode)) throw error;
+      failedAccounts.push({ accountId, errorCode: error.errorCode, message: error.message });
+      return null;
+    }
   });
+  if (failedAccounts.length === accountIds.length) {
+    const first = failedAccounts[0];
+    throw new MetaProjectQcError(first.message, 502, first.errorCode);
+  }
+  failedAccounts.sort((a, b) => a.accountId.localeCompare(b.accountId));
   const grouped = new Map<string, MetaProjectQcRow>();
   const skippedCurrencies = new Set<string>();
 
   for (const account of accounts) {
+    if (!account) continue;
     const { accountId, accountName, insights } = account;
     for (const insight of insights) {
       if (insight.account_id && insight.account_id !== accountId) {
@@ -291,5 +319,10 @@ export async function loadMetaProjectQcRows(
   const rows = [...grouped.values()].sort((a, b) =>
     b.date.localeCompare(a.date) || a.accountId.localeCompare(b.accountId) || a.campaignName.localeCompare(b.campaignName, 'vi')
   );
-  return { rows, accountIds, skippedCurrencies: [...skippedCurrencies].sort() };
+  return {
+    rows,
+    accountIds: accountIds.filter((id) => !failedAccounts.some((failed) => failed.accountId === id)),
+    skippedCurrencies: [...skippedCurrencies].sort(),
+    failedAccounts,
+  };
 }
