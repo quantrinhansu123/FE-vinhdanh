@@ -122,6 +122,16 @@ export async function syncMetaProjectQcToDetailReports(
   dateTo: string,
   options: SyncOptions = {}
 ) {
+  // The snapshot RPC replaces the whole date range, so a partial fetch would delete
+  // the stored rows of every account Meta refused this time.
+  const failedAccounts = result.failedAccounts ?? [];
+  if (failedAccounts.length) {
+    throw new MetaDetailReportSyncError(
+      `Không đồng bộ vì token Meta không đọc được ${failedAccounts.length} tài khoản: ${failedAccounts.map(item => item.accountId).join(', ')}. Cấp quyền cho system user rồi thử lại.`,
+      502,
+      'meta_accounts_incomplete'
+    );
+  }
   const db = makeDatabase(env, options);
   const signal = AbortSignal.timeout(45000);
   const fetchedAt = (options.now?.() || new Date()).toISOString();

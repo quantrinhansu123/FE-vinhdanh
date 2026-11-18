@@ -18,6 +18,7 @@ type MetaQcResponse = {
   rows?: MetaQcRow[];
   accountIds?: string[];
   skippedCurrencies?: string[];
+  failedAccounts?: { accountId: string; message?: string }[];
   message?: string;
 };
 
@@ -48,6 +49,7 @@ export const MetaAdsView: React.FC = () => {
   const [rows, setRows] = useState<MetaQcRow[]>([]);
   const [accountIds, setAccountIds] = useState<string[]>([]);
   const [skippedCurrencies, setSkippedCurrencies] = useState<string[]>([]);
+  const [failedAccountIds, setFailedAccountIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
@@ -92,6 +94,7 @@ export const MetaAdsView: React.FC = () => {
       setRows(Array.isArray(payload.rows) ? payload.rows : []);
       setAccountIds(Array.isArray(payload.accountIds) ? payload.accountIds : []);
       setSkippedCurrencies(Array.isArray(payload.skippedCurrencies) ? payload.skippedCurrencies : []);
+      setFailedAccountIds(Array.isArray(payload.failedAccounts) ? payload.failedAccounts.map((item) => item.accountId) : []);
       setLoadedRange(`${applied.from}:${applied.to}`);
       setPage(1);
     } catch (loadError) {
@@ -100,6 +103,7 @@ export const MetaAdsView: React.FC = () => {
       setRows([]);
       setAccountIds([]);
       setSkippedCurrencies([]);
+      setFailedAccountIds([]);
       setLoadedRange(null);
     } finally {
       if (version === loadVersion.current) setLoading(false);
@@ -286,6 +290,11 @@ export const MetaAdsView: React.FC = () => {
           {skippedCurrencies.length > 0 && (
             <p className="text-xs font-bold text-amber-600">
               Bỏ qua tài khoản dùng tiền tệ {skippedCurrencies.join(', ')}; bảng này chỉ hiển thị số tiền VND.
+            </p>
+          )}
+          {failedAccountIds.length > 0 && (
+            <p className="text-xs font-bold text-amber-600">
+              Token Meta chưa có quyền đọc {failedAccountIds.length} tài khoản ({failedAccountIds.join(', ')}); số liệu bên dưới thiếu các tài khoản này.
             </p>
           )}
 
