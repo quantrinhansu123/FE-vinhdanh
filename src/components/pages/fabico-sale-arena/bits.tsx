@@ -16,7 +16,7 @@ function resolveAvatar(url?: string) {
   return FALLBACK;
 }
 
-export function SaleAvatar({ sale, className = 'tiny-avatar' }: { sale: SaleRow; className?: string }) {
+export function SaleAvatar({ sale, className = 'tiny-avatar' }: { sale: Pick<SaleRow, 'name' | 'avatar' | 'avatarCrop'>; className?: string }) {
   const [failed, setFailed] = useState(false);
   const crop = sale.avatarCrop;
   const src = failed ? FALLBACK : resolveAvatar(sale.avatar);

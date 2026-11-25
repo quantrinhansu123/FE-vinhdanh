@@ -25,7 +25,7 @@ export type MetaProjectQcResult = {
 };
 
 // Errors scoped to one ad account; anything else (token, rate limit, network) affects every account.
-const PER_ACCOUNT_ERROR_CODES = new Set(['meta_permission_denied', 'meta_account_unavailable']);
+const PER_ACCOUNT_ERROR_CODES = new Set(['meta_permission_denied', 'meta_account_unavailable', 'meta_access_blocked']);
 
 export class MetaProjectQcError extends Error {
   constructor(
@@ -106,6 +106,9 @@ function graphError(response: Response, body: Record<string, unknown>): MetaProj
       502,
       'meta_token_invalid'
     );
+  }
+  if (code === 200 && Number(error.error_subcode) === 5258005) {
+    return new MetaProjectQcError('Meta trả về API access blocked (200/5258005).', 502, 'meta_access_blocked');
   }
   if (code === 10 || code === 200) {
     return new MetaProjectQcError(
@@ -277,8 +280,14 @@ export async function loadMetaProjectQcRows(
     }
   });
   if (failedAccounts.length === accountIds.length) {
-    const first = failedAccounts[0];
-    throw new MetaProjectQcError(first.message, 502, first.errorCode);
+    const errorCode = failedAccounts[0].errorCode;
+    const commonError = failedAccounts.every((account) => account.errorCode === errorCode);
+    const detail = commonError ? ` ${failedAccounts[0].message}` : ' Kiểm tra các hạn chế trên Meta và quyền của System User.';
+    throw new MetaProjectQcError(
+      `Không đọc được tài khoản quảng cáo nào (0/${accountIds.length}).${detail}`,
+      502,
+      commonError ? errorCode : 'meta_no_readable_accounts'
+    );
   }
   failedAccounts.sort((a, b) => a.accountId.localeCompare(b.accountId));
   const grouped = new Map<string, MetaProjectQcRow>();

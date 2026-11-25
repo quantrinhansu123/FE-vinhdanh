@@ -5,8 +5,8 @@ import { MetaDetailReportSyncError, syncMetaProjectQcToDetailReports } from './m
 
 const env = { META_ACCESS_TOKEN: 'test-meta-token', META_AD_ACCOUNT_IDS: '111,222,333' };
 
-const graphError = (code: number, status = 400) =>
-  new Response(JSON.stringify({ error: { code, message: 'denied' } }), { status });
+const graphError = (code: number, status = 400, error_subcode?: number) =>
+  new Response(JSON.stringify({ error: { code, error_subcode, message: 'denied' } }), { status });
 
 type AccountBehaviour = 'ok' | Response;
 
@@ -43,6 +43,22 @@ test('token-wide errors still fail the whole request', async () => {
       111: () => 'ok', 222: () => graphError(190, 401), 333: () => 'ok',
     })),
     error => error instanceof MetaProjectQcError && error.errorCode === 'meta_token_invalid'
+  );
+});
+
+test('API access blocked on one account still returns data from readable accounts', async () => {
+  const result = await loadMetaProjectQcRows(env, '2026-11-01', '2026-11-01', fakeMeta({
+    111: () => 'ok', 222: () => graphError(200, 400, 5258005), 333: () => 'ok',
+  }));
+  assert.deepEqual(result.rows.map(row => row.accountId), ['111', '333']);
+  assert.deepEqual(result.failedAccounts.map(item => [item.accountId, item.errorCode]), [['222', 'meta_access_blocked']]);
+});
+
+test('API access blocked on every account is not reported as an empty successful read', async () => {
+  const blocked = () => graphError(200, 400, 5258005);
+  await assert.rejects(
+    loadMetaProjectQcRows(env, '2026-11-01', '2026-11-01', fakeMeta({ 111: blocked, 222: blocked, 333: blocked })),
+    error => error instanceof MetaProjectQcError && error.errorCode === 'meta_access_blocked' && error.message.includes('0/3')
   );
 });
 

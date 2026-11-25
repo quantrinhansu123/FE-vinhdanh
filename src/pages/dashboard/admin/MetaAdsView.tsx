@@ -154,7 +154,7 @@ export const MetaAdsView: React.FC = () => {
   };
 
   const syncToDetailReports = async () => {
-    if (loadedRange !== `${applied.from}:${applied.to}` || draftFrom !== applied.from || draftTo !== applied.to || syncing) return;
+    if (failedAccountIds.length || loadedRange !== `${applied.from}:${applied.to}` || draftFrom !== applied.from || draftTo !== applied.to || syncing) return;
     setSyncing(true);
     setSyncMessage(null);
     setError(null);
@@ -250,7 +250,7 @@ export const MetaAdsView: React.FC = () => {
             <button
               type="button"
               onClick={() => void syncToDetailReports()}
-              disabled={loading || syncing || needsLogin || draftFrom !== applied.from || draftTo !== applied.to || loadedRange !== `${applied.from}:${applied.to}`}
+              disabled={loading || syncing || needsLogin || failedAccountIds.length > 0 || draftFrom !== applied.from || draftTo !== applied.to || loadedRange !== `${applied.from}:${applied.to}`}
               className="flex items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
               title="Lưu snapshot Meta vào Supabase server rồi tổng hợp theo ngày + mã nhân viên vào detail_reports."
             >
@@ -294,7 +294,7 @@ export const MetaAdsView: React.FC = () => {
           )}
           {failedAccountIds.length > 0 && (
             <p className="text-xs font-bold text-amber-600">
-              Token Meta chưa có quyền đọc {failedAccountIds.length} tài khoản ({failedAccountIds.join(', ')}); số liệu bên dưới thiếu các tài khoản này.
+              Đã bỏ qua {failedAccountIds.length} tài khoản không đọc được ({failedAccountIds.join(', ')}). Chỉ hiển thị dữ liệu của các tài khoản còn lại; chưa thể đồng bộ báo cáo để tránh ghi đè số liệu cũ.
             </p>
           )}
 

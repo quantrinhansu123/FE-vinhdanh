@@ -1,0 +1,98 @@
+.fabico-leaderboard {
+  min-height: 100vh;
+}
+
+.fabico-leaderboard .header-controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.fabico-leaderboard .header-controls button,
+.fabico-leaderboard .header-controls a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  color: #c7dbef;
+}
+
+.fabico-leaderboard .board-notice {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.fabico-leaderboard .board-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 12px 8px;
+}
+
+.fabico-leaderboard .board-filters select {
+  max-width: 180px;
+}
+
+.fabico-leaderboard .ranking table {
+  min-width: 360px;
+  font-size: 12px;
+}
+
+.fabico-leaderboard .ranking th:last-child,
+.fabico-leaderboard .ranking td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fabico-leaderboard .bu-row {
+  grid-template-columns: 20px minmax(0, 1fr) minmax(24px, 0.8fr) max-content;
+  min-height: 34px;
+  height: auto;
+  padding-block: 5px;
+  font-size: 12px;
+  --bu-color: #32baff;
+}
+
+.fabico-leaderboard .bu-row b {
+  overflow-wrap: anywhere;
+}
+
+/* The home podium shows one figure per plaque, not the demo's stacked metrics. */
+.fabico-leaderboard .arena .stage-revenue {
+  --score-center-x: 21.8%;
+  top: 77%;
+  left: var(--score-center-x);
+  width: calc(var(--panel-w) - 2%);
+  transform: translate(-50%, -50%);
+  font-size: max(8px, 2.65cqw);
+  font-variant-numeric: tabular-nums;
+}
+
+.fabico-leaderboard .arena .place-1 .stage-revenue {
+  --score-center-x: 51.5%;
+}
+
+.fabico-leaderboard .arena .place-3 .stage-revenue {
+  --score-center-x: 80.45%;
+}
+
+@media (max-width: 720px) {
+  .fabico-leaderboard .header-controls {
+    justify-content: flex-start;
+  }
+
+  .fabico-leaderboard .brand {
+    gap: 8px;
+  }
+
+  .fabico-leaderboard .arena .stage-name {
+    font-size: max(8px, 2.8cqw);
+  }
+
+  .fabico-leaderboard .arena .stage-bu {
+    display: none;
+  }
+}
