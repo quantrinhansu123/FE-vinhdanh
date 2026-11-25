@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "FE-vinhdanh Meta Ads Sync",
+  "version": "1.0.0",
+  "description": "Reads daily campaign rows from the open Meta Ads Manager tab and imports them into FE-vinhdanh.",
+  "permissions": ["storage", "tabs", "scripting"],
+  "host_permissions": [
+    "https://adsmanager.facebook.com/adsmanager/manage/campaigns*",
+    "https://business.facebook.com/adsmanager/manage/campaigns*",
+    "https://fe-vinhdanh.vercel.app/*",
+    "http://localhost:3000/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://adsmanager.facebook.com/adsmanager/manage/campaigns*",
+        "https://business.facebook.com/adsmanager/manage/campaigns*"
+      ],
+      "js": ["scrape.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": { "service_worker": "background.js" },
+  "options_page": "options.html",
+  "action": { "default_popup": "popup.html", "default_title": "Meta → FE-vinhdanh" }
+}

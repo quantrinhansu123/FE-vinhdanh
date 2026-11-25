@@ -3,6 +3,7 @@
     "api/meta-ads.ts": { "maxDuration": 60 },
     "api/meta-qc.ts": { "maxDuration": 60 },
     "api/meta-project-qc.ts": { "maxDuration": 60 },
+    "api/meta-campaign-import.ts": { "maxDuration": 30 },
     "api/cron-marketing-sync.ts": { "maxDuration": 60 }
   },
   "crons": [

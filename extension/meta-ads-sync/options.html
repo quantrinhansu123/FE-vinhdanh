@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cài đặt Meta Ads Sync</title>
+<style>
+  body{font:15px/1.5 system-ui,sans-serif;max-width:620px;margin:40px auto;padding:0 20px;color:#15232d}
+  input,button{font:inherit;padding:10px;border-radius:8px} input{width:100%;box-sizing:border-box;border:1px solid #b8c4cb;margin:8px 0 14px}
+  button{border:0;background:#146c43;color:white;cursor:pointer} #status{margin-top:12px;min-height:24px}
+</style>
+<h1>FE-vinhdanh Meta Ads Sync</h1>
+<p>Chọn môi trường CRM. Extension chỉ gửi dữ liệu từ tab Ads Manager vào đúng origin đã chọn.</p>
+<label for="origin">Địa chỉ FE-vinhdanh</label>
+<input id="origin" list="origins" autocomplete="off">
+<datalist id="origins"><option value="https://fe-vinhdanh.vercel.app"><option value="http://localhost:3000"></datalist>
+<button id="save">Lưu</button>
+<div id="status" role="status"></div>
+<script src="options.js"></script>
+</html>
